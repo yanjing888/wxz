@@ -1,0 +1,111 @@
+# 物小智智能体平台
+
+Vue 3 + Spring Boot 大学物理实验多模态智能指导平台。AI 能力通过自建 Dify 工作流对接（未配置 API Key 时使用 JSON 内置 Mock 响应）。
+
+## 项目结构
+
+```
+物小智-项目/
+├── index.html          # 原始 HTML 原型（参考）
+├── backend/            # Spring Boot 后端
+└── frontend/           # Vue 3 前端
+```
+
+## 快速启动
+
+### 后端
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+默认端口：`8080`
+
+### 前端
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+默认端口：`5173`（已代理 `/api` 与 `/uploads` 到后端）
+
+## 功能说明
+
+| 功能 | 说明 |
+|------|------|
+| 独立账号 | 注册 / 登录，JWT 鉴权 |
+| 实验元数据 | `backend/src/main/resources/experiments/*.json` |
+| 步骤引导 | 5 步流程、教程弹窗 |
+| 多模态纠错 | 上传图片 + 求助，对接 Dify 视觉工作流 |
+| 环境巡检 UI | 右上摄像头为 UI 演示（无真实 getUserMedia），定期检查调用后端 Mock/Dify |
+| 实验报告 | 页面展示 + DOCX 下载 |
+
+## Dify 配置（自建部署）
+
+已在 `application-local.yml` 写入本地密钥（该文件已加入 `.gitignore`）。
+
+默认连接：
+
+- Base URL: `http://188.18.18.149:5001/v1`
+- App Mode: `chat`（对话型 / Chatflow 应用，走 `/chat-messages`）
+
+若你的应用是纯 Workflow 类型，将 `app-mode` 改为 `workflow`。
+
+**重要：** Dify 工作流开始节点需包含输入变量 `query`（后端会自动将用户问题写入 `inputs.query`）。若调用失败，系统会回退到 JSON Mock。
+
+```yaml
+wuxiaozhi:
+  dify:
+    base-url: http://你的dify地址/v1
+    api-key: ${DIFY_API_KEY:}          # 全局 Key（可选，作为各工作流未单独配置时的回退）
+    workflows:
+      vision-correction: app-视觉纠错Key
+      text-assist: app-文字问答Key
+      env-check: app-环境巡检Key
+      report-generate: app-报告生成Key
+```
+
+环境变量示例（每个 Dify 工作流应用各有一个 API Key）：
+
+```bash
+set DIFY_API_KEY=app-xxxx
+set DIFY_WF_VISION_KEY=app-vision-xxxx
+set DIFY_WF_TEXT_KEY=app-text-xxxx
+set DIFY_WF_ENV_KEY=app-env-xxxx
+```
+
+### Dify 工作流输出字段约定
+
+**视觉纠错 / 文字问答：**
+
+- `type`: `vision_correction` 或 `text_assist`
+- `feedback`: Markdown 文本
+- `error_type`, `detail`: 可选
+- `marks`: JSON 数组 `[{x,y,w,h,n}]` 或 `marks_json` 字符串
+
+**环境巡检：**
+
+- `level`: `L0` ~ `L3`
+- `summary`, `suggestion`
+
+未配置 API Key 时，系统自动使用实验 JSON 中的 `assistMock` 与随机环境等级 Mock。
+
+## 新增实验
+
+在 `backend/src/main/resources/experiments/` 新增 JSON 文件，格式参考 `tensile_steel.json`，重启后端即可。
+
+## API 概览
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/auth/register` | 注册 |
+| POST | `/api/auth/login` | 登录 |
+| GET | `/api/experiments` | 实验列表 |
+| POST | `/api/sessions` | 开始实验会话 |
+| POST | `/api/sessions/{id}/assist` | 求助 / 纠错 |
+| POST | `/api/sessions/{id}/env-check` | 环境巡检 |
+| GET | `/api/sessions/{id}/report` | 报告 JSON |
+| GET | `/api/sessions/{id}/report/docx` | 报告 DOCX 下载 |

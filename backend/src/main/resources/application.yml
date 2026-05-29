@@ -1,0 +1,51 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: wuxiaozhi-backend
+  profiles:
+    active: local
+  datasource:
+    url: jdbc:h2:file:./data/wuxiaozhi;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+wuxiaozhi:
+  jwt:
+    secret: change-this-jwt-secret-in-production-wuxiaozhi-2026
+    expiration-ms: 86400000
+  upload:
+    dir: ./uploads
+  experiments:
+    config-dir: classpath:experiments/
+  dify:
+    base-url: http://188.18.18.149:5001/v1
+    api-key: ${DIFY_API_KEY:}
+    app-mode: chat
+    workflows:
+      # 各工作流在 Dify 中创建应用后，将其 API Key 填到此处（可与全局 api-key 二选一）
+      vision-correction: ${DIFY_WF_VISION_KEY:}
+      text-assist: ${DIFY_WF_TEXT_KEY:}
+      env-check: ${DIFY_WF_ENV_KEY:}
+      report-generate: ${DIFY_WF_REPORT_KEY:}
+
+logging:
+  level:
+    com.wuxiaozhi: INFO
