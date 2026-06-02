@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { experimentApi, sessionApi, uploadApi } from '../api'
+import { sniffImageMime, readFileAsDataUrl } from '../utils/imageFile'
 
 export const useLabStore = defineStore('lab', {
   state: () => ({
@@ -9,8 +10,9 @@ export const useLabStore = defineStore('lab', {
     activeStep: 1,
     imageUrl: '',
     imagePreview: '',
+    composerImageUrl: '',
+    composerImagePreview: '',
     marks: [],
-    showAnalysisLabel: false,
     messages: [],
     envCheckEnabled: true,
     envLevel: 'L0',
@@ -21,7 +23,9 @@ export const useLabStore = defineStore('lab', {
     envTimer: null,
     tutViewCount: 0,
     uploadingImage: false,
-    loadingAssist: false
+    loadingAssist: false,
+    uploadSeq: 0,
+    uploadError: ''
   }),
   getters: {
     stepConfig(state) {
@@ -29,6 +33,12 @@ export const useLabStore = defineStore('lab', {
     },
     stepCount(state) {
       return state.experiment?.menuLabels?.length || 5
+    },
+    /** 已成功上传到服务器的图片地址（不含 ? 参数），用于提交给智能体 */
+    readyImageUrl(state) {
+      const raw = state.composerImageUrl || state.imageUrl
+      if (!raw || !raw.startsWith('/uploads/')) return ''
+      return raw.split('?')[0]
     }
   },
   actions: {
@@ -50,8 +60,9 @@ export const useLabStore = defineStore('lab', {
     resetLabUi() {
       this.imageUrl = ''
       this.imagePreview = ''
+      this.composerImageUrl = ''
+      this.composerImagePreview = ''
       this.marks = []
-      this.showAnalysisLabel = false
       this.messages = []
       this.envLogs = []
       this.envLevel = 'L0'
@@ -67,72 +78,140 @@ export const useLabStore = defineStore('lab', {
       }
     },
     async uploadImage(file) {
+      if (!file || !file.size) {
+        throw new Error('请选择有效的图片文件')
+      }
+
+      const originalFile = file
+      const sniffed = await sniffImageMime(originalFile)
+      if (
+        sniffed.includes('heic') ||
+        sniffed.includes('heif') ||
+        /\.heic$/i.test(originalFile.name || '') ||
+        /\.heif$/i.test(originalFile.name || '')
+      ) {
+        throw new Error('当前浏览器不支持 HEIC/HEIF 格式，请先将图片转为 JPG 或 PNG')
+      }
+
+      const seq = ++this.uploadSeq
       this.uploadingImage = true
-      const localPreview = URL.createObjectURL(file)
-      this.imagePreview = localPreview
+      this.uploadError = ''
       this.marks = []
-      this.showAnalysisLabel = false
+
+      const dataUrl = await readFileAsDataUrl(originalFile)
+      this.composerImagePreview = dataUrl
+      this.imagePreview = dataUrl
+
       try {
-        const { data } = await uploadApi.image(file)
+        const { data } = await uploadApi.image(originalFile)
+        if (seq !== this.uploadSeq) return
+
+        this.composerImageUrl = data.url
         this.imageUrl = data.url
       } catch (e) {
-        URL.revokeObjectURL(localPreview)
+        if (seq !== this.uploadSeq) return
+
+        this.composerImageUrl = ''
         this.imageUrl = ''
-        this.imagePreview = ''
+        this.uploadError = e.response?.data?.message || e.message || '图片上传失败'
         throw e
       } finally {
-        this.uploadingImage = false
+        if (seq === this.uploadSeq) {
+          this.uploadingImage = false
+        }
       }
+    },
+    revokeBlobIfUnused(url) {
+      if (!url?.startsWith('blob:')) return
+      const usedInChat = this.messages.some((m) => m.image === url)
+      if (!usedInChat && this.imagePreview !== url && this.composerImagePreview !== url) {
+        URL.revokeObjectURL(url)
+      }
+    },
+    clearComposerImage() {
+      this.revokeBlobIfUnused(this.composerImagePreview)
+      this.composerImageUrl = ''
+      this.composerImagePreview = ''
     },
     clearImage() {
-      if (this.imagePreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(this.imagePreview)
-      }
+      this.revokeBlobIfUnused(this.composerImagePreview)
+      this.revokeBlobIfUnused(this.imagePreview)
       this.imageUrl = ''
       this.imagePreview = ''
+      this.composerImageUrl = ''
+      this.composerImagePreview = ''
       this.marks = []
-      this.showAnalysisLabel = false
+      this.uploadError = ''
     },
-    pushUser(text, image) {
-      this.messages.push({ role: 'user', text: text || '', image: image || '', ts: Date.now() })
+    pushUser(text, image, imageFallback = '') {
+      this.messages.push({
+        role: 'user',
+        text: text || '',
+        image: image || '',
+        imageFallback: imageFallback || '',
+        ts: Date.now()
+      })
     },
     pushAi(text) {
       this.messages.push({ role: 'ai', text, ts: Date.now() })
     },
     async sendMessage(userMessage) {
-      if (!this.session?.id || this.loadingAssist || this.uploadingImage) return
+      if (!this.session?.id || this.loadingAssist || this.uploadingImage) return false
+
       const text = (userMessage || '').trim()
-      if (!text && !this.imageUrl) return
+      const imageUrl = this.readyImageUrl
+      const hasPreview = !!(this.composerImagePreview || this.imagePreview)
+
+      if (!text && !imageUrl) {
+        if (hasPreview) {
+          window.alert(
+            this.uploadError
+              ? `图片上传失败：${this.uploadError}\n请点「更换图片」重新上传。`
+              : '图片尚未上传完成，请等待上传结束后再发送'
+          )
+        }
+        return false
+      }
 
       this.loadingAssist = true
-      const imageUrl = this.imageUrl
-      const imagePreview = this.imagePreview
       const hadImage = !!imageUrl
+      const displayImage = this.composerImagePreview || this.imagePreview || imageUrl
+      this.marks = []
       const prompt = text || (hadImage ? '请分析上传的实验图片。' : '')
 
-      this.pushUser(prompt, hadImage ? imagePreview : '')
+      this.pushUser(prompt, hadImage ? displayImage : '', hadImage ? imageUrl : '')
+      this.clearComposerImage()
 
       const aiIndex = this.messages.length
       this.messages.push({ role: 'ai', text: '', streaming: true, ts: Date.now() })
+
+      let pendingMarks = null
+      const applyMarksIfReady = () => {
+        if (pendingMarks?.length) {
+          this.marks = pendingMarks
+          pendingMarks = null
+        }
+      }
 
       try {
         await sessionApi.assistStream(
           this.session.id,
           { userMessage: prompt, imageUrl: imageUrl || undefined },
           {
+            onMarks: (marks) => {
+              if (marks?.length) pendingMarks = marks
+            },
             onChunk: (chunk) => {
-              this.loadingAssist = false
+              applyMarksIfReady()
               this.messages[aiIndex].text += chunk
             },
             onDone: (data) => {
               this.messages[aiIndex].streaming = false
-              if (data.marks?.length) {
-                this.marks = data.marks
-                this.showAnalysisLabel = true
-              }
-              if (!this.messages[aiIndex].text && data.feedback) {
+              if (data.feedback) {
                 this.messages[aiIndex].text = data.feedback
               }
+              if (data.marks?.length) pendingMarks = data.marks
+              applyMarksIfReady()
             },
             onError: (msg) => {
               this.messages[aiIndex].streaming = false
@@ -143,7 +222,6 @@ export const useLabStore = defineStore('lab', {
           }
         )
         this.session = (await sessionApi.get(this.session.id)).data
-        if (hadImage) this.clearImage()
       } catch (e) {
         this.messages[aiIndex].streaming = false
         const msg = e.message || '网络异常，请稍后重试'
@@ -156,6 +234,7 @@ export const useLabStore = defineStore('lab', {
           this.messages[aiIndex].streaming = false
         }
       }
+      return true
     },
     async runEnvCheck() {
       if (!this.session?.id || this.envCheckRunning) return

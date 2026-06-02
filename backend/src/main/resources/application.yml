@@ -45,6 +45,10 @@ wuxiaozhi:
       text-assist: ${DIFY_WF_TEXT_KEY:}
       env-check: ${DIFY_WF_ENV_KEY:}
       report-generate: ${DIFY_WF_REPORT_KEY:}
+    knowledge:
+      top-k: 5
+      # 知识库检索 Key；留空则使用 text-assist / 全局 api-key
+      api-key: ${DIFY_KB_API_KEY:}
 
 logging:
   level:

@@ -97,6 +97,18 @@ set DIFY_WF_ENV_KEY=app-env-xxxx
 
 在 `backend/src/main/resources/experiments/` 新增 JSON 文件，格式参考 `tensile_steel.json`，重启后端即可。
 
+每个实验可配置 Dify 知识库（一实验一库）：
+
+```json
+"dify": {
+  "datasetId": "Dify 知识库 UUID"
+}
+```
+
+求助时（**含带图**）后端会先调用 `/datasets/{datasetId}/retrieve`，将召回内容写入 `inputs.kb_context` 再调 Chatflow。Dify 工作流开始节点需增加变量：`experiment_code`、`kb_context`、`dataset_id`（可选）、`step_title` 等；**带图分支的 LLM 也要引用 `kb_context`**，不要只做视觉分析。
+
+知识库检索 API Key 可在 `wuxiaozhi.dify.knowledge.api-key` 单独配置，留空则使用 `text-assist` Key。
+
 ## API 概览
 
 | 方法 | 路径 | 说明 |

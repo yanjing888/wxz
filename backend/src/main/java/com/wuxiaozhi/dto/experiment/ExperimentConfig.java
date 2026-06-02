@@ -16,4 +16,6 @@ public class ExperimentConfig {
     private List<String> reportKnowledge;
     private List<String> reportPath;
     private Map<String, StepConfig> steps;
+    /** Dify 侧配置：知识库 ID 等 */
+    private ExperimentDifyConfig dify;
 }

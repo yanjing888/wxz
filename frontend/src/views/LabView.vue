@@ -1,54 +1,71 @@
 <template>
-  <div v-if="booting" class="w-full h-full flex items-center justify-center bg-[#eef2f7] text-slate-500 text-sm">
-    正在进入实验室…
+  <div v-if="booting" class="w-full h-full flex flex-col items-center justify-center text-ink-muted text-sm gap-4">
+    <div class="w-12 h-12 rounded-2xl brand-gradient flex items-center justify-center text-white font-bold shadow-brand chat-loading-avatar">智</div>
+    <p>正在进入实验室<span class="chat-loading-dots ml-1"><span /><span /><span /></span></p>
   </div>
-  <div v-else-if="bootError" class="w-full h-full flex flex-col items-center justify-center bg-[#eef2f7] px-6 text-center gap-4">
-    <p class="text-red-600 text-sm max-w-md">{{ bootError }}</p>
-    <button type="button" class="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold" @click="retryBoot">重试</button>
+
+  <div v-else-if="bootError" class="w-full h-full flex flex-col items-center justify-center px-6 text-center gap-4">
+    <div class="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-red-500 text-2xl">!</div>
+    <p class="text-red-600 text-sm max-w-md leading-relaxed">{{ bootError }}</p>
+    <button type="button" class="btn-brand px-7 py-2.5 rounded-xl text-sm font-bold" @click="retryBoot">重新连接</button>
   </div>
-  <div v-else class="flex flex-row w-full h-full overflow-hidden bg-[#eef2f7]">
-    <SideNav @quick-stats="showQuickStats = true" />
 
-    <main class="flex-1 flex flex-col border-r border-[#dbe3ee] bg-[#f7f9fc] overflow-hidden min-w-0">
-      <LabHeader
-        :experiment-name="lab.experiment?.name"
-        :student-name="lab.session?.studentName || '学生'"
-        :student-class="lab.session?.studentClass || ''"
-      />
-      <StepPanel
-        :menu-labels="lab.experiment?.menuLabels || []"
-        :active-step="lab.activeStep"
-        :step="lab.stepConfig"
-        @select="lab.selectStep"
-        @tutorial="openTutorial"
-      />
-      <ImageUploadZone
-        ref="uploadZone"
-        :image-preview="lab.imagePreview"
-        :marks="lab.marks"
-        :show-analysis-label="lab.showAnalysisLabel"
-        @upload="onUpload"
-        @clear="lab.clearImage()"
-      />
-    </main>
-
-    <RightPanel
-      :messages="lab.messages"
-      :loading-assist="lab.loadingAssist"
-      :uploading-image="lab.uploadingImage"
-      :image-preview="lab.imagePreview"
-      :env-check-enabled="lab.envCheckEnabled"
+  <div v-else class="flex flex-col w-full h-full overflow-hidden">
+    <!-- 顶栏 -->
+    <LabHeader
+      :experiment-name="lab.experiment?.name"
+      :student-name="lab.session?.studentName || '学生'"
+      :student-class="lab.session?.studentClass || ''"
       :env-level="lab.envLevel"
-      :env-hint="lab.envHint"
-      :env-logs="lab.envLogs"
-      :env-check-running="lab.envCheckRunning"
-      @send="lab.sendMessage"
-      @upload-image="onUpload"
-      @clear-image="lab.clearImage()"
+      @quick-stats="showQuickStats = true"
       @report="openReport"
-      @toggle-env="lab.toggleEnvCheck"
-      @env-check="lab.runEnvCheck"
     />
+
+    <!-- 主体：左辅助栏（步骤指导 + 图片 + 摄像头）+ 右 AI 主舞台 -->
+    <div class="flex-1 flex flex-row overflow-hidden min-h-0 gap-4 px-4 pb-4 pt-4">
+      <!-- 左辅助栏 -->
+      <aside class="w-[400px] shrink-0 flex flex-col gap-3 min-h-0">
+        <StepPanel
+          :menu-labels="lab.experiment?.menuLabels || []"
+          :active-step="lab.activeStep"
+          :step="lab.stepConfig"
+          @select="lab.selectStep"
+          @tutorial="openTutorial"
+        />
+        <ImageUploadZone
+          ref="uploadZone"
+          :image-preview="lab.imagePreview"
+          :uploading-image="lab.uploadingImage"
+          :upload-error="lab.uploadError"
+          :marks="lab.marks"
+          @upload="onUpload"
+          @clear="lab.clearImage()"
+        />
+        <BenchCameraPanel
+          :env-check-enabled="lab.envCheckEnabled"
+          :env-level="lab.envLevel"
+          :env-hint="lab.envHint"
+          :env-logs="lab.envLogs"
+          :env-check-running="lab.envCheckRunning"
+          @toggle-env="lab.toggleEnvCheck"
+          @env-check="lab.runEnvCheck"
+        />
+      </aside>
+
+      <!-- 右：AI 智能助手主舞台 -->
+      <section class="flex-1 min-w-0 flex flex-col">
+        <RightPanel
+          :messages="lab.messages"
+          :loading-assist="lab.loadingAssist"
+          :uploading-image="lab.uploadingImage"
+          :image-preview="lab.composerImagePreview"
+          :image-ready="!!lab.readyImageUrl"
+          @send="onSendMessage"
+          @upload-image="onUpload"
+          @clear-image="lab.clearComposerImage()"
+        />
+      </section>
+    </div>
 
     <TutorialModal
       :visible="showTutorial"
@@ -79,10 +96,10 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useLabStore } from '../stores/lab'
-import SideNav from '../components/layout/SideNav.vue'
 import LabHeader from '../components/layout/LabHeader.vue'
 import StepPanel from '../components/step/StepPanel.vue'
 import ImageUploadZone from '../components/upload/ImageUploadZone.vue'
+import BenchCameraPanel from '../components/monitor/BenchCameraPanel.vue'
 import RightPanel from '../components/layout/RightPanel.vue'
 import TutorialModal from '../components/modals/TutorialModal.vue'
 import ReportModal from '../components/modals/ReportModal.vue'
@@ -131,7 +148,16 @@ onMounted(() => {
 onUnmounted(() => lab.stopEnvTimer())
 
 async function onUpload(file) {
-  await lab.uploadImage(file)
+  try {
+    await lab.uploadImage(file)
+  } catch (e) {
+    const msg = lab.uploadError || e.response?.data?.message || e.message || '图片上传失败'
+    window.alert(msg)
+  }
+}
+
+async function onSendMessage(text) {
+  return lab.sendMessage(text)
 }
 
 async function openTutorial() {

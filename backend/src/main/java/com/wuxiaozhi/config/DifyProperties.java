@@ -16,6 +16,22 @@ public class DifyProperties {
     /** workflow = /workflows/run；chat = /chat-messages（对话型/Chatflow 应用） */
     private String appMode = "chat";
     private Map<String, String> workflows = new HashMap<>();
+    private Knowledge knowledge = new Knowledge();
+
+    @Data
+    public static class Knowledge {
+        /** 每次检索返回的最大片段数 */
+        private int topK = 5;
+        /** 知识库检索 API Key；留空则回退 text-assist → 全局 api-key */
+        private String apiKey = "";
+    }
+
+    public String resolveKnowledgeApiKey() {
+        if (knowledge.getApiKey() != null && !knowledge.getApiKey().isBlank()) {
+            return knowledge.getApiKey();
+        }
+        return resolveApiKey("text-assist");
+    }
 
     public boolean isConfigured() {
         if (apiKey != null && !apiKey.isBlank()) return true;

@@ -26,10 +26,30 @@ export const sessionApi = {
 }
 
 export const uploadApi = {
-  image: (file) => {
+  async image(file) {
     const fd = new FormData()
-    fd.append('file', file)
-    return http.post('/api/upload', fd)
+    fd.append('file', file, file.name || 'image.jpg')
+
+    let res
+    try {
+      res = await fetch('/api/upload', { method: 'POST', body: fd })
+    } catch {
+      throw new Error('无法连接后端，请确认 backend 已在 8080 端口运行')
+    }
+
+    const text = await res.text()
+    let payload
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      throw new Error(text || `上传失败 (${res.status})`)
+    }
+
+    if (!res.ok) {
+      throw new Error(payload.message || `上传失败 (${res.status})`)
+    }
+
+    return { data: payload }
   }
 }
 

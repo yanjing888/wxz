@@ -18,6 +18,9 @@ function parseSseBlock(block, handlers) {
     handlers.onChunk?.(typeof payload === 'string' ? payload : payload.text || '')
   } else if (event === 'start') {
     handlers.onStart?.(payload)
+  } else if (event === 'marks') {
+    const marks = Array.isArray(payload) ? payload : payload.marks
+    if (marks?.length) handlers.onMarks?.(marks)
   } else if (event === 'done') {
     handlers.onDone?.(payload)
   } else if (event === 'error') {

@@ -3,6 +3,8 @@ package com.wuxiaozhi.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wuxiaozhi.dto.*;
 import com.wuxiaozhi.dto.experiment.ExperimentConfig;
+import com.wuxiaozhi.dto.experiment.ExperimentDifyConfig;
+import com.wuxiaozhi.dto.experiment.MarkDto;
 import com.wuxiaozhi.dto.experiment.StepConfig;
 import com.wuxiaozhi.entity.CorrectionLog;
 import com.wuxiaozhi.entity.EnvCheckLog;
@@ -10,6 +12,8 @@ import com.wuxiaozhi.entity.LabSession;
 import com.wuxiaozhi.repository.CorrectionLogRepository;
 import com.wuxiaozhi.repository.EnvCheckLogRepository;
 import com.wuxiaozhi.repository.LabSessionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.stereotype.Service;
@@ -26,6 +30,8 @@ import java.util.concurrent.CompletableFuture;
 @Service
 public class LabSessionService {
 
+    private static final Logger log = LoggerFactory.getLogger(LabSessionService.class);
+
     private static final long GUEST_USER_ID = 0L;
 
     private final LabSessionRepository sessionRepository;
@@ -33,6 +39,7 @@ public class LabSessionService {
     private final EnvCheckLogRepository envCheckLogRepository;
     private final ExperimentConfigService experimentConfigService;
     private final DifyService difyService;
+    private final DifyRetrieveService difyRetrieveService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
@@ -41,6 +48,7 @@ public class LabSessionService {
                              EnvCheckLogRepository envCheckLogRepository,
                              ExperimentConfigService experimentConfigService,
                              DifyService difyService,
+                             DifyRetrieveService difyRetrieveService,
                              ObjectMapper objectMapper,
                              PlatformTransactionManager transactionManager) {
         this.sessionRepository = sessionRepository;
@@ -48,6 +56,7 @@ public class LabSessionService {
         this.envCheckLogRepository = envCheckLogRepository;
         this.experimentConfigService = experimentConfigService;
         this.difyService = difyService;
+        this.difyRetrieveService = difyRetrieveService;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -104,7 +113,9 @@ public class LabSessionService {
             try {
                 AssistResponse resp = difyService.streamAssist("text-assist", prepare.inputs(), "guest-" + sessionId,
                         prepare.experiment(), prepare.session().getActiveStep(), prepare.hasImage(),
-                        prepare.hasImage() ? req.getImageUrl() : null, delta -> sendChunk(emitter, delta));
+                        prepare.hasImage() ? req.getImageUrl() : null,
+                        delta -> sendChunk(emitter, delta),
+                        marks -> sendMarks(emitter, marks));
                 transactionTemplate.executeWithoutResult(status ->
                         persistAssistResult(sessionId, req, prepare, resp));
                 emitter.send(SseEmitter.event().name("done").data(resp));
@@ -136,6 +147,17 @@ public class LabSessionService {
         }
     }
 
+    private void sendMarks(SseEmitter emitter, List<MarkDto> marks) {
+        if (marks == null || marks.isEmpty()) {
+            return;
+        }
+        try {
+            emitter.send(SseEmitter.event().name("marks").data(new AssistStreamMarks(marks)));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private AssistPrepare prepareAssist(Long sessionId, AssistRequest req) {
         LabSession session = getSession(sessionId);
 
@@ -148,10 +170,71 @@ public class LabSessionService {
             userMessage = "请分析上传的实验图片。";
         }
 
+        log.info("assist prepare sessionId={}, hasImage={}, imageUrl={}", sessionId, hasImage, req.getImageUrl());
+
         ExperimentConfig exp = experimentConfigService.getByCode(session.getExperimentCode());
         Map<String, Object> inputs = new LinkedHashMap<>();
         inputs.put("query", userMessage);
+        putExperimentInputs(inputs, exp.getName(), exp.getCode());
+        if (exp.getCategory() != null && !exp.getCategory().isBlank()) {
+            inputs.put("category", exp.getCategory());
+        }
+
+        StepConfig step = resolveStep(exp, session.getActiveStep());
+        if (step != null) {
+            inputs.put("step_id", session.getActiveStep());
+            if (step.getTitle() != null) {
+                inputs.put("step_title", step.getTitle());
+            }
+            if (step.getDesc() != null) {
+                inputs.put("step_desc", step.getDesc());
+            }
+        }
+
+        attachKnowledgeContext(inputs, exp, session, step, userMessage, hasImage);
+
         return new AssistPrepare(session, exp, userMessage, hasImage, inputs);
+    }
+
+    /** 纯文字与带图均检索当前实验知识库（若已配置 datasetId） */
+    private void attachKnowledgeContext(Map<String, Object> inputs, ExperimentConfig exp, LabSession session,
+                                        StepConfig step, String userMessage, boolean hasImage) {
+        ExperimentDifyConfig dify = exp.getDify();
+        if (dify == null || dify.getDatasetId() == null || dify.getDatasetId().isBlank()) {
+            return;
+        }
+        String datasetId = dify.getDatasetId().trim();
+        String retrievalQuery = buildRetrievalQuery(exp, step, userMessage, hasImage);
+        String kbContext = difyRetrieveService.retrieve(datasetId, retrievalQuery);
+
+        inputs.put("dataset_id", datasetId);
+        inputs.put("kb_context", kbContext);
+        log.info("KB retrieve sessionId={}, experiment={}, hasImage={}, retrievalQueryLen={}, kbContextLen={}",
+                session.getId(), exp.getCode(), hasImage, retrievalQuery.length(), kbContext.length());
+    }
+
+    private String buildRetrievalQuery(ExperimentConfig exp, StepConfig step, String userMessage, boolean hasImage) {
+        StringBuilder q = new StringBuilder();
+        if (exp.getName() != null) {
+            q.append(exp.getName());
+        }
+        if (step != null && step.getTitle() != null && !step.getTitle().isBlank()) {
+            q.append(' ').append(step.getTitle());
+        }
+        if (userMessage != null && !userMessage.isBlank()) {
+            q.append(' ').append(userMessage);
+        }
+        if (hasImage) {
+            q.append(" 实验装置 仪器接线 操作规范 常见错误 读数方法");
+        }
+        return q.toString().trim();
+    }
+
+    private StepConfig resolveStep(ExperimentConfig exp, int stepId) {
+        if (exp.getSteps() == null) {
+            return null;
+        }
+        return exp.getSteps().get(String.valueOf(stepId));
     }
 
     private void persistAssistResult(Long sessionId, AssistRequest req, AssistPrepare prepare, AssistResponse resp) {

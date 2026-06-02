@@ -12,7 +12,7 @@ import com.wuxiaozhi.dto.experiment.MarkDto;
 import com.wuxiaozhi.dto.experiment.StepConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -21,11 +21,13 @@ import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
@@ -64,11 +66,13 @@ public class DifyService {
     }
 
     /**
-     * 流式调用 Dify，逐段回调 onDelta；Dify 不可用时回退 mock 并逐字模拟输出。
+     * 流式调用 Dify：answer 仅含用户可见文本；regions 从 node_finished（参数提取器）单独采集。
+     * Dify 不可用时才回退 Mock。
      */
     public AssistResponse streamAssist(String workflowKey, Map<String, Object> inputs, String userId,
                                        ExperimentConfig experiment, int stepId, boolean hasImage,
-                                       String imageUrl, Consumer<String> onDelta) {
+                                       String imageUrl, Consumer<String> onDelta,
+                                       Consumer<List<MarkDto>> onMarks) {
         if (canCall(workflowKey) && difyProperties.isChatMode()) {
             try {
                 String query = buildAssistQuery(inputs, hasImage);
@@ -77,22 +81,67 @@ public class DifyService {
                 String apiKey = difyProperties.resolveApiKey(workflowKey);
                 String url = difyProperties.getBaseUrl().replaceAll("/$", "") + "/chat-messages";
                 StringBuilder full = new StringBuilder();
+                List<MarkDto> streamMarks = new ArrayList<>();
                 streamChatSse(url, apiKey, body, node -> {
+                    absorbStreamMeta(node, streamMarks, onMarks);
                     String delta = extractStreamDelta(node);
                     if (!delta.isEmpty()) {
                         full.append(delta);
                         onDelta.accept(delta);
                     }
                 });
-                log.info("Dify stream ok, workflowKey={}, length={}", workflowKey, full.length());
-                return parseAnswerAsAssist(full.toString(), true, hasImage);
+                log.info("Dify stream ok, workflowKey={}, length={}, marks={}",
+                        workflowKey, full.length(), streamMarks.size());
+                return buildStreamAssistResponse(full.toString(), streamMarks, hasImage);
             } catch (Throwable e) {
                 log.warn("Dify stream failed, fallback to mock: {}", e.getMessage());
             }
         }
         AssistResponse mock = mockAssist(experiment, stepId, hasImage);
+        if (onMarks != null && mock.getMarks() != null && !mock.getMarks().isEmpty()) {
+            onMarks.accept(mock.getMarks());
+        }
         streamMockFeedback(mock.getFeedback(), onDelta);
         return mock;
+    }
+
+    /** 从 Dify SSE 的 node_finished 采集参数提取器 / 多模态 LLM 的 regions，并即时回调 */
+    private void absorbStreamMeta(JsonNode node, List<MarkDto> marksHolder, Consumer<List<MarkDto>> onMarks) {
+        if (!"node_finished".equals(node.path("event").asText(""))) {
+            return;
+        }
+        JsonNode data = node.path("data");
+        JsonNode outputs = data.path("outputs");
+        if (outputs.isMissingNode() || outputs.isNull()) {
+            return;
+        }
+        String nodeType = data.path("node_type").asText("");
+        String title = data.path("title").asText("");
+
+        List<MarkDto> parsed = List.of();
+        if ("parameter-extractor".equals(nodeType) || title.contains("参数提取")) {
+            parsed = DifyRegionParser.fromOutputs(outputs, objectMapper);
+        } else if ("llm".equals(nodeType) && (title.contains("多模态") || title.contains("理解"))) {
+            parsed = DifyRegionParser.fromOutputs(outputs, objectMapper);
+        }
+
+        if (!parsed.isEmpty()) {
+            marksHolder.clear();
+            marksHolder.addAll(parsed);
+            log.info("Dify regions captured from node '{}', count={}", title, parsed.size());
+            if (onMarks != null) {
+                onMarks.accept(List.copyOf(parsed));
+            }
+        }
+    }
+
+    private AssistResponse buildStreamAssistResponse(String answer, List<MarkDto> streamMarks, boolean hasImage) {
+        AssistResponse resp = new AssistResponse();
+        resp.setFromDify(true);
+        resp.setType(!streamMarks.isEmpty() || hasImage ? "vision_correction" : "text_assist");
+        resp.setFeedback(answer != null ? answer.trim() : "");
+        resp.setMarks(streamMarks);
+        return resp;
     }
 
     /** mock 兜底：按字符逐字推送，模拟真实流式打字效果 */
@@ -129,6 +178,7 @@ public class DifyService {
             Map<String, Object> fileRef = difyFileRef(uploadFileId);
             mergedInputs.put("image", fileRef);
             body.put("inputs", mergedInputs);
+            body.put("files", List.of(fileRef));
             if (!query.contains("图")) {
                 query = "用户已上传实验图片，请结合图片回答：" + query;
                 body.put("query", query);
@@ -291,14 +341,28 @@ public class DifyService {
 
     private String uploadImageToDify(String imageUrl, String userId, String apiKey) {
         Path path = fileStorageService.resolve(imageUrl);
-        if (!java.nio.file.Files.exists(path)) {
+        if (!Files.exists(path)) {
             throw new IllegalStateException("Image file not found: " + imageUrl);
         }
+
+        byte[] bytes;
+        try {
+            bytes = Files.readAllBytes(path);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read image: " + imageUrl, e);
+        }
+        String uploadName = buildDifyUploadFilename(path.getFileName().toString(), bytes);
+        log.info("Uploading image to Dify, stored={}, uploadName={}, bytes={}", path.getFileName(), uploadName, bytes.length);
 
         String uploadUrl = difyProperties.getBaseUrl().replaceAll("/$", "") + "/files/upload";
 
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
-        form.add("file", new FileSystemResource(path.toFile()));
+        form.add("file", new ByteArrayResource(bytes) {
+            @Override
+            public String getFilename() {
+                return uploadName;
+            }
+        });
         form.add("user", userId);
 
         HttpHeaders headers = new HttpHeaders();
@@ -317,6 +381,12 @@ public class DifyService {
             String msg = ex.getResponseBodyAsString();
             throw new IllegalStateException(msg.isBlank() ? ex.getMessage() : msg, ex);
         }
+    }
+
+    /** 按文件头决定上传文件名，避免 JPEG 内容却带 .png 后缀导致 Dify 视觉模型无法识别。 */
+    private String buildDifyUploadFilename(String storedName, byte[] bytes) {
+        String ext = FileStorageService.resolveExtension(storedName, null, bytes);
+        return "wxz-upload" + ext;
     }
 
     private JsonNode postJson(String url, String apiKey, Map<String, Object> body) {
@@ -447,10 +517,15 @@ public class DifyService {
         AssistMock mock = step != null ? step.getAssistMock() : null;
         if (hasImage && mock != null) {
             resp.setType("vision_correction");
-            resp.setFeedback(mock.getFeedback());
             resp.setErrorType(mock.getErrorType());
             resp.setDetail(mock.getDetail());
-            resp.setMarks(mock.getMarks() != null ? mock.getMarks() : List.of());
+            List<MarkDto> jsonMarks = mock.getMarks() != null ? mock.getMarks() : List.of();
+            resp.setFeedback(mock.getFeedback());
+            resp.setMarks(jsonMarks);
+        } else if (hasImage) {
+            resp.setType("vision_correction");
+            resp.setFeedback("已收到图片。当前 Dify 不可用，请稍后重试。");
+            resp.setMarks(List.of());
         } else if (step != null) {
             resp.setType("text_assist");
             resp.setFeedback("**" + step.getTitle() + "**\n\n" + step.getDesc()
