@@ -1,22 +1,10 @@
 <template>
   <section class="surface-card rounded-2xl flex-1 flex flex-col overflow-hidden min-h-0">
-    <header class="shrink-0 flex items-center justify-between px-5 py-3 border-b border-line-soft">
-      <div class="flex items-center gap-2.5">
-        <div class="w-9 h-9 rounded-xl brand-gradient flex items-center justify-center text-white text-sm font-bold shadow-brand">智</div>
-        <div class="flex flex-col leading-tight">
-          <span class="text-sm font-bold text-ink-strong">智能助手 · AI Tutor</span>
-          <span class="text-[10px] text-ink-faint">基于当前实验步骤与知识库回答 · 支持图像理解</span>
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <span class="chip">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          在线就绪
-        </span>
-        <span class="chip hidden xl:inline-flex">
-          <span class="font-mono text-ink-base">{{ messages.length }}</span>
-          <span class="text-ink-faint">条消息</span>
-        </span>
+    <header class="shrink-0 flex items-center gap-2.5 px-5 py-3 border-b border-line-soft">
+      <div class="w-9 h-9 rounded-xl brand-gradient flex items-center justify-center text-white text-sm font-bold shadow-brand">智</div>
+      <div class="flex flex-col leading-tight">
+        <span class="text-sm font-bold text-ink-strong">智能助手 · AI Tutor</span>
+        <span class="text-[10px] text-ink-faint">基于当前实验步骤与知识库回答 · 支持图像理解</span>
       </div>
     </header>
 

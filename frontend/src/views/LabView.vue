@@ -13,12 +13,15 @@
   <div v-else class="flex flex-col w-full h-full overflow-hidden">
     <!-- 顶栏 -->
     <LabHeader
-      :experiment-name="lab.experiment?.name"
+      :experiments="lab.experiments"
+      :experiment-code="lab.experiment?.code || ''"
       :student-name="lab.session?.studentName || '学生'"
       :student-class="lab.session?.studentClass || ''"
       :env-level="lab.envLevel"
+      :switching="lab.switchingExperiment"
       @quick-stats="showQuickStats = true"
       @report="openReport"
+      @experiment-change="onExperimentChange"
     />
 
     <!-- 主体：左辅助栏（步骤指导 + 图片 + 摄像头）+ 右 AI 主舞台 -->
@@ -32,7 +35,41 @@
           @select="lab.selectStep"
           @tutorial="openTutorial"
         />
+        <InstrumentDataPanel
+          v-if="lab.useDeviceData"
+          :step-title="lab.stepConfig?.title"
+          :device-type="lab.deviceType"
+          :device-name="lab.deviceName"
+          :device-state="lab.deviceState"
+          :device-connected="lab.deviceConnected"
+          :device-busy="lab.deviceBusy"
+          :sampling-hz="lab.deviceSamplingHz"
+          :fields="lab.currentDataFields"
+          :snapshot="lab.deviceSnapshot"
+          :live="lab.deviceLive"
+          :curve-points="lab.deviceCurve"
+          :reading="lab.deviceReading"
+          :submitting="lab.submittingData"
+          :validation-errors="lab.dataSubmitErrors"
+          :can-submit-data="lab.deviceHasSubmitData"
+          :acquire-progress="lab.deviceAcquireProgress"
+          @start-acquire="lab.startDeviceAcquisition()"
+          @stop-acquire="lab.stopDeviceAcquisition()"
+          @read-once="lab.readDeviceOnce()"
+          @submit="lab.submitDeviceData()"
+        />
+        <DataCollectionPanel
+          v-else-if="lab.useManualDataCorrection"
+          :fields="lab.currentDataFields"
+          :step-title="lab.stepConfig?.title"
+          :values="lab.currentStepDataValues"
+          :last-saved="lab.currentStepDataSaved"
+          :submitting="lab.submittingData"
+          :validation-errors="lab.dataSubmitErrors"
+          @submit="onSubmitData"
+        />
         <ImageUploadZone
+          v-else-if="lab.useVisionCorrection"
           ref="uploadZone"
           :image-preview="lab.imagePreview"
           :uploading-image="lab.uploadingImage"
@@ -98,6 +135,8 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useLabStore } from '../stores/lab'
 import LabHeader from '../components/layout/LabHeader.vue'
 import StepPanel from '../components/step/StepPanel.vue'
+import InstrumentDataPanel from '../components/data/InstrumentDataPanel.vue'
+import DataCollectionPanel from '../components/data/DataCollectionPanel.vue'
 import ImageUploadZone from '../components/upload/ImageUploadZone.vue'
 import BenchCameraPanel from '../components/monitor/BenchCameraPanel.vue'
 import RightPanel from '../components/layout/RightPanel.vue'
@@ -122,7 +161,7 @@ async function bootstrap() {
   try {
     if (!lab.session?.id) {
       await lab.loadExperiments()
-      const code = localStorage.getItem('wxz_exp') || lab.experiments[0]?.code || 'tensile_steel'
+      const code = localStorage.getItem('wxz_exp') || 'tensile_steel'
       const name = localStorage.getItem('wxz_name') || '学生'
       const cls = localStorage.getItem('wxz_class') || ''
       await lab.loadExperiment(code)
@@ -145,7 +184,10 @@ onMounted(() => {
   bootstrap()
 })
 
-onUnmounted(() => lab.stopEnvTimer())
+onUnmounted(() => {
+  lab.stopEnvTimer()
+  lab.teardownDevice()
+})
 
 async function onUpload(file) {
   try {
@@ -158,6 +200,28 @@ async function onUpload(file) {
 
 async function onSendMessage(text) {
   return lab.sendMessage(text)
+}
+
+async function onExperimentChange(code) {
+  if (!code || code === lab.experiment?.code) return
+  const target = lab.experiments.find((e) => e.code === code)
+  const label = target?.name || code
+  if (
+    !window.confirm(
+      `将切换到「${label}」并开始新的实验会话，当前步骤与对话记录不会保留。\n\n确定切换吗？`
+    )
+  ) {
+    return
+  }
+  try {
+    await lab.switchExperiment(code)
+  } catch (e) {
+    window.alert(e.response?.data?.message || e.message || '切换实验失败')
+  }
+}
+
+async function onSubmitData(values) {
+  await lab.submitStepData(values)
 }
 
 async function openTutorial() {

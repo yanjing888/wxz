@@ -9,9 +9,11 @@ import com.wuxiaozhi.dto.experiment.StepConfig;
 import com.wuxiaozhi.entity.CorrectionLog;
 import com.wuxiaozhi.entity.EnvCheckLog;
 import com.wuxiaozhi.entity.LabSession;
+import com.wuxiaozhi.entity.SessionDataLog;
 import com.wuxiaozhi.repository.CorrectionLogRepository;
 import com.wuxiaozhi.repository.EnvCheckLogRepository;
 import com.wuxiaozhi.repository.LabSessionRepository;
+import com.wuxiaozhi.repository.SessionDataLogRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -40,23 +42,29 @@ public class LabSessionService {
     private final ExperimentConfigService experimentConfigService;
     private final DifyService difyService;
     private final DifyRetrieveService difyRetrieveService;
+    private final SessionDataLogRepository sessionDataLogRepository;
+    private final DataValidationService dataValidationService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
     public LabSessionService(LabSessionRepository sessionRepository,
                              CorrectionLogRepository correctionLogRepository,
                              EnvCheckLogRepository envCheckLogRepository,
+                             SessionDataLogRepository sessionDataLogRepository,
                              ExperimentConfigService experimentConfigService,
                              DifyService difyService,
                              DifyRetrieveService difyRetrieveService,
+                             DataValidationService dataValidationService,
                              ObjectMapper objectMapper,
                              PlatformTransactionManager transactionManager) {
         this.sessionRepository = sessionRepository;
         this.correctionLogRepository = correctionLogRepository;
         this.envCheckLogRepository = envCheckLogRepository;
+        this.sessionDataLogRepository = sessionDataLogRepository;
         this.experimentConfigService = experimentConfigService;
         this.difyService = difyService;
         this.difyRetrieveService = difyRetrieveService;
+        this.dataValidationService = dataValidationService;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -85,6 +93,165 @@ public class LabSessionService {
         LabSession session = getSession(sessionId);
         session.setActiveStep(stepId);
         return sessionRepository.save(session);
+    }
+
+    public Map<String, Object> getSessionData(Long sessionId) {
+        getSession(sessionId);
+        List<SessionDataLog> logs = sessionDataLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        Map<String, Object> byStep = new LinkedHashMap<>();
+        for (SessionDataLog log : logs) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("stepId", log.getStepId());
+            entry.put("stepTitle", log.getStepTitle());
+            entry.put("values", readJsonMap(log.getValuesJson()));
+            entry.put("validation", readJsonMap(log.getValidationJson()));
+            entry.put("feedback", log.getFeedback());
+            entry.put("createdAt", log.getCreatedAt() != null ? log.getCreatedAt().toString() : "");
+            byStep.put(String.valueOf(log.getStepId()), entry);
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("byStep", byStep);
+        return body;
+    }
+
+    @Transactional
+    public SessionDataSubmitResponse submitSessionData(Long sessionId, SubmitSessionDataRequest req) {
+        LabSession session = getSession(sessionId);
+        ExperimentConfig exp = experimentConfigService.getByCode(session.getExperimentCode());
+        int stepId = req.getStepId() != null ? req.getStepId() : session.getActiveStep();
+        StepConfig step = resolveStep(exp, stepId);
+
+        if (!isDataStep(exp, step)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前步骤请使用拍照纠错，不支持数据提交");
+        }
+
+        Map<String, Object> values = req.getValues() != null ? new LinkedHashMap<>(req.getValues()) : Map.of();
+        DataValidationResult validation = dataValidationService.validate(exp, step, values);
+
+        Map<String, Object> inputs = new LinkedHashMap<>();
+        String dataJson = writeJson(values);
+        inputs.put("query", buildDataAssistQuery(step, validation, values));
+        inputs.put("data_json", dataJson);
+        inputs.put("correction_mode", "data");
+        putExperimentInputs(inputs, exp.getName(), exp.getCode());
+        if (exp.getCategory() != null && !exp.getCategory().isBlank()) {
+            inputs.put("category", exp.getCategory());
+        }
+        inputs.put("step_id", stepId);
+        if (step.getTitle() != null) {
+            inputs.put("step_title", step.getTitle());
+        }
+        if (step.getDesc() != null) {
+            inputs.put("step_desc", step.getDesc());
+        }
+        attachKnowledgeContext(inputs, exp, session, step, inputs.get("query").toString(), false);
+
+        AssistResponse assist = difyService.assist("text-assist", inputs, "guest-" + sessionId, exp, stepId, false, null, true);
+        String feedback = prependValidationSummary(assist.getFeedback(), validation);
+        assist.setFeedback(feedback);
+
+        SessionDataLog log = new SessionDataLog();
+        log.setSessionId(sessionId);
+        log.setStepId(stepId);
+        log.setStepTitle(step != null && step.getTitle() != null ? step.getTitle() : "");
+        log.setValuesJson(dataJson);
+        log.setValidationJson(writeJson(validation));
+        log.setFeedback(feedback);
+        sessionDataLogRepository.save(log);
+
+        session.setHelpCount(session.getHelpCount() + 1);
+        sessionRepository.save(session);
+
+        if ("data_correction".equals(assist.getType()) || !validation.isOk() || !validation.getWarnings().isEmpty()) {
+            CorrectionLog correction = new CorrectionLog();
+            correction.setSessionId(sessionId);
+            correction.setStepId(stepId);
+            correction.setStepTitle(log.getStepTitle());
+            correction.setErrorType(assist.getErrorType() != null ? assist.getErrorType() : "实验数据");
+            correction.setDetail(assist.getDetail() != null ? assist.getDetail() : dataJson);
+            correction.setFeedback(feedback);
+            correctionLogRepository.save(correction);
+        }
+
+        SessionDataSubmitResponse resp = new SessionDataSubmitResponse();
+        resp.setStepId(stepId);
+        resp.setValues(values);
+        resp.setValidation(validation);
+        resp.setAssist(assist);
+        return resp;
+    }
+
+    public static boolean isDataStep(ExperimentConfig exp, StepConfig step) {
+        if (exp.getDataCollection() == null || !exp.getDataCollection().isEnabled()) {
+            return false;
+        }
+        if (step == null) {
+            return false;
+        }
+        if ("vision".equalsIgnoreCase(step.getCorrectionMode())) {
+            return false;
+        }
+        if ("data".equalsIgnoreCase(step.getCorrectionMode())) {
+            return true;
+        }
+        return step.getDataFields() != null && !step.getDataFields().isEmpty();
+    }
+
+    private String buildDataAssistQuery(StepConfig step, DataValidationResult validation, Map<String, Object> values) {
+        StringBuilder q = new StringBuilder("请根据本步骤实验测量数据，检查操作与计算是否合理，并给出纠错建议。");
+        if (step != null && step.getTitle() != null) {
+            q.append("\n步骤：").append(step.getTitle());
+        }
+        if (!validation.getErrors().isEmpty()) {
+            q.append("\n系统预检发现：").append(String.join("；", validation.getErrors()));
+        }
+        if (!validation.getWarnings().isEmpty()) {
+            q.append("\n系统提示：").append(String.join("；", validation.getWarnings()));
+        }
+        q.append("\n数据：").append(writeJson(values));
+        return q.toString();
+    }
+
+    private String prependValidationSummary(String feedback, DataValidationResult validation) {
+        StringBuilder sb = new StringBuilder();
+        if (!validation.getErrors().isEmpty()) {
+            sb.append("**数据预检**\n");
+            for (String err : validation.getErrors()) {
+                sb.append("- ").append(err).append('\n');
+            }
+            sb.append('\n');
+        }
+        if (!validation.getWarnings().isEmpty()) {
+            sb.append("**提示**\n");
+            for (String w : validation.getWarnings()) {
+                sb.append("- ").append(w).append('\n');
+            }
+            sb.append('\n');
+        }
+        if (feedback != null && !feedback.isBlank()) {
+            sb.append(feedback);
+        }
+        return sb.toString().trim();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readJsonMap(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    private String writeJson(Object obj) {
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (Exception e) {
+            return "{}";
+        }
     }
 
     @Transactional
@@ -311,6 +478,7 @@ public class LabSessionService {
         ExperimentConfig exp = experimentConfigService.getByCode(session.getExperimentCode());
         List<CorrectionLog> corrections = correctionLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
         List<EnvCheckLog> envLogs = envCheckLogRepository.findBySessionIdOrderByCreatedAtDesc(sessionId);
+        List<SessionDataLog> dataLogs = sessionDataLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
 
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("sessionId", sessionId);
@@ -325,6 +493,7 @@ public class LabSessionService {
         report.put("reportKnowledge", exp.getReportKnowledge());
         report.put("reportPath", exp.getReportPath());
         report.put("corrections", corrections);
+        report.put("dataLogs", dataLogs);
         report.put("envLogs", envLogs);
         return report;
     }

@@ -2,6 +2,10 @@ import { defineStore } from 'pinia'
 import { experimentApi, sessionApi, uploadApi } from '../api'
 import { sniffImageMime, readFileAsDataUrl } from '../utils/imageFile'
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export const useLabStore = defineStore('lab', {
   state: () => ({
     experiments: [],
@@ -25,18 +29,86 @@ export const useLabStore = defineStore('lab', {
     uploadingImage: false,
     loadingAssist: false,
     uploadSeq: 0,
-    uploadError: ''
+    uploadError: '',
+    sessionDataByStep: {},
+    submittingData: false,
+    dataSubmitErrors: [],
+    deviceConnected: false,
+    deviceState: 'idle',
+    deviceName: '',
+    deviceType: '',
+    deviceSamplingHz: 0,
+    deviceSnapshot: {},
+    deviceLive: {},
+    deviceCurve: [],
+    deviceConnecting: false,
+    deviceReading: false,
+    deviceStreamAbort: null,
+    deviceAcquireProgress: null,
+    _deviceAcquireRunId: 0,
+    _pendingAcquireSnapshot: null,
+    _playbackSamples: [],
+    switchingExperiment: false
   }),
   getters: {
     stepConfig(state) {
       return state.experiment?.steps?.[String(state.activeStep)] || null
     },
+    dataCollectionEnabled(state) {
+      return !!state.experiment?.dataCollection?.enabled
+    },
+    useDeviceData(state) {
+      const step = state.experiment?.steps?.[String(state.activeStep)]
+      return step?.dataSource === 'device'
+    },
+    useDataCorrection(state) {
+      if (!state.experiment?.dataCollection?.enabled) return false
+      const step = state.experiment?.steps?.[String(state.activeStep)]
+      if (!step) return false
+      if (step.correctionMode === 'vision') return false
+      if (step.dataSource === 'device') return true
+      if (step.correctionMode === 'data') return true
+      return Array.isArray(step.dataFields) && step.dataFields.length > 0
+    },
+    useManualDataCorrection() {
+      return this.useDataCorrection && !this.useDeviceData
+    },
+    deviceBusy(state) {
+      return state.deviceConnecting || state.deviceReading
+    },
+    deviceHasSubmitData(state) {
+      const snap = state.deviceSnapshot || {}
+      const fields = state.experiment?.steps?.[String(state.activeStep)]?.dataFields || []
+      const required = fields.filter((f) => f.required !== false)
+      if (!required.length) return Object.keys(snap).length > 0
+      return required.every((f) => {
+        const v = snap[f.key]
+        return v != null && String(v).trim() !== ''
+      })
+    },
+    useVisionCorrection(state) {
+      if (!state.experiment?.dataCollection?.enabled) return true
+      const step = state.experiment?.steps?.[String(state.activeStep)]
+      if (!step) return true
+      if (step.correctionMode === 'data') return false
+      if (step.correctionMode === 'vision') return true
+      return !step.dataFields?.length
+    },
+    currentDataFields(state) {
+      return state.experiment?.steps?.[String(state.activeStep)]?.dataFields || []
+    },
+    currentStepDataValues(state) {
+      return state.sessionDataByStep[String(state.activeStep)]?.values || {}
+    },
+    currentStepDataSaved(state) {
+      return !!state.sessionDataByStep[String(state.activeStep)]?.feedback
+    },
     stepCount(state) {
       return state.experiment?.menuLabels?.length || 5
     },
-    /** 已成功上传到服务器的图片地址（不含 ? 参数），用于提交给智能体 */
+    /** 聊天输入区待发送的图片（仅 composer，不含左侧实拍区已展示的图片） */
     readyImageUrl(state) {
-      const raw = state.composerImageUrl || state.imageUrl
+      const raw = state.composerImageUrl
       if (!raw || !raw.startsWith('/uploads/')) return ''
       return raw.split('?')[0]
     }
@@ -44,18 +116,53 @@ export const useLabStore = defineStore('lab', {
   actions: {
     async loadExperiments() {
       const { data } = await experimentApi.list()
-      this.experiments = data
+      const order = ['tensile_steel', 'beam_bending', 'compression_modulus', 'general']
+      this.experiments = [...(data || [])].sort((a, b) => {
+        const ia = order.indexOf(a.code)
+        const ib = order.indexOf(b.code)
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
+      })
     },
     async loadExperiment(code) {
       const { data } = await experimentApi.get(code)
       this.experiment = data
+    },
+    async switchExperiment(experimentCode) {
+      const code = (experimentCode || '').trim()
+      if (!code || code === this.experiment?.code) return false
+
+      this.switchingExperiment = true
+      this.stopEnvTimer()
+      try {
+        localStorage.setItem('wxz_exp', code)
+        const name = localStorage.getItem('wxz_name') || this.session?.studentName || '学生'
+        const cls = localStorage.getItem('wxz_class') || this.session?.studentClass || ''
+        await this.loadExperiment(code)
+        await this.startSession(code, name, cls)
+        this.startEnvTimer()
+        return true
+      } catch (e) {
+        throw e
+      } finally {
+        this.switchingExperiment = false
+      }
     },
     async startSession(experimentCode, studentName, studentClass) {
       const { data } = await sessionApi.start({ experimentCode, studentName, studentClass })
       this.session = data
       this.activeStep = 1
       this.resetLabUi()
-      this.pushAi(`同学你好，实验已开始。\n\n可在中间栏查看步骤与上传实拍图；在下方输入问题并**发送**（Enter 或发送按钮），可上传图片一并提问。`)
+      await this.loadSessionData()
+      const modeHint =
+        this.experiment?.code === 'tensile_steel'
+          ? '左侧栏已连接实验仪器：数据步骤将**自动采集**测量与拉伸曲线；装夹、预载等步骤请**拍照**纠错。'
+          : this.dataCollectionEnabled
+            ? '左侧栏会按步骤切换：**数据步骤**采集或填写测量值，**拍照步骤**上传实拍图纠错。'
+            : '可在左侧上传实拍图纠错；在下方输入问题并**发送**。'
+      this.pushAi(`同学你好，实验已开始。\n\n${modeHint}\n\n在右侧可向物小智提问。`)
+      if (this.useDeviceData) {
+        await this.prepareDeviceStep()
+      }
     },
     resetLabUi() {
       this.imageUrl = ''
@@ -69,12 +176,392 @@ export const useLabStore = defineStore('lab', {
       this.envHint = '暂无异常'
       this.envSuggestion = ''
       this.tutViewCount = 0
+      this.sessionDataByStep = {}
+      this.dataSubmitErrors = []
+      this.teardownDevice()
+    },
+    teardownDevice() {
+      this.cancelDeviceAcquirePlayback()
+      if (this.session?.id && this.deviceState === 'acquiring') {
+        sessionApi.deviceStop(this.session.id, this.activeStep).catch(() => {})
+      }
+      this.deviceConnected = false
+      this.deviceState = 'idle'
+      this.deviceName = ''
+      this.deviceType = ''
+      this.deviceSamplingHz = 0
+      this.deviceSnapshot = {}
+      this.deviceLive = {}
+      this.deviceCurve = []
+      this.deviceConnecting = false
+      this.deviceReading = false
+      this.deviceAcquireProgress = null
+      this._pendingAcquireSnapshot = null
+      this._playbackSamples = []
+    },
+    cancelDeviceAcquirePlayback() {
+      this._deviceAcquireRunId += 1
+      if (this.deviceStreamAbort) {
+        this.deviceStreamAbort.abort()
+        this.deviceStreamAbort = null
+      }
+    },
+    summarizePartialSamples(samples) {
+      if (!samples?.length) return {}
+      let fMax = 0
+      let fYield = 0
+      let strainYield = 0
+      let yieldSet = false
+      for (const s of samples) {
+        const f = Number(s.forceKn) || 0
+        const stress = Number(s.stressMpa) || 0
+        if (f > fMax) fMax = f
+        if (!yieldSet && stress >= 230 && stress <= 250) {
+          fYield = f
+          strainYield = Number(s.strainPct) || 0
+          yieldSet = true
+        }
+      }
+      if (!yieldSet && samples.length > 20) {
+        const p = samples[25]
+        fYield = Number(p.forceKn) || 0
+        strainYield = Number(p.strainPct) || 0
+      }
+      return {
+        F_max_kN: Math.round(fMax * 1000) / 1000,
+        F_yield_kN: Math.round(fYield * 1000) / 1000,
+        strain_yield_pct: Math.round(strainYield * 1000) / 1000
+      }
+    },
+    async playAcquireSamples(samples, finalSnapshot, runId) {
+      const hz = this.deviceSamplingHz > 0 ? this.deviceSamplingHz : 10
+      const intervalMs = Math.max(40, Math.floor(1000 / hz))
+      const total = samples.length
+      this._playbackSamples = samples
+
+      for (let i = 0; i < total; i++) {
+        if (runId !== this._deviceAcquireRunId) return false
+        const s = samples[i]
+        this.deviceCurve.push({
+          strainPct: s.strainPct,
+          stressMpa: s.stressMpa
+        })
+        this.deviceLive = {
+          forceKn: s.forceKn,
+          strainPct: s.strainPct,
+          stressMpa: s.stressMpa,
+          displacementMm: s.displacementMm
+        }
+        this.deviceAcquireProgress = { current: i + 1, total }
+        if (i < total - 1) {
+          await sleep(intervalMs)
+        }
+      }
+      if (runId !== this._deviceAcquireRunId) return false
+      this.deviceSnapshot = { ...finalSnapshot }
+      this.deviceState = 'completed'
+      this.deviceAcquireProgress = { current: total, total }
+      this._pendingAcquireSnapshot = null
+      return true
+    },
+    async loadSessionData() {
+      if (!this.session?.id) return
+      try {
+        const { data } = await sessionApi.getData(this.session.id)
+        this.sessionDataByStep = data?.byStep || {}
+      } catch {
+        this.sessionDataByStep = {}
+      }
     },
     async selectStep(stepId) {
+      this.teardownDevice()
       this.activeStep = stepId
+      this.dataSubmitErrors = []
       if (this.session?.id) {
         const { data } = await sessionApi.updateStep(this.session.id, stepId)
         this.session = data
+      }
+      if (this.useDeviceData) {
+        await this.prepareDeviceStep()
+      }
+    },
+    async prepareDeviceStep() {
+      if (!this.session?.id) return
+      this.deviceType = this.stepConfig?.deviceType || ''
+      await this.connectDevice()
+      if (this.deviceType === 'dimension_measure') {
+        await this.readDeviceOnce(true)
+      } else if (this.deviceType === 'post_measure') {
+        const hasTensile = this.sessionDataByStep['4']?.values
+        if (hasTensile) await this.readDeviceOnce(true)
+      }
+    },
+    async connectDevice() {
+      if (!this.session?.id) return
+      this.deviceConnecting = true
+      try {
+        const { data } = await sessionApi.deviceConnect(this.session.id, this.activeStep)
+        this.applyDeviceStatus(data)
+      } catch (e) {
+        this.deviceConnected = false
+        this.deviceState = 'idle'
+        this.dataSubmitErrors = [e.response?.data?.message || e.message || '仪器连接失败']
+      } finally {
+        this.deviceConnecting = false
+      }
+    },
+    applyDeviceStatus(data) {
+      const nextState = data?.state || 'idle'
+      if (this.deviceState === 'completed' && nextState === 'acquiring') {
+        return
+      }
+      this.deviceConnected = !!data?.connected
+      this.deviceState = nextState
+      this.deviceName = data?.deviceName || ''
+      this.deviceType = data?.deviceType || this.stepConfig?.deviceType || ''
+      this.deviceSamplingHz = data?.samplingHz || 0
+      if (data?.snapshot && Object.keys(data.snapshot).length) {
+        this.deviceSnapshot = { ...data.snapshot }
+      }
+    },
+    async syncDeviceSnapshot() {
+      if (!this.session?.id) return
+      try {
+        const { data } = await sessionApi.deviceSnapshot(this.session.id, this.activeStep)
+        if (data?.values && Object.keys(data.values).length) {
+          this.deviceSnapshot = { ...data.values }
+        }
+        if (data?.curve?.length) {
+          this.deviceCurve = data.curve.map((p) => ({
+            strainPct: p.strainPct,
+            stressMpa: p.stressMpa
+          }))
+        }
+        if (data?.live) {
+          this.deviceLive = { ...data.live }
+        }
+        const serverState = data?.state
+        if (this.deviceHasSubmitData) {
+          this.deviceState = 'completed'
+        } else if (serverState && serverState !== 'acquiring') {
+          this.deviceState = serverState
+        }
+      } catch {
+        if (this.deviceCurve.length > 0 && this.deviceLive?.forceKn != null) {
+          this.deviceState = 'completed'
+        }
+      }
+    },
+    async readDeviceOnce(silent = false) {
+      if (!this.session?.id || this.deviceReading) return
+      this.cancelDeviceAcquirePlayback()
+      const runId = this._deviceAcquireRunId
+      this.deviceReading = true
+      if (!silent) this.dataSubmitErrors = []
+      try {
+        if (!this.deviceConnected) {
+          await this.connectDevice()
+        }
+        const { data } = await sessionApi.deviceAcquire(this.session.id, this.activeStep)
+        if (runId !== this._deviceAcquireRunId) return
+        await this.animateStaticRead(data, runId)
+        this.deviceName = this.deviceName || this.stepConfig?.title
+      } catch (e) {
+        const msg = e.response?.data?.message || e.message || '读取失败'
+        if (!silent) this.dataSubmitErrors = [msg]
+      } finally {
+        this.deviceReading = false
+      }
+    },
+    applyAcquireResult(data) {
+      if (data?.values && Object.keys(data.values).length) {
+        this.deviceSnapshot = { ...data.values }
+      }
+      if (data?.curve?.length) {
+        this.deviceCurve = data.curve.map((p) => ({
+          strainPct: p.strainPct,
+          stressMpa: p.stressMpa
+        }))
+      }
+      if (data?.live) {
+        this.deviceLive = {
+          forceKn: data.live.forceKn,
+          strainPct: data.live.strainPct,
+          stressMpa: data.live.stressMpa,
+          displacementMm: data.live.displacementMm
+        }
+      } else if (this.deviceCurve.length) {
+        const last = this.deviceCurve[this.deviceCurve.length - 1]
+        const snap = this.deviceSnapshot || {}
+        this.deviceLive = {
+          forceKn: snap.F_max_kN,
+          strainPct: last.strainPct,
+          stressMpa: last.stressMpa,
+          displacementMm: null
+        }
+      }
+      this.deviceState = this.deviceHasSubmitData ? 'completed' : data?.state || 'ready'
+    },
+    async startDeviceAcquisition() {
+      if (!this.session?.id || this.deviceState === 'acquiring') return
+      this.cancelDeviceAcquirePlayback()
+      const runId = this._deviceAcquireRunId
+      this.dataSubmitErrors = []
+      this.deviceCurve = []
+      this.deviceSnapshot = {}
+      this.deviceLive = {}
+      this.deviceAcquireProgress = { current: 0, total: 0 }
+      this.deviceState = 'acquiring'
+
+      try {
+        if (!this.deviceConnected) {
+          await this.connectDevice()
+        }
+        if (runId !== this._deviceAcquireRunId) return
+
+        const { data } = await sessionApi.deviceAcquire(this.session.id, this.activeStep)
+        if (runId !== this._deviceAcquireRunId) return
+
+        if (this.deviceType === 'universal_tester') {
+          const samples = data?.samples?.length
+            ? data.samples
+            : (data?.curve || []).map((p) => ({
+                strainPct: p.strainPct,
+                stressMpa: p.stressMpa,
+                forceKn: null,
+                displacementMm: null
+              }))
+          const finalSnap = { ...(data?.values || {}) }
+          this._pendingAcquireSnapshot = finalSnap
+          this.deviceAcquireProgress = { current: 0, total: samples.length }
+
+          if (!samples.length) {
+            this.applyAcquireResult(data)
+            if (!this.deviceHasSubmitData) {
+              this.dataSubmitErrors = ['采集完成但未得到有效特征点，请重试']
+              this.deviceState = 'ready'
+            }
+            return
+          }
+
+          const ok = await this.playAcquireSamples(samples, finalSnap, runId)
+          if (!ok) return
+          if (!this.deviceHasSubmitData) {
+            this.dataSubmitErrors = ['采集完成但未得到有效特征点，请重试']
+            this.deviceState = 'ready'
+          }
+          return
+        }
+
+        await this.animateStaticRead(data, runId)
+      } catch (e) {
+        if (runId === this._deviceAcquireRunId) {
+          this.dataSubmitErrors = [e.response?.data?.message || e.message || '采集失败']
+          this.deviceState = 'ready'
+          this.deviceAcquireProgress = null
+        }
+      }
+    },
+    async animateStaticRead(data, runId) {
+      const values = data?.values || {}
+      const keys = Object.keys(values)
+      this.deviceState = 'acquiring'
+      this.deviceSnapshot = {}
+      for (let i = 0; i < keys.length; i++) {
+        if (runId !== this._deviceAcquireRunId) return
+        const k = keys[i]
+        this.deviceSnapshot = { ...this.deviceSnapshot, [k]: values[k] }
+        await sleep(380)
+      }
+      if (runId !== this._deviceAcquireRunId) return
+      this.applyAcquireResult(data)
+    },
+    async stopDeviceAcquisition() {
+      const runId = this._deviceAcquireRunId
+      this.cancelDeviceAcquirePlayback()
+
+      if (this.deviceType === 'universal_tester' && this._pendingAcquireSnapshot) {
+        const played = this.deviceCurve.length
+        if (played > 5 && this.deviceAcquireProgress) {
+          const partial = this.summarizePartialSamples(this._playbackSamples.slice(0, played))
+          this.deviceSnapshot = {
+            ...this._pendingAcquireSnapshot,
+            ...partial,
+            point_count: played
+          }
+          this.deviceState = 'completed'
+        } else {
+          this.deviceState = 'ready'
+          this.deviceSnapshot = {}
+        }
+        this._pendingAcquireSnapshot = null
+        this.deviceAcquireProgress = null
+        return
+      }
+
+      if (this.session?.id) {
+        await sessionApi.deviceStop(this.session.id, this.activeStep).catch(() => {})
+      }
+      await this.syncDeviceSnapshot()
+      if (this.deviceState === 'acquiring' && !this.deviceHasSubmitData) {
+        this.deviceState = 'ready'
+      }
+    },
+    async submitDeviceData() {
+      if (!this.deviceHasSubmitData) {
+        await this.syncDeviceSnapshot()
+      }
+      const values = { ...this.deviceSnapshot }
+      if (!Object.keys(values).length) {
+        this.dataSubmitErrors = ['暂无采集数据，请先完成仪器采集或读取测量值']
+        return false
+      }
+      return this.submitStepData(values, true)
+    },
+    async submitStepData(values, fromDevice = false) {
+      if (!this.session?.id || this.submittingData) return false
+      this.submittingData = true
+      this.dataSubmitErrors = []
+
+      const stepId = this.activeStep
+      const stepTitle = this.stepConfig?.title || ''
+      const summary = Object.entries(values || {})
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('，')
+      const prefix = fromDevice ? '【仪器采集】' : '【数据提交】'
+      this.pushUser(`${prefix}${stepTitle}\n${summary || '(空)'}`)
+
+      const aiIndex = this.messages.length
+      this.messages.push({ role: 'ai', text: '', streaming: true, ts: Date.now() })
+
+      try {
+        const { data } = await sessionApi.submitData(this.session.id, { stepId, values })
+        const feedback = data.assist?.feedback || ''
+        this.messages[aiIndex].text = feedback
+        this.messages[aiIndex].streaming = false
+
+        if (data.validation?.errors?.length) {
+          this.dataSubmitErrors = data.validation.errors
+        }
+
+        const key = String(stepId)
+        this.sessionDataByStep[key] = {
+          stepId,
+          stepTitle,
+          values: data.values || values,
+          validation: data.validation,
+          feedback
+        }
+        this.session = (await sessionApi.get(this.session.id)).data
+        return true
+      } catch (e) {
+        this.messages[aiIndex].streaming = false
+        const msg = e.response?.data?.message || e.message || '数据提交失败'
+        this.dataSubmitErrors = [msg]
+        this.messages[aiIndex].text = `**提交失败**：${msg}`
+        return false
+      } finally {
+        this.submittingData = false
       }
     },
     async uploadImage(file) {
@@ -176,7 +663,7 @@ export const useLabStore = defineStore('lab', {
       this.loadingAssist = true
       const hadImage = !!imageUrl
       const displayImage = this.composerImagePreview || this.imagePreview || imageUrl
-      this.marks = []
+      if (hadImage) this.marks = []
       const prompt = text || (hadImage ? '请分析上传的实验图片。' : '')
 
       this.pushUser(prompt, hadImage ? displayImage : '', hadImage ? imageUrl : '')
@@ -199,7 +686,7 @@ export const useLabStore = defineStore('lab', {
           { userMessage: prompt, imageUrl: imageUrl || undefined },
           {
             onMarks: (marks) => {
-              if (marks?.length) pendingMarks = marks
+              if (hadImage && marks?.length) pendingMarks = marks
             },
             onChunk: (chunk) => {
               applyMarksIfReady()
@@ -210,8 +697,8 @@ export const useLabStore = defineStore('lab', {
               if (data.feedback) {
                 this.messages[aiIndex].text = data.feedback
               }
-              if (data.marks?.length) pendingMarks = data.marks
-              applyMarksIfReady()
+              if (hadImage && data.marks?.length) pendingMarks = data.marks
+              if (hadImage) applyMarksIfReady()
             },
             onError: (msg) => {
               this.messages[aiIndex].streaming = false
@@ -281,6 +768,14 @@ export const useLabStore = defineStore('lab', {
       this.session = data
       this.stopEnvTimer()
       const { data: report } = await sessionApi.report(this.session.id)
+      if (report && (!report.envLogs?.length) && this.envLogs.length) {
+        report.envLogs = this.envLogs.map((l, i) => ({
+          id: i,
+          level: l.level,
+          summary: l.summary,
+          createdAt: l.time
+        }))
+      }
       return report
     },
     async downloadReportDocx() {

@@ -2,6 +2,7 @@
   "code": "compression_modulus",
   "name": "压缩弹性模量测定",
   "category": "mechanics",
+  "dataCollection": { "enabled": true },
   "menuLabels": ["试样端面与尺寸检查", "装夹与零点校准", "分级压缩加载", "弹性段拟合取值", "模量计算与误差分析"],
   "reportKnowledge": [
     "胡克定律在压缩条件下的适用条件",
@@ -15,6 +16,11 @@
   "steps": {
     "1": {
       "title": "试样端面与尺寸检查",
+      "correctionMode": "data",
+      "dataFields": [
+        { "key": "H_mm", "label": "高度 H", "type": "number", "unit": "mm", "min": 10, "max": 150, "required": true },
+        { "key": "d_mm", "label": "直径 d", "type": "number", "unit": "mm", "min": 5, "max": 40, "required": true }
+      ],
       "desc": "检查试样端面平整、平行；测量高度 H、直径 d 并计算横截面积。",
       "tut": {
         "steps": ["用钢尺测量 H，用卡尺测 d", "检查端面是否垂直于轴线", "计算 A = πd²/4 并记录有效数字"],
@@ -29,6 +35,7 @@
     },
     "2": {
       "title": "装夹与零点校准",
+      "correctionMode": "vision",
       "desc": "将试样置于上下压板中心，调平后空载清零力与位移读数。",
       "tut": {
         "steps": ["试样置于压板几何中心", "调节球铰/调平螺钉使受力均匀", "空载时力、位移仪表清零"],
@@ -43,6 +50,11 @@
     },
     "3": {
       "title": "分级压缩加载",
+      "correctionMode": "data",
+      "dataFields": [
+        { "key": "deltaF_N", "label": "力增量 ΔF", "type": "number", "unit": "N", "min": 0, "max": 50000, "required": true },
+        { "key": "deltaL_mm", "label": "位移增量 ΔL", "type": "number", "unit": "mm", "min": 0, "max": 5, "required": true }
+      ],
       "desc": "按分级载荷施加压力，记录各级 ΔF 与 ΔL；控制在弹性范围内。",
       "tut": {
         "steps": ["按分级表逐级加载并等待读数稳定", "同步记录力与位移（或应变）", "发现非线性加大应停止并记录"],
@@ -57,6 +69,11 @@
     },
     "4": {
       "title": "弹性段拟合取值",
+      "correctionMode": "data",
+      "dataFields": [
+        { "key": "slope_N_per_mm", "label": "拟合斜率 ΔF/ΔL", "type": "number", "unit": "N/mm", "required": true },
+        { "key": "R2", "label": "相关系数 R²", "type": "number", "min": 0, "max": 1, "required": false }
+      ],
       "desc": "在 ΔF-ΔL 或 σ-ε 图上选取线性段拟合斜率，得到弹性模量相关数据。",
       "tut": {
         "steps": ["在图上选取线性最好的区间", "用最小二乘拟合直线", "记录拟合相关系数 R²"],
@@ -71,6 +88,10 @@
     },
     "5": {
       "title": "模量计算与误差分析",
+      "correctionMode": "data",
+      "dataFields": [
+        { "key": "E_GPa", "label": "弹性模量 E", "type": "number", "unit": "GPa", "min": 50, "max": 300, "required": true }
+      ],
       "desc": "按 E = Δσ/Δε 或 ΔFL/(AΔL) 计算弹性模量；分析相对误差来源。",
       "tut": {
         "steps": ["代入面积、标距计算 E", "与手册值或理论值比较相对误差", "列出仪器、几何、拟合等误差来源"],

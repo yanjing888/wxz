@@ -54,7 +54,30 @@
 
         <section class="mb-10">
           <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
-            <span class="w-1.5 h-6 bg-amber-500 rounded-full" />3. 知识巩固建议
+            <span class="w-1.5 h-6 bg-orange-500 rounded-full" />3. 环境安全巡检记录
+          </h3>
+          <div v-if="report?.envLogs?.length" class="space-y-3">
+            <div
+              v-for="(log, i) in report.envLogs"
+              :key="log.id ?? i"
+              class="p-4 rounded-2xl border border-line-soft bg-surface-soft"
+            >
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="text-xs font-mono text-ink-faint">{{ formatLogTime(log.createdAt) }}</span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-md" :class="envLevelClass(log.level)">{{ log.level }}</span>
+              </div>
+              <p class="text-sm text-ink-base leading-relaxed line-clamp-4" :title="log.summary">{{ log.summary }}</p>
+              <p v-if="log.suggestion" class="text-xs text-ink-faint mt-2 leading-relaxed border-t border-line-soft pt-2">{{ log.suggestion }}</p>
+            </div>
+          </div>
+          <div v-else class="p-6 rounded-2xl border border-line-soft bg-surface-soft text-sm text-ink-faint text-center">
+            本次实验未产生环境巡检记录（未开启安全监测或未触发巡检）。
+          </div>
+        </section>
+
+        <section class="mb-10">
+          <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
+            <span class="w-1.5 h-6 bg-amber-500 rounded-full" />4. 知识巩固建议
           </h3>
           <ul class="text-sm text-ink-base space-y-2 surface-card p-5 rounded-2xl">
             <li v-for="(item, i) in report?.reportKnowledge || []" :key="i" class="flex gap-2 leading-relaxed">
@@ -66,7 +89,7 @@
 
         <section>
           <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
-            <span class="w-1.5 h-6 brand-gradient rounded-full" />4. 后续学习路径
+            <span class="w-1.5 h-6 brand-gradient rounded-full" />5. 后续学习路径
           </h3>
           <div class="space-y-3">
             <div v-for="(text, i) in report?.reportPath || []" :key="i" class="flex items-start gap-3 p-3 rounded-xl hover:bg-surface-soft transition-colors">
@@ -98,4 +121,25 @@ defineProps({
   downloading: Boolean
 })
 defineEmits(['close', 'download-docx'])
+
+function formatLogTime(v) {
+  if (!v) return '--'
+  const d = new Date(v)
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+  return String(v)
+}
+
+function envLevelClass(level) {
+  if (level === 'L3') return 'text-red-600 bg-red-50 border border-red-100'
+  if (level === 'L2') return 'text-orange-600 bg-orange-50 border border-orange-100'
+  if (level === 'L1') return 'text-amber-600 bg-amber-50 border border-amber-100'
+  return 'text-emerald-600 bg-emerald-50 border border-emerald-100'
+}
 </script>

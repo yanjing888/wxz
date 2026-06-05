@@ -2,6 +2,8 @@ package com.wuxiaozhi.controller;
 
 import com.wuxiaozhi.dto.*;
 import com.wuxiaozhi.entity.LabSession;
+import com.wuxiaozhi.dto.device.DeviceStatusDto;
+import com.wuxiaozhi.service.DeviceAcquisitionService;
 import com.wuxiaozhi.service.LabSessionService;
 import com.wuxiaozhi.service.ReportService;
 import jakarta.validation.Valid;
@@ -20,10 +22,14 @@ import java.util.Map;
 public class SessionController {
 
     private final LabSessionService labSessionService;
+    private final DeviceAcquisitionService deviceAcquisitionService;
     private final ReportService reportService;
 
-    public SessionController(LabSessionService labSessionService, ReportService reportService) {
+    public SessionController(LabSessionService labSessionService,
+                             DeviceAcquisitionService deviceAcquisitionService,
+                             ReportService reportService) {
         this.labSessionService = labSessionService;
+        this.deviceAcquisitionService = deviceAcquisitionService;
         this.reportService = reportService;
     }
 
@@ -40,6 +46,52 @@ public class SessionController {
     @PatchMapping("/{sessionId}/step")
     public LabSession updateStep(@PathVariable Long sessionId, @RequestParam int stepId) {
         return labSessionService.updateStep(sessionId, stepId);
+    }
+
+    @GetMapping("/{sessionId}/data")
+    public Map<String, Object> getData(@PathVariable Long sessionId) {
+        return labSessionService.getSessionData(sessionId);
+    }
+
+    @PostMapping("/{sessionId}/data")
+    public SessionDataSubmitResponse submitData(@PathVariable Long sessionId,
+                                                @Valid @RequestBody SubmitSessionDataRequest req) {
+        return labSessionService.submitSessionData(sessionId, req);
+    }
+
+    @PostMapping("/{sessionId}/device/connect")
+    public DeviceStatusDto deviceConnect(@PathVariable Long sessionId, @RequestParam int stepId) {
+        return deviceAcquisitionService.connect(sessionId, stepId);
+    }
+
+    @GetMapping("/{sessionId}/device/status")
+    public DeviceStatusDto deviceStatus(@PathVariable Long sessionId, @RequestParam int stepId) {
+        return deviceAcquisitionService.status(sessionId, stepId);
+    }
+
+    @PostMapping("/{sessionId}/device/read")
+    public DeviceStatusDto deviceRead(@PathVariable Long sessionId, @RequestParam int stepId) {
+        return deviceAcquisitionService.readOnce(sessionId, stepId);
+    }
+
+    @PostMapping("/{sessionId}/device/acquire")
+    public Map<String, Object> deviceAcquire(@PathVariable Long sessionId, @RequestParam int stepId) {
+        return deviceAcquisitionService.acquireSync(sessionId, stepId);
+    }
+
+    @GetMapping(value = "/{sessionId}/device/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter deviceStream(@PathVariable Long sessionId, @RequestParam int stepId) {
+        return deviceAcquisitionService.stream(sessionId, stepId);
+    }
+
+    @PostMapping("/{sessionId}/device/stop")
+    public void deviceStop(@PathVariable Long sessionId, @RequestParam int stepId) {
+        deviceAcquisitionService.stop(sessionId, stepId);
+    }
+
+    @GetMapping("/{sessionId}/device/snapshot")
+    public Map<String, Object> deviceSnapshot(@PathVariable Long sessionId, @RequestParam int stepId) {
+        return deviceAcquisitionService.snapshot(sessionId, stepId);
     }
 
     @PostMapping("/{sessionId}/assist")

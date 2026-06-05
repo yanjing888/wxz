@@ -2,6 +2,7 @@
   "code": "beam_bending",
   "name": "简支梁弯曲应力测定",
   "category": "mechanics",
+  "dataCollection": { "enabled": true },
   "menuLabels": ["跨距与支座布置", "测点与仪表安装", "分级加载与挠度记录", "弯矩应力与挠度计算", "结果复核与结论"],
   "reportKnowledge": [
     "简支梁弯矩分布与中性层概念",
@@ -15,6 +16,11 @@
   "steps": {
     "1": {
       "title": "跨距与支座布置",
+      "correctionMode": "data",
+      "dataFields": [
+        { "key": "L_mm", "label": "跨距 L", "type": "number", "unit": "mm", "min": 100, "max": 800, "required": true },
+        { "key": "beam_model", "label": "梁型号/截面", "type": "text", "required": true, "placeholder": "如矩形梁 20×30" }
+      ],
       "desc": "按讲义调整支座跨距 L，检查梁放置为简支；记录支座类型与位置。",
       "tut": {
         "steps": ["用钢尺测量跨距 L（支座中心距）", "确认梁为简支：固定转动、无轴向约束", "检查梁面大致水平"],
@@ -29,6 +35,7 @@
     },
     "2": {
       "title": "测点与仪表安装",
+      "correctionMode": "vision",
       "desc": "在跨中或指定截面安装应变片/挠度计；完成桥路接线与调零。",
       "tut": {
         "steps": ["按布片图粘贴应变片并检查绝缘", "连接应变仪或挠度计至采集通道", "空载调零并检查噪声水平"],
@@ -43,6 +50,12 @@
     },
     "3": {
       "title": "分级加载与挠度记录",
+      "correctionMode": "data",
+      "dataFields": [
+        { "key": "P_N", "label": "荷载 P", "type": "number", "unit": "N", "min": 0, "max": 5000, "required": true },
+        { "key": "delta_mm", "label": "跨中挠度 δ", "type": "number", "unit": "mm", "min": 0, "max": 50, "required": true },
+        { "key": "strain_ue", "label": "应变读数", "type": "number", "unit": "με", "required": false }
+      ],
       "desc": "采用分级砝码或加载机构，记录各级载荷 P 与应变 ε、挠度 δ。",
       "tut": {
         "steps": ["从低载荷开始逐级加载", "稳定后记录 P、ε、δ", "注意加载位置（跨中集中力等）"],
@@ -57,6 +70,12 @@
     },
     "4": {
       "title": "弯矩应力与挠度计算",
+      "correctionMode": "data",
+      "dataFields": [
+        { "key": "M_Nmm", "label": "弯矩 M", "type": "number", "unit": "N·mm", "required": true },
+        { "key": "sigma_theory_MPa", "label": "理论应力 σ", "type": "number", "unit": "MPa", "required": false },
+        { "key": "delta_theory_mm", "label": "理论挠度 δ", "type": "number", "unit": "mm", "required": false }
+      ],
       "desc": "由 M = PL/4（集中力跨中）等公式计算理论应力、挠度，并与实测比较。",
       "tut": {
         "steps": ["计算各载荷下弯矩 M", "用 σ = My/I 求理论表面应变/应力", "用挠度公式计算 δ 并与实测对比"],
@@ -71,6 +90,7 @@
     },
     "5": {
       "title": "结果复核与结论",
+      "correctionMode": "vision",
       "desc": "整理数据表与曲线，计算相对误差，分析主要误差来源并写出结论。",
       "tut": {
         "steps": ["绘制 P-ε、P-δ 曲线", "计算理论值与实测相对误差", "讨论支座摩擦、仪表、温度等影响"],

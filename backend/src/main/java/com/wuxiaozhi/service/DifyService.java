@@ -52,17 +52,23 @@ public class DifyService {
     public AssistResponse assist(String workflowKey, Map<String, Object> inputs, String userId,
                                  ExperimentConfig experiment, int stepId, boolean hasImage,
                                  String imageUrl) {
+        return assist(workflowKey, inputs, userId, experiment, stepId, hasImage, imageUrl, hasDataAssist(inputs));
+    }
+
+    public AssistResponse assist(String workflowKey, Map<String, Object> inputs, String userId,
+                                 ExperimentConfig experiment, int stepId, boolean hasImage,
+                                 String imageUrl, boolean hasData) {
         if (canCall(workflowKey)) {
             try {
                 JsonNode payload = difyProperties.isChatMode()
-                        ? runChat(workflowKey, inputs, userId, buildAssistQuery(inputs, hasImage), imageUrl)
+                        ? runChat(workflowKey, inputs, userId, buildAssistQuery(inputs, hasImage, hasData), imageUrl)
                         : runWorkflow(workflowKey, inputs, userId);
-                return parseAssistPayload(payload, true, hasImage);
+                return parseAssistPayload(payload, true, hasImage, hasData);
             } catch (Throwable e) {
                 log.warn("Dify assist failed, fallback to mock: {}", e.getMessage());
             }
         }
-        return mockAssist(experiment, stepId, hasImage);
+        return mockAssist(experiment, stepId, hasImage, hasData);
     }
 
     /**
@@ -75,7 +81,8 @@ public class DifyService {
                                        Consumer<List<MarkDto>> onMarks) {
         if (canCall(workflowKey) && difyProperties.isChatMode()) {
             try {
-                String query = buildAssistQuery(inputs, hasImage);
+                boolean hasData = hasDataAssist(inputs);
+                String query = buildAssistQuery(inputs, hasImage, hasData);
                 Map<String, Object> body = buildChatBody(workflowKey, inputs, userId, query, imageUrl);
                 body.put("response_mode", "streaming");
                 String apiKey = difyProperties.resolveApiKey(workflowKey);
@@ -92,12 +99,13 @@ public class DifyService {
                 });
                 log.info("Dify stream ok, workflowKey={}, length={}, marks={}",
                         workflowKey, full.length(), streamMarks.size());
-                return buildStreamAssistResponse(full.toString(), streamMarks, hasImage);
+                return buildStreamAssistResponse(full.toString(), streamMarks, hasImage, hasData);
             } catch (Throwable e) {
                 log.warn("Dify stream failed, fallback to mock: {}", e.getMessage());
             }
         }
-        AssistResponse mock = mockAssist(experiment, stepId, hasImage);
+        boolean hasData = hasDataAssist(inputs);
+        AssistResponse mock = mockAssist(experiment, stepId, hasImage, hasData);
         if (onMarks != null && mock.getMarks() != null && !mock.getMarks().isEmpty()) {
             onMarks.accept(mock.getMarks());
         }
@@ -135,13 +143,31 @@ public class DifyService {
         }
     }
 
-    private AssistResponse buildStreamAssistResponse(String answer, List<MarkDto> streamMarks, boolean hasImage) {
+    private AssistResponse buildStreamAssistResponse(String answer, List<MarkDto> streamMarks, boolean hasImage, boolean hasData) {
         AssistResponse resp = new AssistResponse();
         resp.setFromDify(true);
-        resp.setType(!streamMarks.isEmpty() || hasImage ? "vision_correction" : "text_assist");
+        if (!streamMarks.isEmpty() || hasImage) {
+            resp.setType("vision_correction");
+        } else if (hasData) {
+            resp.setType("data_correction");
+        } else {
+            resp.setType("text_assist");
+        }
         resp.setFeedback(answer != null ? answer.trim() : "");
         resp.setMarks(streamMarks);
         return resp;
+    }
+
+    private boolean hasDataAssist(Map<String, Object> inputs) {
+        if (inputs == null) {
+            return false;
+        }
+        Object mode = inputs.get("correction_mode");
+        if ("data".equals(String.valueOf(mode))) {
+            return true;
+        }
+        Object data = inputs.get("data_json");
+        return data != null && !String.valueOf(data).isBlank();
     }
 
     /** mock 兜底：按字符逐字推送，模拟真实流式打字效果 */
@@ -275,12 +301,17 @@ public class DifyService {
         return difyProperties.canRun(key);
     }
 
-    private String buildAssistQuery(Map<String, Object> inputs, boolean hasImage) {
+    private String buildAssistQuery(Map<String, Object> inputs, boolean hasImage, boolean hasData) {
         Object q = inputs.get("query");
         if (q == null) q = inputs.get("user_query");
         String userQuery = q != null ? String.valueOf(q).trim() : "";
         if (!userQuery.isBlank()) {
             return userQuery;
+        }
+        if (hasData) {
+            Object dataJson = inputs.get("data_json");
+            return "请检查以下实验测量数据是否合理，并指出可能的操作或计算错误：\n"
+                    + (dataJson != null ? dataJson : "");
         }
         if (hasImage) {
             return "请分析上传的实验图片。";
@@ -411,14 +442,14 @@ public class DifyService {
         }
     }
 
-    private AssistResponse parseAssistPayload(JsonNode payload, boolean fromDify, boolean hasImage) {
+    private AssistResponse parseAssistPayload(JsonNode payload, boolean fromDify, boolean hasImage, boolean hasData) {
         if (payload.has("answer")) {
-            return parseAnswerAsAssist(payload.path("answer").asText(""), fromDify, hasImage);
+            return parseAnswerAsAssist(payload.path("answer").asText(""), fromDify, hasImage, hasData);
         }
         return parseAssistResponse(payload, fromDify);
     }
 
-    private AssistResponse parseAnswerAsAssist(String answer, boolean fromDify, boolean hasImage) {
+    private AssistResponse parseAnswerAsAssist(String answer, boolean fromDify, boolean hasImage, boolean hasData) {
         String trimmed = answer != null ? answer.trim() : "";
         if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
             try {
@@ -434,7 +465,7 @@ public class DifyService {
         }
         AssistResponse resp = new AssistResponse();
         resp.setFromDify(fromDify);
-        resp.setType(hasImage ? "vision_correction" : "text_assist");
+        resp.setType(hasImage ? "vision_correction" : (hasData ? "data_correction" : "text_assist"));
         resp.setFeedback(trimmed);
         resp.setMarks(List.of());
         return resp;
@@ -499,14 +530,14 @@ public class DifyService {
         return resp;
     }
 
-    private AssistResponse mockAssist(ExperimentConfig experiment, int stepId, boolean hasImage) {
+    private AssistResponse mockAssist(ExperimentConfig experiment, int stepId, boolean hasImage, boolean hasData) {
         AssistResponse resp = new AssistResponse();
         resp.setFromDify(false);
         if (experiment == null) {
-            resp.setType(hasImage ? "vision_correction" : "text_assist");
+            resp.setType(hasImage ? "vision_correction" : (hasData ? "data_correction" : "text_assist"));
             resp.setFeedback(hasImage
                     ? "已收到图片。当前 Dify 不可用，请稍后重试。"
-                    : "已收到您的问题。当前 Dify 不可用，请稍后重试。");
+                    : (hasData ? "已收到实验数据。当前 Dify 不可用，请稍后重试。" : "已收到您的问题。当前 Dify 不可用，请稍后重试。"));
             resp.setMarks(List.of());
             return resp;
         }
@@ -525,6 +556,17 @@ public class DifyService {
         } else if (hasImage) {
             resp.setType("vision_correction");
             resp.setFeedback("已收到图片。当前 Dify 不可用，请稍后重试。");
+            resp.setMarks(List.of());
+        } else if (hasData && mock != null) {
+            resp.setType("data_correction");
+            resp.setErrorType(mock.getErrorType());
+            resp.setDetail(mock.getDetail());
+            resp.setFeedback(mock.getFeedback());
+            resp.setMarks(List.of());
+        } else if (hasData && step != null) {
+            resp.setType("data_correction");
+            resp.setFeedback("**" + step.getTitle() + "**\n\n" + step.getDesc()
+                    + "\n\n请核对记录表中的读数、单位与有效数字；若装夹或仪表有疑问，可切换至需拍照的步骤上传实拍图。");
             resp.setMarks(List.of());
         } else if (step != null) {
             resp.setType("text_assist");

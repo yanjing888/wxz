@@ -2,6 +2,7 @@
   "code": "tensile_steel",
   "name": "低碳钢拉伸实验",
   "category": "mechanics",
+  "dataCollection": { "enabled": true },
   "menuLabels": ["试样测量与编号", "装夹与引伸计安装", "预加载与对中检查", "分级加载与曲线记录", "断后测量与指标计算"],
   "reportKnowledge": [
     "应力-应变曲线各阶段物理意义（弹性、屈服、强化、颈缩）",
@@ -15,6 +16,14 @@
   "steps": {
     "1": {
       "title": "试样测量与编号",
+      "correctionMode": "data",
+      "dataSource": "device",
+      "deviceType": "dimension_measure",
+      "dataFields": [
+        { "key": "specimen_id", "label": "试样编号", "type": "text", "required": true, "placeholder": "如 S-01" },
+        { "key": "d_mm", "label": "直径 d", "type": "number", "unit": "mm", "min": 3, "max": 20, "required": true },
+        { "key": "L0_mm", "label": "标距 L₀", "type": "number", "unit": "mm", "min": 20, "max": 200, "required": true }
+      ],
       "desc": "用游标卡尺、螺旋测微器测量标距段直径 d 与原始标距 L0；记录材料、编号及环境条件。",
       "tut": {
         "steps": ["在标距段三处互垂直测量直径并取平均", "核对标距 L0 与试样表面缺陷、锈蚀情况", "在记录表填写编号、规格与测量仪器分辨率"],
@@ -29,6 +38,7 @@
     },
     "2": {
       "title": "装夹与引伸计安装",
+      "correctionMode": "vision",
       "desc": "将试样装入上下夹头，安装引伸计并对准标距；检查轴线对中与夹持可靠。",
       "tut": {
         "steps": ["对称旋紧夹头，避免偏载弯曲", "引伸计刀口对准标距刻线并轻夹持", "检查试样轴线与加载方向一致"],
@@ -43,6 +53,7 @@
     },
     "3": {
       "title": "预加载与对中检查",
+      "correctionMode": "vision",
       "desc": "施加小载荷消除机构间隙，检查对中与仪表零点；确认曲线记录通道正常。",
       "tut": {
         "steps": ["低速施加小载荷后卸载至零，再正式加载", "确认力、位移/应变通道归零", "观察试样有无明显弯曲或异响"],
@@ -57,6 +68,14 @@
     },
     "4": {
       "title": "分级加载与曲线记录",
+      "correctionMode": "data",
+      "dataSource": "device",
+      "deviceType": "universal_tester",
+      "dataFields": [
+        { "key": "F_yield_kN", "label": "屈服力 Fₛ", "type": "number", "unit": "kN", "min": 0, "max": 500, "required": false },
+        { "key": "F_max_kN", "label": "最大力 Fᵦ", "type": "number", "unit": "kN", "min": 0, "max": 500, "required": true },
+        { "key": "strain_yield_pct", "label": "屈服应变 εₛ", "type": "number", "unit": "%", "min": 0, "max": 5, "required": false }
+      ],
       "desc": "按分级载荷或应变控制加载，记录 σ-ε 曲线；注意屈服段与强化段特征。",
       "tut": {
         "steps": ["按分级表逐级加载并稳定读数", "记录屈服点、抗拉强度附近特征", "保持加载速率稳定直至断裂"],
@@ -71,6 +90,14 @@
     },
     "5": {
       "title": "断后测量与指标计算",
+      "correctionMode": "data",
+      "dataSource": "device",
+      "deviceType": "post_measure",
+      "dataFields": [
+        { "key": "d1_mm", "label": "断后最小直径 d₁", "type": "number", "unit": "mm", "min": 1, "max": 30, "required": true },
+        { "key": "Lu_mm", "label": "断后标距 Lu", "type": "number", "unit": "mm", "min": 10, "max": 250, "required": true },
+        { "key": "delta_pct", "label": "延伸率 δ", "type": "number", "unit": "%", "min": 0, "max": 80, "required": false }
+      ],
       "desc": "测量断后最小直径与标距，计算 σs、σb、δ、ψ 等；完成不确定度与结果分析。",
       "tut": {
         "steps": ["在颈缩处测量最小直径 d1", "测量断后标距 Lu（按讲义规定）", "代入公式计算强度、塑性指标并写结论"],

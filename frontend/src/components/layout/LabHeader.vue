@@ -14,17 +14,24 @@
 
     <span class="w-px h-7 bg-line-soft shrink-0" />
 
-    <!-- 实验信息 -->
-    <div class="flex items-center gap-2 min-w-0 flex-1">
-      <h1 class="truncate text-ink-strong text-base font-bold tracking-tight">{{ experimentName }}</h1>
-      <span class="chip shrink-0">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-        进行中
-      </span>
-      <span class="chip shrink-0" :class="envChipClass">
-        <span class="w-1.5 h-1.5 rounded-full" :class="envDotClass" />
-        环境 {{ envLevel }}
-      </span>
+    <!-- 实验选择 + 状态 -->
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <ExperimentSelect
+        :experiments="experiments"
+        :experiment-code="experimentCode"
+        :switching="switching"
+        @experiment-change="(code) => $emit('experiment-change', code)"
+      />
+      <div class="hidden sm:flex items-center gap-2 shrink-0">
+        <span class="chip shrink-0">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          进行中
+        </span>
+        <span class="chip shrink-0" :class="envChipClass">
+          <span class="w-1.5 h-1.5 rounded-full" :class="envDotClass" />
+          环境 {{ envLevel }}
+        </span>
+      </div>
     </div>
 
     <!-- 学生身份 -->
@@ -73,15 +80,18 @@
 
 <script setup>
 import { computed } from 'vue'
+import ExperimentSelect from './ExperimentSelect.vue'
 
 const props = defineProps({
-  experimentName: { type: String, default: '--' },
+  experiments: { type: Array, default: () => [] },
+  experimentCode: { type: String, default: '' },
   studentName: { type: String, default: '--' },
   studentClass: { type: String, default: '' },
-  envLevel: { type: String, default: 'L0' }
+  envLevel: { type: String, default: 'L0' },
+  switching: { type: Boolean, default: false }
 })
 
-defineEmits(['quick-stats', 'report'])
+defineEmits(['quick-stats', 'report', 'experiment-change'])
 
 const studentInitial = computed(() => {
   const n = (props.studentName || '').trim()

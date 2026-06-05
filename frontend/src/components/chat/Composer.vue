@@ -15,7 +15,7 @@
       <textarea
         v-model="input"
         rows="2"
-        placeholder="问 AI 任意操作问题…（Enter 发送，Shift+Enter 换行）"
+        placeholder="向物小智询问实验操作问题…（Enter 发送，Shift+Enter 换行）"
         class="w-full bg-transparent border-none text-[13px] text-ink-base outline-none resize-none placeholder:text-ink-faint leading-relaxed"
         @keydown="onKeydown"
       />
@@ -23,11 +23,11 @@
         <button
           type="button"
           class="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-ink-muted hover:text-brand-600 rounded-md hover:bg-brand-50 transition-all btn-active-scale shrink-0"
-          title="上传图片求助"
+          title="上传附件求助"
           @click="triggerUpload"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
-          图片
+          附件
         </button>
         <button
           type="button"
@@ -64,9 +64,9 @@ const canSend = computed(() =>
 )
 
 const attachHint = computed(() => {
-  if (props.uploadingImage) return '图片上传中…'
-  if (props.imagePreview && !props.imageReady) return '图片上传失败或未就绪，请重新选择'
-  if (props.imageReady) return '已添加图片，发送时一并提交'
+  if (props.uploadingImage) return '附件上传中…'
+  if (props.imagePreview && !props.imageReady) return '附件上传失败或未就绪，请重新选择'
+  if (props.imageReady) return '已添加附件，发送时一并提交'
   return ''
 })
 
