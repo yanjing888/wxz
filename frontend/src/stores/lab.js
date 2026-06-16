@@ -6,6 +6,26 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function briefEnvSummary(text, maxLen = 80) {
+  if (!text) return '暂无异常'
+  const plain = String(text)
+    .replace(/[#*_>`[\]()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!plain) return '暂无异常'
+  return plain.length <= maxLen ? plain : `${plain.slice(0, maxLen)}…`
+}
+
+const WELCOME_MESSAGE = `你好，我是物小智。
+
+左侧工作区会按步骤引导你操作：
+
+- 需要数据的步骤可**连接仪器自动采集**并提交纠错
+- 需要现场确认的步骤请**上传实验台照片**进行纠错
+- 点击右上角「本步骤教程」可查看操作说明
+
+有疑问随时问我，也可以点输入框上方的推荐问题。`
+
 export const useLabStore = defineStore('lab', {
   state: () => ({
     experiments: [],
@@ -25,9 +45,11 @@ export const useLabStore = defineStore('lab', {
     envLogs: [],
     envCheckRunning: false,
     envTimer: null,
+    _envCaptureFn: null,
     tutViewCount: 0,
     uploadingImage: false,
     loadingAssist: false,
+    assistStreamAbort: null,
     uploadSeq: 0,
     uploadError: '',
     sessionDataByStep: {},
@@ -48,7 +70,9 @@ export const useLabStore = defineStore('lab', {
     _deviceAcquireRunId: 0,
     _pendingAcquireSnapshot: null,
     _playbackSamples: [],
-    switchingExperiment: false
+    switchingExperiment: false,
+    /** 用户手动切换数据采集区折叠态的覆盖值：{ [stepNo]: boolean } */
+    dataPanelOverride: {}
   }),
   getters: {
     stepConfig(state) {
@@ -61,17 +85,24 @@ export const useLabStore = defineStore('lab', {
       const step = state.experiment?.steps?.[String(state.activeStep)]
       return step?.dataSource === 'device'
     },
-    useDataCorrection(state) {
+    /** 当前步骤是否可以采集数据（用于折叠态默认值与开关可见性） */
+    hasDataPanel(state) {
       if (!state.experiment?.dataCollection?.enabled) return false
       const step = state.experiment?.steps?.[String(state.activeStep)]
       if (!step) return false
-      if (step.correctionMode === 'vision') return false
       if (step.dataSource === 'device') return true
       if (step.correctionMode === 'data') return true
       return Array.isArray(step.dataFields) && step.dataFields.length > 0
     },
+    /** 数据采集区是否展开：用户手动覆盖优先，否则按步骤配置自动决定 */
+    dataPanelOpen(state) {
+      if (!this.hasDataPanel) return false
+      const override = state.dataPanelOverride[String(state.activeStep)]
+      if (override != null) return override
+      return true
+    },
     useManualDataCorrection() {
-      return this.useDataCorrection && !this.useDeviceData
+      return this.hasDataPanel && !this.useDeviceData
     },
     deviceBusy(state) {
       return state.deviceConnecting || state.deviceReading
@@ -86,13 +117,9 @@ export const useLabStore = defineStore('lab', {
         return v != null && String(v).trim() !== ''
       })
     },
-    useVisionCorrection(state) {
-      if (!state.experiment?.dataCollection?.enabled) return true
-      const step = state.experiment?.steps?.[String(state.activeStep)]
-      if (!step) return true
-      if (step.correctionMode === 'data') return false
-      if (step.correctionMode === 'vision') return true
-      return !step.dataFields?.length
+    /** 图片上传区：始终可用，所有步骤都允许拍照求助 */
+    useVisionCorrection() {
+      return true
     },
     currentDataFields(state) {
       return state.experiment?.steps?.[String(state.activeStep)]?.dataFields || []
@@ -116,7 +143,7 @@ export const useLabStore = defineStore('lab', {
   actions: {
     async loadExperiments() {
       const { data } = await experimentApi.list()
-      const order = ['tensile_steel', 'beam_bending', 'compression_modulus', 'general']
+      const order = ['newton_rings', 'tensile_steel', 'general']
       this.experiments = [...(data || [])].sort((a, b) => {
         const ia = order.indexOf(a.code)
         const ib = order.indexOf(b.code)
@@ -153,13 +180,7 @@ export const useLabStore = defineStore('lab', {
       this.activeStep = 1
       this.resetLabUi()
       await this.loadSessionData()
-      const modeHint =
-        this.experiment?.code === 'tensile_steel'
-          ? '左侧栏已连接实验仪器：数据步骤将**自动采集**测量与拉伸曲线；装夹、预载等步骤请**拍照**纠错。'
-          : this.dataCollectionEnabled
-            ? '左侧栏会按步骤切换：**数据步骤**采集或填写测量值，**拍照步骤**上传实拍图纠错。'
-            : '可在左侧上传实拍图纠错；在下方输入问题并**发送**。'
-      this.pushAi(`同学你好，实验已开始。\n\n${modeHint}\n\n在右侧可向物小智提问。`)
+      this.pushAi(WELCOME_MESSAGE)
       if (this.useDeviceData) {
         await this.prepareDeviceStep()
       }
@@ -178,7 +199,14 @@ export const useLabStore = defineStore('lab', {
       this.tutViewCount = 0
       this.sessionDataByStep = {}
       this.dataSubmitErrors = []
+      this.dataPanelOverride = {}
       this.teardownDevice()
+    },
+    toggleDataPanel(forceOpen) {
+      if (!this.hasDataPanel) return
+      const key = String(this.activeStep)
+      const next = typeof forceOpen === 'boolean' ? forceOpen : !this.dataPanelOpen
+      this.dataPanelOverride = { ...this.dataPanelOverride, [key]: next }
     },
     teardownDevice() {
       this.cancelDeviceAcquirePlayback()
@@ -289,7 +317,9 @@ export const useLabStore = defineStore('lab', {
       if (!this.session?.id) return
       this.deviceType = this.stepConfig?.deviceType || ''
       await this.connectDevice()
-      if (this.deviceType === 'dimension_measure') {
+      if (this.deviceType === 'dimension_measure'
+          || this.deviceType === 'reading_microscope'
+          || this.deviceType === 'newton_analyzer') {
         await this.readDeviceOnce(true)
       } else if (this.deviceType === 'post_measure') {
         const hasTensile = this.sessionDataByStep['4']?.values
@@ -564,7 +594,12 @@ export const useLabStore = defineStore('lab', {
         this.submittingData = false
       }
     },
-    async uploadImage(file) {
+    /**
+     * 上传图片。
+     * 上传后同时写入对话框附件状态和左栏「实验台拍摄」状态，两侧保持一致；
+     * `target` 仅用于记录入口（保留参数以兼容调用方）。
+     */
+    async uploadImage(file, { target = 'composer' } = {}) { // eslint-disable-line no-unused-vars
       if (!file || !file.size) {
         throw new Error('请选择有效的图片文件')
       }
@@ -642,6 +677,23 @@ export const useLabStore = defineStore('lab', {
     pushAi(text) {
       this.messages.push({ role: 'ai', text, ts: Date.now() })
     },
+    cancelAssistStream() {
+      if (this.assistStreamAbort) {
+        this.assistStreamAbort.abort()
+        this.assistStreamAbort = null
+      }
+    },
+    stopAssist() {
+      if (!this.loadingAssist) return
+      this.cancelAssistStream()
+      for (let i = this.messages.length - 1; i >= 0; i--) {
+        if (this.messages[i].streaming) {
+          this.messages[i].streaming = false
+          break
+        }
+      }
+      this.loadingAssist = false
+    },
     async sendMessage(userMessage) {
       if (!this.session?.id || this.loadingAssist || this.uploadingImage) return false
 
@@ -660,7 +712,10 @@ export const useLabStore = defineStore('lab', {
         return false
       }
 
+      this.cancelAssistStream()
       this.loadingAssist = true
+      const abortCtrl = new AbortController()
+      this.assistStreamAbort = abortCtrl
       const hadImage = !!imageUrl
       const displayImage = this.composerImagePreview || this.imagePreview || imageUrl
       if (hadImage) this.marks = []
@@ -701,48 +756,98 @@ export const useLabStore = defineStore('lab', {
               if (hadImage) applyMarksIfReady()
             },
             onError: (msg) => {
+              if (abortCtrl.signal.aborted) return
               this.messages[aiIndex].streaming = false
               if (!this.messages[aiIndex].text) {
                 this.messages[aiIndex].text = `**请求失败**：${msg}`
               }
             }
-          }
+          },
+          abortCtrl.signal
         )
-        this.session = (await sessionApi.get(this.session.id)).data
+        if (!abortCtrl.signal.aborted) {
+          this.session = (await sessionApi.get(this.session.id)).data
+        }
       } catch (e) {
-        this.messages[aiIndex].streaming = false
-        const msg = e.message || '网络异常，请稍后重试'
-        if (!this.messages[aiIndex].text) {
-          this.messages[aiIndex].text = `**请求失败**：${msg}`
+        const aborted = e.name === 'AbortError' || abortCtrl.signal.aborted
+        if (this.messages[aiIndex]) {
+          this.messages[aiIndex].streaming = false
+        }
+        if (!aborted) {
+          const msg = e.message || '网络异常，请稍后重试'
+          if (this.messages[aiIndex] && !this.messages[aiIndex].text) {
+            this.messages[aiIndex].text = `**请求失败**：${msg}`
+          }
         }
       } finally {
         this.loadingAssist = false
+        if (this.assistStreamAbort === abortCtrl) {
+          this.assistStreamAbort = null
+        }
         if (this.messages[aiIndex]) {
           this.messages[aiIndex].streaming = false
         }
       }
       return true
     },
-    async runEnvCheck() {
+    setEnvCaptureFn(fn) {
+      this._envCaptureFn = typeof fn === 'function' ? fn : null
+    },
+    async uploadEnvSnapshot(blob) {
+      if (!blob) return ''
+      const file = new File([blob], `env-${Date.now()}.jpg`, { type: 'image/jpeg' })
+      const { data } = await uploadApi.image(file)
+      return data?.url || ''
+    },
+    async runEnvCheck(snapshotUrlOrBlob = '') {
       if (!this.session?.id || this.envCheckRunning) return
       this.envCheckRunning = true
       try {
-        const { data } = await sessionApi.envCheck(this.session.id)
+        let snapshotUrl = typeof snapshotUrlOrBlob === 'string' ? snapshotUrlOrBlob : ''
+        if (snapshotUrlOrBlob instanceof Blob) {
+          try {
+            snapshotUrl = await this.uploadEnvSnapshot(snapshotUrlOrBlob)
+          } catch {
+            snapshotUrl = ''
+          }
+        }
+        const payload = snapshotUrl ? { snapshotUrl } : {}
+        const { data } = await sessionApi.envCheck(this.session.id, payload)
         this.envLevel = data.level
-        this.envHint = data.summary
+        this.envHint = briefEnvSummary(data.summary)
         this.envSuggestion = data.suggestion || ''
-        const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-        this.envLogs.unshift({ time, level: data.level, summary: data.summary })
+        const now = new Date()
+        const time = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+        const createdAt = now.toISOString()
+        this.envLogs.unshift({
+          time,
+          createdAt,
+          level: data.level,
+          summary: data.summary,
+          suggestion: data.suggestion || '',
+          snapshotUrl: data.snapshotUrl || snapshotUrl || ''
+        })
         if (this.envLogs.length > 18) this.envLogs.pop()
         this.session = (await sessionApi.get(this.session.id)).data
       } finally {
         this.envCheckRunning = false
       }
     },
+    async runEnvCheckWithCapture() {
+      let blob = null
+      if (this._envCaptureFn) {
+        try {
+          blob = await this._envCaptureFn()
+        } catch {
+          blob = null
+        }
+      }
+      await this.runEnvCheck(blob || '')
+    },
     startEnvTimer() {
       this.stopEnvTimer()
       if (!this.envCheckEnabled) return
-      this.envTimer = setInterval(() => this.runEnvCheck(), 60000)
+      this.envTimer = setInterval(() => this.runEnvCheckWithCapture(), 60000)
     },
     stopEnvTimer() {
       if (this.envTimer) {
@@ -773,7 +878,9 @@ export const useLabStore = defineStore('lab', {
           id: i,
           level: l.level,
           summary: l.summary,
-          createdAt: l.time
+          suggestion: l.suggestion || '',
+          snapshotUrl: l.snapshotUrl || '',
+          createdAt: l.createdAt || l.time
         }))
       }
       return report

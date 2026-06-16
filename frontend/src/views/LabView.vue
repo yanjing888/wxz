@@ -24,10 +24,11 @@
       @experiment-change="onExperimentChange"
     />
 
-    <!-- 主体：左辅助栏（步骤指导 + 图片 + 摄像头）+ 右 AI 主舞台 -->
-    <div class="flex-1 flex flex-row overflow-hidden min-h-0 gap-4 px-4 pb-4 pt-4">
-      <!-- 左辅助栏 -->
-      <aside class="w-[400px] shrink-0 flex flex-col gap-3 min-h-0">
+    <!-- 主体：嵌入式工作台 — 贴顶栏底、贴左右边、贴底，仅保留顶部圆角 -->
+    <div class="flex-1 flex flex-row overflow-hidden min-h-0 px-3">
+      <div class="flex-1 workspace-frame flex flex-row min-h-0 overflow-hidden">
+      <!-- 左：连续工作区 -->
+      <aside class="w-[400px] shrink-0 flex flex-col min-h-0 overflow-hidden border-r border-line-soft">
         <StepPanel
           :menu-labels="lab.experiment?.menuLabels || []"
           :active-step="lab.activeStep"
@@ -35,57 +36,68 @@
           @select="lab.selectStep"
           @tutorial="openTutorial"
         />
-        <InstrumentDataPanel
-          v-if="lab.useDeviceData"
-          :step-title="lab.stepConfig?.title"
-          :device-type="lab.deviceType"
-          :device-name="lab.deviceName"
-          :device-state="lab.deviceState"
-          :device-connected="lab.deviceConnected"
-          :device-busy="lab.deviceBusy"
-          :sampling-hz="lab.deviceSamplingHz"
-          :fields="lab.currentDataFields"
-          :snapshot="lab.deviceSnapshot"
-          :live="lab.deviceLive"
-          :curve-points="lab.deviceCurve"
-          :reading="lab.deviceReading"
-          :submitting="lab.submittingData"
-          :validation-errors="lab.dataSubmitErrors"
-          :can-submit-data="lab.deviceHasSubmitData"
-          :acquire-progress="lab.deviceAcquireProgress"
-          @start-acquire="lab.startDeviceAcquisition()"
-          @stop-acquire="lab.stopDeviceAcquisition()"
-          @read-once="lab.readDeviceOnce()"
-          @submit="lab.submitDeviceData()"
-        />
-        <DataCollectionPanel
-          v-else-if="lab.useManualDataCorrection"
-          :fields="lab.currentDataFields"
-          :step-title="lab.stepConfig?.title"
-          :values="lab.currentStepDataValues"
-          :last-saved="lab.currentStepDataSaved"
-          :submitting="lab.submittingData"
-          :validation-errors="lab.dataSubmitErrors"
-          @submit="onSubmitData"
-        />
+        <template v-if="lab.hasDataPanel">
+          <div class="workzone-divider" />
+          <DataCollectionSection
+            :open="lab.dataPanelOpen"
+            :mode="lab.useDeviceData ? 'device' : 'manual'"
+            @toggle="lab.toggleDataPanel()"
+          >
+            <InstrumentDataPanel
+              v-if="lab.useDeviceData"
+              :step-title="lab.stepConfig?.title"
+              :device-type="lab.deviceType"
+              :device-name="lab.deviceName"
+              :device-state="lab.deviceState"
+              :device-connected="lab.deviceConnected"
+              :device-busy="lab.deviceBusy"
+              :sampling-hz="lab.deviceSamplingHz"
+              :fields="lab.currentDataFields"
+              :snapshot="lab.deviceSnapshot"
+              :live="lab.deviceLive"
+              :curve-points="lab.deviceCurve"
+              :reading="lab.deviceReading"
+              :submitting="lab.submittingData"
+              :validation-errors="lab.dataSubmitErrors"
+              :can-submit-data="lab.deviceHasSubmitData"
+              :acquire-progress="lab.deviceAcquireProgress"
+              @start-acquire="lab.startDeviceAcquisition()"
+              @stop-acquire="lab.stopDeviceAcquisition()"
+              @read-once="lab.readDeviceOnce()"
+              @submit="lab.submitDeviceData()"
+            />
+            <DataCollectionPanel
+              v-else
+              :fields="lab.currentDataFields"
+              :step-title="lab.stepConfig?.title"
+              :values="lab.currentStepDataValues"
+              :last-saved="lab.currentStepDataSaved"
+              :submitting="lab.submittingData"
+              :validation-errors="lab.dataSubmitErrors"
+              @submit="onSubmitData"
+            />
+          </DataCollectionSection>
+        </template>
+        <div class="workzone-divider" />
         <ImageUploadZone
-          v-else-if="lab.useVisionCorrection"
           ref="uploadZone"
           :image-preview="lab.imagePreview"
           :uploading-image="lab.uploadingImage"
           :upload-error="lab.uploadError"
           :marks="lab.marks"
-          @upload="onUpload"
+          @upload="onZoneUpload"
           @clear="lab.clearImage()"
         />
+        <div class="workzone-divider" />
         <BenchCameraPanel
+          ref="benchCam"
           :env-check-enabled="lab.envCheckEnabled"
           :env-level="lab.envLevel"
           :env-hint="lab.envHint"
           :env-logs="lab.envLogs"
           :env-check-running="lab.envCheckRunning"
           @toggle-env="lab.toggleEnvCheck"
-          @env-check="lab.runEnvCheck"
+          @env-check="(blob) => lab.runEnvCheck(blob)"
         />
       </aside>
 
@@ -97,11 +109,17 @@
           :uploading-image="lab.uploadingImage"
           :image-preview="lab.composerImagePreview"
           :image-ready="!!lab.readyImageUrl"
+          :experiment-name="lab.experiment?.name || ''"
+          :step-title="lab.stepConfig?.title || ''"
+          :student-name="lab.session?.studentName || ''"
+          :suggestions="quickSuggestions"
           @send="onSendMessage"
-          @upload-image="onUpload"
+          @stop="lab.stopAssist()"
+          @upload-image="onComposerUpload"
           @clear-image="lab.clearComposerImage()"
         />
       </section>
+      </div>
     </div>
 
     <TutorialModal
@@ -131,12 +149,13 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useLabStore } from '../stores/lab'
 import LabHeader from '../components/layout/LabHeader.vue'
 import StepPanel from '../components/step/StepPanel.vue'
 import InstrumentDataPanel from '../components/data/InstrumentDataPanel.vue'
 import DataCollectionPanel from '../components/data/DataCollectionPanel.vue'
+import DataCollectionSection from '../components/data/DataCollectionSection.vue'
 import ImageUploadZone from '../components/upload/ImageUploadZone.vue'
 import BenchCameraPanel from '../components/monitor/BenchCameraPanel.vue'
 import RightPanel from '../components/layout/RightPanel.vue'
@@ -147,6 +166,7 @@ import QuickStatsModal from '../components/modals/QuickStatsModal.vue'
 const lab = useLabStore()
 
 const uploadZone = ref(null)
+const benchCam = ref(null)
 const showTutorial = ref(false)
 const showReport = ref(false)
 const showQuickStats = ref(false)
@@ -155,13 +175,24 @@ const downloadingDocx = ref(false)
 const booting = ref(true)
 const bootError = ref('')
 
+const quickSuggestions = computed(() => {
+  const stepTitle = lab.stepConfig?.title
+  const expName = lab.experiment?.name
+  const step = stepTitle ? `「${stepTitle}」` : '这一步'
+  return [
+    `${step}有哪些常见错误？`,
+    `${step}的关键测量参数是什么？`,
+    expName ? `介绍一下${expName}的原理？` : '介绍一下本次实验的原理？'
+  ]
+})
+
 async function bootstrap() {
   booting.value = true
   bootError.value = ''
   try {
     if (!lab.session?.id) {
       await lab.loadExperiments()
-      const code = localStorage.getItem('wxz_exp') || 'tensile_steel'
+      const code = localStorage.getItem('wxz_exp') || 'newton_rings'
       const name = localStorage.getItem('wxz_name') || '学生'
       const cls = localStorage.getItem('wxz_class') || ''
       await lab.loadExperiment(code)
@@ -181,6 +212,7 @@ function retryBoot() {
 }
 
 onMounted(() => {
+  lab.setEnvCaptureFn(() => benchCam.value?.captureFrame?.())
   bootstrap()
 })
 
@@ -189,13 +221,21 @@ onUnmounted(() => {
   lab.teardownDevice()
 })
 
-async function onUpload(file) {
+async function uploadTo(file, target) {
   try {
-    await lab.uploadImage(file)
+    await lab.uploadImage(file, { target })
   } catch (e) {
     const msg = lab.uploadError || e.response?.data?.message || e.message || '图片上传失败'
     window.alert(msg)
   }
+}
+
+function onComposerUpload(file) {
+  return uploadTo(file, 'composer')
+}
+
+function onZoneUpload(file) {
+  return uploadTo(file, 'zone')
 }
 
 async function onSendMessage(text) {

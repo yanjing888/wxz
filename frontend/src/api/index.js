@@ -18,7 +18,7 @@ export const sessionApi = {
   assist: (id, data) => http.post(`/api/sessions/${id}/assist`, data),
   assistStream: (id, data, handlers, signal) =>
     postSse(`/api/sessions/${id}/assist/stream`, data, handlers, signal),
-  envCheck: (id) => http.post(`/api/sessions/${id}/env-check`),
+  envCheck: (id, data = {}) => http.post(`/api/sessions/${id}/env-check`, data),
   tutorialView: (id) => http.post(`/api/sessions/${id}/tutorial-view`),
   getData: (id) => http.get(`/api/sessions/${id}/data`),
   submitData: (id, data) => http.post(`/api/sessions/${id}/data`, data),
@@ -42,7 +42,7 @@ export const uploadApi = {
     try {
       res = await fetch('/api/upload', { method: 'POST', body: fd })
     } catch {
-      throw new Error('无法连接后端，请确认 backend 已在 8080 端口运行')
+      throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/ports.env）')
     }
 
     const text = await res.text()

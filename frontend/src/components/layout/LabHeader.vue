@@ -1,15 +1,12 @@
 <template>
-  <header class="shrink-0 flex items-center gap-4 px-5 h-14 bg-white/85 backdrop-blur-md border-b border-line-soft relative z-30">
+  <header class="shrink-0 flex items-center gap-4 px-5 h-14 bg-white relative z-30">
     <!-- 品牌区 -->
     <div class="flex items-center gap-2.5 shrink-0">
       <div class="relative">
         <div class="w-9 h-9 brand-gradient rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-brand">智</div>
         <span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white" />
       </div>
-      <div class="flex flex-col leading-tight">
-        <span class="text-[9px] font-mono text-ink-faint tracking-widest">WUXIAOZHI · v1.0</span>
-        <span class="text-[11px] font-bold text-ink-strong">物小智实验台</span>
-      </div>
+      <span class="text-[14px] font-bold text-ink-strong tracking-tight">物小智实验台</span>
     </div>
 
     <span class="w-px h-7 bg-line-soft shrink-0" />

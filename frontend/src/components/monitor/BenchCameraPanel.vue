@@ -1,9 +1,12 @@
 <template>
-  <div class="surface-card rounded-2xl p-3 shrink-0">
+  <div class="shrink-0 p-3">
     <!-- 主体一行：摄像头小窗 + 状态 + 操作 -->
-    <div class="flex items-stretch gap-2.5">
-      <!-- 摄像头窗（紧凑） -->
-      <div class="relative w-[100px] h-[68px] shrink-0 rounded-xl overflow-hidden border border-line-soft bg-gradient-to-br from-slate-900 to-slate-800 shadow-card">
+    <div class="flex items-start gap-2.5">
+      <!-- 摄像头窗 -->
+      <div
+        ref="previewRef"
+        class="relative w-[100px] h-[68px] shrink-0 rounded-xl overflow-hidden border border-line-soft bg-gradient-to-br from-slate-900 to-slate-800 shadow-card"
+      >
         <div v-if="camUiActive" class="absolute inset-0 flex flex-col items-center justify-center">
           <div class="w-full h-full opacity-30 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,.06)_2px,rgba(255,255,255,.06)_4px)]" />
           <div class="absolute top-1 left-1 flex items-center gap-0.5">
@@ -63,8 +66,12 @@
             </span>
           </button>
         </div>
-        <p class="text-[10px] leading-tight line-clamp-2" :class="envCheckEnabled ? 'text-ink-muted' : 'text-ink-faint italic'">
-          {{ envCheckEnabled ? (envHint || '暂无异常') : '巡检已暂停，仅手动检查' }}
+        <p
+          class="text-[10px] leading-tight env-hint-brief min-h-0"
+          :class="envCheckEnabled ? 'text-ink-muted' : 'text-ink-faint italic'"
+          :title="envCheckEnabled && envHint ? envHint : ''"
+        >
+          {{ displayHint }}
         </p>
         <div class="flex items-center gap-1.5">
           <button
@@ -108,6 +115,8 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+const previewRef = ref(null)
+
 const props = defineProps({
   envCheckEnabled: { type: Boolean, default: true },
   envLevel: { type: String, default: 'L0' },
@@ -121,6 +130,21 @@ const emit = defineEmits(['toggle-env', 'env-check'])
 const camUiActive = ref(false)
 const flash = ref(false)
 const logsOpen = ref(false)
+
+function briefSummary(text, maxLen = 80) {
+  if (!text) return ''
+  const plain = String(text)
+    .replace(/[#*_>`[\]()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!plain) return ''
+  return plain.length <= maxLen ? plain : `${plain.slice(0, maxLen)}…`
+}
+
+const displayHint = computed(() => {
+  if (!props.envCheckEnabled) return '巡检已暂停，仅手动检查'
+  return briefSummary(props.envHint) || '暂无异常'
+})
 
 const levelClass = computed(() => {
   const map = {
@@ -147,9 +171,68 @@ function stopCamUi() {
   camUiActive.value = false
 }
 
+async function captureFrame() {
+  const w = 320
+  const h = 216
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  const grad = ctx.createLinearGradient(0, 0, w, h)
+  grad.addColorStop(0, '#0f172a')
+  grad.addColorStop(1, '#334155')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, w, h)
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+  for (let y = 0; y < h; y += 4) {
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    ctx.lineTo(w, y)
+    ctx.stroke()
+  }
+
+  if (camUiActive.value) {
+    ctx.fillStyle = '#f87171'
+    ctx.beginPath()
+    ctx.arc(18, 18, 4, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#fca5a5'
+    ctx.font = 'bold 11px monospace'
+    ctx.fillText('REC', 28, 22)
+    ctx.fillStyle = '#6ee7b7'
+    ctx.font = '10px monospace'
+    ctx.fillText('DEMO', 12, h - 12)
+  } else {
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'
+    ctx.font = '12px sans-serif'
+    ctx.fillText('实验台监控（示意）', 72, h / 2)
+  }
+
+  const stamp = new Date().toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'
+  ctx.font = '10px monospace'
+  ctx.fillText(stamp, w - 148, h - 10)
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.88)
+  })
+}
+
 async function manualCheck() {
   flash.value = true
   setTimeout(() => { flash.value = false }, 320)
-  emit('env-check')
+  const blob = await captureFrame()
+  emit('env-check', blob)
 }
+
+defineExpose({ captureFrame })
 </script>

@@ -35,8 +35,8 @@ public class DeviceAcquisitionService {
 
     public DeviceStatusDto connect(Long sessionId, int stepId) {
         LabSession session = getSession(sessionId);
-        if (!"tensile_steel".equals(session.getExperimentCode())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前实验未配置试验机采集");
+        if (session.getExperimentCode() == null || session.getExperimentCode().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前实验未配置仪器采集");
         }
         StepConfig step = resolveStep(session.getExperimentCode(), stepId);
         if (!isDeviceStep(step)) {
@@ -75,7 +75,8 @@ public class DeviceAcquisitionService {
         DeviceSessionState state = requireState(sessionId, stepId);
         String type = nullToEmpty(state.getDeviceType());
 
-        if ("dimension_measure".equals(type) || "post_measure".equals(type)) {
+        if ("dimension_measure".equals(type) || "post_measure".equals(type)
+                || "reading_microscope".equals(type) || "newton_analyzer".equals(type)) {
             readOnce(sessionId, stepId);
             return snapshot(sessionId, stepId);
         }
@@ -109,6 +110,8 @@ public class DeviceAcquisitionService {
         switch (nullToEmpty(state.getDeviceType())) {
             case "dimension_measure" -> acquireSpecimenDimensions(sessionId, state);
             case "post_measure" -> acquirePostFracture(state);
+            case "reading_microscope" -> acquireReadingMicroscope(sessionId, state);
+            case "newton_analyzer" -> acquireNewtonAnalysis(sessionId, state);
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前步骤请使用拉伸采集");
         }
         state.setState("completed");
@@ -262,6 +265,53 @@ public class DeviceAcquisitionService {
         state.getSpecimen().putAll(snap);
     }
 
+    private void acquireReadingMicroscope(Long sessionId, DeviceSessionState state) {
+        Random r = new Random(sessionId * 47L + state.getStepId());
+        int ringM = 10;
+        double left = 12.48 + r.nextDouble() * 0.12;
+        double right = 15.76 + r.nextDouble() * 0.12;
+        double diameter = Math.abs(right - left);
+        Map<String, Object> snap = new LinkedHashMap<>();
+        snap.put("ring_m", ringM);
+        snap.put("reading_left_mm", round(left, 3));
+        snap.put("reading_right_mm", round(right, 3));
+        snap.put("diameter_D_mm", round(diameter, 3));
+        state.getSnapshot().clear();
+        state.getSnapshot().putAll(snap);
+        state.getSpecimen().putAll(snap);
+    }
+
+    private void acquireNewtonAnalysis(Long sessionId, DeviceSessionState state) {
+        double dM = toDouble(state.getSpecimen().get("diameter_D_mm"), 0);
+        int m = (int) toDouble(state.getSpecimen().get("ring_m"), 0);
+        if (dM <= 0 || m <= 0) {
+            acquireReadingMicroscope(sessionId, state);
+            dM = toDouble(state.getSpecimen().get("diameter_D_mm"), 3.28);
+            m = (int) toDouble(state.getSpecimen().get("ring_m"), 10);
+        }
+        int deltaM = 5;
+        int n = m + deltaM;
+        Random r = new Random(sessionId * 53L + n);
+        double dN = dM * Math.sqrt((double) n / m) * (1.0 + r.nextDouble() * 0.015);
+        double deltaD2 = dN * dN - dM * dM;
+        double lambdaNm = 589.3;
+        double lambdaM = lambdaNm * 1e-9;
+        double deltaD2M2 = deltaD2 * 1e-6;
+        double rM = deltaD2M2 / (4.0 * lambdaM * deltaM);
+        double rMm = rM * 1000.0;
+        double nominalR = 1000.0;
+        double errorPct = Math.abs(rMm - nominalR) / nominalR * 100.0;
+
+        Map<String, Object> snap = new LinkedHashMap<>();
+        snap.put("delta_m", deltaM);
+        snap.put("delta_D2_mm2", round(deltaD2, 4));
+        snap.put("lambda_nm", round(lambdaNm, 1));
+        snap.put("radius_R_mm", round(rMm, 1));
+        snap.put("error_pct", round(errorPct, 2));
+        state.getSnapshot().clear();
+        state.getSnapshot().putAll(snap);
+    }
+
     private void acquirePostFracture(DeviceSessionState state) {
         double d = toDouble(state.getSpecimen().get("d_mm"), 10.0);
         double l0 = toDouble(state.getSpecimen().get("L0_mm"), 100.0);
@@ -341,6 +391,8 @@ public class DeviceAcquisitionService {
             case "dimension_measure" -> new DeviceNames("电子游标卡尺采集终端", 2);
             case "universal_tester" -> new DeviceNames("微机控制电子万能试验机", 10);
             case "post_measure" -> new DeviceNames("断后尺寸测量系统", 2);
+            case "reading_microscope" -> new DeviceNames("读数显微镜数显终端", 2);
+            case "newton_analyzer" -> new DeviceNames("牛顿环数据分析仪", 2);
             default -> new DeviceNames("实验数据采集仪", 5);
         };
     }

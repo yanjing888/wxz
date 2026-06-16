@@ -68,7 +68,14 @@ export async function postSse(url, body, handlers = {}, signal) {
   let buffer = ''
 
   while (true) {
-    const { done, value } = await reader.read()
+    let chunk
+    try {
+      chunk = await reader.read()
+    } catch (e) {
+      if (signal?.aborted || e.name === 'AbortError') return
+      throw e
+    }
+    const { done, value } = chunk
     if (done) break
     buffer += decoder.decode(value, { stream: true })
     const parts = buffer.split(/\r?\n\r?\n/)
@@ -109,7 +116,14 @@ export async function getSse(url, handlers = {}, signal) {
   let buffer = ''
 
   while (true) {
-    const { done, value } = await reader.read()
+    let chunk
+    try {
+      chunk = await reader.read()
+    } catch (e) {
+      if (signal?.aborted || e.name === 'AbortError') return
+      throw e
+    }
+    const { done, value } = chunk
     if (done) break
     buffer += decoder.decode(value, { stream: true })
     const parts = buffer.split(/\r?\n\r?\n/)

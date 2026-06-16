@@ -13,24 +13,48 @@ Vue 3 + Spring Boot 大学物理实验多模态智能指导平台。AI 能力通
 
 ## 快速启动
 
-### 后端
+### 端口配置（唯一入口）
 
-```bash
-cd backend
-mvn spring-boot:run
+前后端端口统一写在项目根目录 `config/ports.env`：
+
+```env
+BACKEND_PORT=8082
+FRONTEND_PORT=5174
 ```
 
-默认端口：`8080`
+部署到其他服务器时，若端口被占用，**只需修改该文件后重新启动**。前端开发服务器会自动将 `/api`、`/uploads` 代理到配置的后端端口。
 
-### 前端
+### 一键启动
 
-```bash
-cd frontend
-npm install
-npm run dev
+```bat
+rem Windows（双击或在 cmd 中运行）
+scripts\start.bat
 ```
 
-默认端口：`5173`（已代理 `/api` 与 `/uploads` 到后端）
+```bash
+# Linux / macOS
+chmod +x scripts/start.sh
+./scripts/start.sh
+```
+
+脚本会读取 `config/ports.env` 并检查端口是否空闲。
+
+### 分别启动
+
+```bat
+rem Windows（推荐，会自动读取 config/ports.env）
+scripts\run-backend.bat
+scripts\run-frontend.bat
+```
+
+```bash
+# 前端（vite.config.js 自动读取 config/ports.env）
+cd frontend && npm install && npm run dev
+
+# 后端（需与 ports.env 中 BACKEND_PORT 一致）
+export BACKEND_PORT=8082   # 与 config/ports.env 保持一致
+cd backend && mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=$BACKEND_PORT
+```
 
 ## 功能说明
 

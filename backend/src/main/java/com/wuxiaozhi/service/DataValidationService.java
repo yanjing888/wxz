@@ -67,8 +67,7 @@ public class DataValidationService {
         }
         switch (code) {
             case "tensile_steel" -> validateTensile(step, values, result);
-            case "beam_bending" -> validateBeam(step, values, result);
-            case "compression_modulus" -> validateCompression(step, values, result);
+            case "newton_rings" -> validateNewtonRings(step, values, result);
             default -> { }
         }
     }
@@ -88,36 +87,24 @@ public class DataValidationService {
         }
     }
 
-    private void validateBeam(StepConfig step, Map<String, Object> values, DataValidationResult result) {
+    private void validateNewtonRings(StepConfig step, Map<String, Object> values, DataValidationResult result) {
         String title = step.getTitle() != null ? step.getTitle() : "";
-        if (title.contains("跨距")) {
-            warnIf(result, num(values, "L_mm"), 100, 800, "跨距 L 数量级异常，请确认单位为 mm");
-        }
-        if (title.contains("分级加载")) {
-            Double p = num(values, "P_N");
-            Double delta = num(values, "delta_mm");
-            if (p != null && p < 0) {
-                result.getErrors().add("荷载 P 不应为负");
+        if (title.contains("暗环直径")) {
+            Double left = num(values, "reading_left_mm");
+            Double right = num(values, "reading_right_mm");
+            Double d = num(values, "diameter_D_mm");
+            if (left != null && right != null && d != null) {
+                double expected = Math.abs(right - left);
+                if (Math.abs(d - expected) > 0.05) {
+                    result.getWarnings().add("直径 Dₘ 与左右读数差不一致，请复核计算");
+                }
             }
-            if (delta != null && delta < 0) {
-                result.getErrors().add("挠度 δ 不应为负");
-            }
+            warnIf(result, num(values, "ring_m"), 1, 50, "暗环序号 m 通常在 1～50 范围内");
         }
-    }
-
-    private void validateCompression(StepConfig step, Map<String, Object> values, DataValidationResult result) {
-        String title = step.getTitle() != null ? step.getTitle() : "";
-        if (title.contains("试样") || title.contains("几何")) {
-            Double h = num(values, "H_mm");
-            Double d = num(values, "d_mm");
-            if (h != null && d != null && h < d) {
-                result.getWarnings().add("高度 H 小于直径 d，请确认试样取向与测量位置");
-            }
-        }
-        if (title.contains("弹性模量") || title.contains("计算")) {
-            Double e = num(values, "E_GPa");
-            if (e != null && (e < 50 || e > 300)) {
-                result.getWarnings().add("弹性模量 E 数量级偏离常见金属范围，请复核 ΔF、ΔL 与几何尺寸");
+        if (title.contains("计算")) {
+            Double lambda = num(values, "lambda_nm");
+            if (lambda != null && (lambda < 400 || lambda > 700)) {
+                result.getWarnings().add("波长 λ 数量级偏离可见光常用范围，请核对公式与单位");
             }
         }
     }

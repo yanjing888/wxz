@@ -3,15 +3,36 @@
     <div class="relative w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col bg-white border border-line-soft shadow-lift fade-in-up">
       <div class="h-1.5 w-full bg-gradient-to-r from-brand-600 via-accent-cyan to-emerald-500 shrink-0" />
       <div class="p-8 overflow-y-auto custom-scroll flex-1">
-        <div class="text-center mb-8">
+        <div class="text-center mb-6">
           <span class="chip text-brand-700 bg-brand-50 border-brand-100 mx-auto mb-3">EXPERIMENT REPORT</span>
           <h2 class="text-3xl font-black brand-text-gradient mb-2 tracking-tight">实验总结报告</h2>
-          <p class="text-ink-faint text-sm">生成时间：{{ report?.generatedAt || '--' }}</p>
         </div>
+
+        <section class="mb-8 surface-card rounded-2xl p-5">
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+            <div><span class="text-ink-faint">实验名称</span><p class="font-semibold text-ink-strong mt-0.5">{{ report?.experimentName || '—' }}</p></div>
+            <div><span class="text-ink-faint">学生姓名</span><p class="font-semibold text-ink-strong mt-0.5">{{ report?.studentName || '—' }}</p></div>
+            <div><span class="text-ink-faint">班级</span><p class="font-semibold text-ink-strong mt-0.5">{{ report?.studentClass || '—' }}</p></div>
+            <div><span class="text-ink-faint">生成时间</span><p class="font-semibold text-ink-strong mt-0.5">{{ report?.generatedAt || '—' }}</p></div>
+            <div><span class="text-ink-faint">会话编号</span><p class="font-semibold text-ink-strong mt-0.5">{{ report?.sessionId ?? '—' }}</p></div>
+          </div>
+        </section>
+
+        <section v-if="report?.stepSummaries?.length" class="mb-10">
+          <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
+            <span class="w-1.5 h-6 rounded-full bg-slate-400" />1. 实验步骤回顾
+          </h3>
+          <ol class="space-y-3 text-sm text-ink-base surface-card p-5 rounded-2xl list-none">
+            <li v-for="step in report.stepSummaries" :key="step.stepNo" class="leading-relaxed">
+              <span class="font-bold text-ink-strong">{{ step.stepNo }}. {{ step.title }}</span>
+              <span v-if="step.desc">：{{ step.desc }}</span>
+            </li>
+          </ol>
+        </section>
 
         <section class="mb-10">
           <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
-            <span class="w-1.5 h-6 rounded-full brand-gradient" />1. 实操回顾与数据统计
+            <span class="w-1.5 h-6 rounded-full brand-gradient" />2. 实操回顾与数据统计
           </h3>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div class="p-5 surface-card rounded-2xl text-center">
@@ -35,7 +56,7 @@
 
         <section class="mb-10">
           <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
-            <span class="w-1.5 h-6 bg-red-500 rounded-full" />2. 操作纠错记录
+            <span class="w-1.5 h-6 bg-red-500 rounded-full" />3. 操作纠错记录
           </h3>
           <div v-if="report?.corrections?.length" class="space-y-3">
             <div v-for="(log, i) in report.corrections" :key="i" class="p-5 bg-red-50/70 rounded-2xl border border-red-100">
@@ -54,21 +75,77 @@
 
         <section class="mb-10">
           <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
-            <span class="w-1.5 h-6 bg-orange-500 rounded-full" />3. 环境安全巡检记录
+            <span class="w-1.5 h-6 bg-violet-500 rounded-full" />4. 实验数据记录
           </h3>
-          <div v-if="report?.envLogs?.length" class="space-y-3">
+          <div v-if="report?.dataLogEntries?.length" class="overflow-x-auto surface-card rounded-2xl">
+            <table class="w-full text-sm text-left">
+              <thead>
+                <tr class="border-b border-line-soft bg-surface-soft text-[11px] text-ink-faint uppercase">
+                  <th class="px-4 py-3 font-bold">步骤</th>
+                  <th class="px-4 py-3 font-bold">提交时间</th>
+                  <th class="px-4 py-3 font-bold">采集数据</th>
+                  <th class="px-4 py-3 font-bold">校验结果</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, i) in report.dataLogEntries" :key="i" class="border-b border-line-soft/60 last:border-b-0">
+                  <td class="px-4 py-3 text-ink-strong whitespace-nowrap">{{ row.stepTitle || '—' }}</td>
+                  <td class="px-4 py-3 text-ink-muted whitespace-nowrap">{{ row.submittedAt || '—' }}</td>
+                  <td class="px-4 py-3 text-ink-base">{{ row.valuesSummary || '—' }}</td>
+                  <td class="px-4 py-3 text-ink-base whitespace-nowrap">{{ row.validationSummary || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="p-6 rounded-2xl border border-line-soft bg-surface-soft text-sm text-ink-faint text-center">
+            本次实验未提交结构化实验数据。
+          </div>
+        </section>
+
+        <section class="mb-10">
+          <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
+            <span class="w-1.5 h-6 bg-orange-500 rounded-full" />5. 环境安全巡检记录
+          </h3>
+          <div v-if="report?.envLogs?.length" class="env-report-panel">
             <div
-              v-for="(log, i) in report.envLogs"
-              :key="log.id ?? i"
-              class="p-4 rounded-2xl border border-line-soft bg-surface-soft"
+              class="env-report-scroll custom-scroll"
+              :class="{ 'env-report-scroll--limited': report.envLogs.length > 6 }"
             >
-              <div class="flex flex-wrap items-center gap-2 mb-2">
-                <span class="text-xs font-mono text-ink-faint">{{ formatLogTime(log.createdAt) }}</span>
-                <span class="text-[10px] font-bold px-2 py-0.5 rounded-md" :class="envLevelClass(log.level)">{{ log.level }}</span>
-              </div>
-              <p class="text-sm text-ink-base leading-relaxed line-clamp-4" :title="log.summary">{{ log.summary }}</p>
-              <p v-if="log.suggestion" class="text-xs text-ink-faint mt-2 leading-relaxed border-t border-line-soft pt-2">{{ log.suggestion }}</p>
+              <article
+                v-for="(log, i) in report.envLogs"
+                :key="log.id ?? i"
+                class="env-report-item"
+              >
+                <div class="env-report-thumb">
+                  <img
+                    v-if="log.snapshotUrl"
+                    :src="log.snapshotUrl"
+                    alt="巡检抽帧"
+                    class="env-report-thumb-img"
+                  />
+                  <div v-else class="env-report-thumb-empty">未采集画面</div>
+                </div>
+                <div class="env-report-body">
+                  <div class="env-report-meta">
+                    <time class="env-report-time">{{ formatLogTime(log.createdAt) }}</time>
+                    <span class="env-report-level" :class="envLevelClass(log.level)">
+                      安全等级 · {{ levelLabel(log.level) }}
+                    </span>
+                  </div>
+                  <p class="env-report-basis">
+                    <span class="env-report-label">判断依据</span>
+                    <span class="env-report-text">{{ log.summary || '—' }}</span>
+                  </p>
+                  <p v-if="log.suggestion" class="env-report-suggestion">
+                    <span class="env-report-label">处置建议</span>
+                    <span class="env-report-text">{{ log.suggestion }}</span>
+                  </p>
+                </div>
+              </article>
             </div>
+            <p v-if="report.envLogs.length > 6" class="env-report-foot">
+              共 {{ report.envLogs.length }} 条记录，区域内可滚动查看
+            </p>
           </div>
           <div v-else class="p-6 rounded-2xl border border-line-soft bg-surface-soft text-sm text-ink-faint text-center">
             本次实验未产生环境巡检记录（未开启安全监测或未触发巡检）。
@@ -77,7 +154,7 @@
 
         <section class="mb-10">
           <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
-            <span class="w-1.5 h-6 bg-amber-500 rounded-full" />4. 知识巩固建议
+            <span class="w-1.5 h-6 bg-amber-500 rounded-full" />6. 知识巩固建议
           </h3>
           <ul class="text-sm text-ink-base space-y-2 surface-card p-5 rounded-2xl">
             <li v-for="(item, i) in report?.reportKnowledge || []" :key="i" class="flex gap-2 leading-relaxed">
@@ -89,7 +166,7 @@
 
         <section>
           <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
-            <span class="w-1.5 h-6 brand-gradient rounded-full" />5. 后续学习路径
+            <span class="w-1.5 h-6 brand-gradient rounded-full" />7. 后续学习路径
           </h3>
           <div class="space-y-3">
             <div v-for="(text, i) in report?.reportPath || []" :key="i" class="flex items-start gap-3 p-3 rounded-xl hover:bg-surface-soft transition-colors">
@@ -127,13 +204,25 @@ function formatLogTime(v) {
   const d = new Date(v)
   if (!Number.isNaN(d.getTime())) {
     return d.toLocaleString('zh-CN', {
+      year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      second: '2-digit'
     })
   }
   return String(v)
+}
+
+function levelLabel(level) {
+  const map = {
+    L0: 'L0 正常',
+    L1: 'L1 注意',
+    L2: 'L2 警告',
+    L3: 'L3 严重'
+  }
+  return map[level] || level || '—'
 }
 
 function envLevelClass(level) {

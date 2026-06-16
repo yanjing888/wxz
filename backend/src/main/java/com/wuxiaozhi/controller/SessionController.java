@@ -105,8 +105,9 @@ public class SessionController {
     }
 
     @PostMapping("/{sessionId}/env-check")
-    public EnvCheckResponse envCheck(@PathVariable Long sessionId) {
-        return labSessionService.envCheck(sessionId);
+    public EnvCheckResponse envCheck(@PathVariable Long sessionId,
+                                     @RequestBody(required = false) EnvCheckRequest req) {
+        return labSessionService.envCheck(sessionId, req);
     }
 
     @PostMapping("/{sessionId}/tutorial-view")

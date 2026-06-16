@@ -7,5 +7,6 @@ public class EnvCheckResponse {
     private String level;
     private String summary;
     private String suggestion;
+    private String snapshotUrl;
     private boolean fromDify;
 }

@@ -1,5 +1,6 @@
 package com.wuxiaozhi.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wuxiaozhi.dto.*;
 import com.wuxiaozhi.dto.experiment.ExperimentConfig;
@@ -26,8 +27,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 public class LabSessionService {
@@ -434,13 +437,14 @@ public class LabSessionService {
     }
 
     @Transactional
-    public EnvCheckResponse envCheck(Long sessionId) {
+    public EnvCheckResponse envCheck(Long sessionId, EnvCheckRequest req) {
         LabSession session = getSession(sessionId);
         Map<String, Object> inputs = new LinkedHashMap<>();
         if (!"general".equals(session.getExperimentCode())) {
             putExperimentInputs(inputs, session.getExperimentName(), session.getExperimentCode());
         }
         inputs.put("note", "camera_ui_only");
+        String snapshotUrl = req != null && req.getSnapshotUrl() != null ? req.getSnapshotUrl().trim() : "";
 
         EnvCheckResponse resp = difyService.envCheck(inputs, "guest-" + sessionId);
 
@@ -449,6 +453,10 @@ public class LabSessionService {
         log.setLevel(resp.getLevel());
         log.setSummary(resp.getSummary());
         log.setSuggestion(resp.getSuggestion());
+        if (!snapshotUrl.isBlank()) {
+            log.setSnapshotUrl(snapshotUrl);
+            resp.setSnapshotUrl(snapshotUrl);
+        }
         envCheckLogRepository.save(log);
 
         if ("L3".equals(resp.getLevel())) {
@@ -485,17 +493,97 @@ public class LabSessionService {
         report.put("experimentName", session.getExperimentName());
         report.put("studentName", session.getStudentName());
         report.put("studentClass", session.getStudentClass());
-        report.put("generatedAt", LocalDateTime.now().toString());
+        report.put("generatedAt", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy年MM月dd日 HH:mm:ss")));
         report.put("helpCount", session.getHelpCount());
         report.put("errorPointCount", session.getErrorPointCount());
         report.put("tutViewCount", session.getTutViewCount());
         report.put("labL3Count", session.getLabL3Count());
         report.put("reportKnowledge", exp.getReportKnowledge());
         report.put("reportPath", exp.getReportPath());
+        report.put("stepSummaries", buildStepSummaries(exp));
+        report.put("dataLogEntries", buildDataLogEntries(dataLogs));
         report.put("corrections", corrections);
         report.put("dataLogs", dataLogs);
         report.put("envLogs", envLogs);
         return report;
+    }
+
+    private List<Map<String, Object>> buildStepSummaries(ExperimentConfig exp) {
+        List<Map<String, Object>> summaries = new ArrayList<>();
+        if (exp.getSteps() == null || exp.getSteps().isEmpty()) {
+            return summaries;
+        }
+        exp.getSteps().entrySet().stream()
+                .sorted(Comparator.comparingInt(e -> parseStepId(e.getKey())))
+                .forEach(entry -> {
+                    StepConfig step = entry.getValue();
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("stepNo", entry.getKey());
+                    item.put("title", step.getTitle() != null ? step.getTitle() : ("步骤 " + entry.getKey()));
+                    item.put("desc", step.getDesc() != null ? step.getDesc() : "");
+                    summaries.add(item);
+                });
+        return summaries;
+    }
+
+    private List<Map<String, Object>> buildDataLogEntries(List<SessionDataLog> dataLogs) {
+        List<Map<String, Object>> entries = new ArrayList<>();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        for (SessionDataLog log : dataLogs) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("stepId", log.getStepId());
+            item.put("stepTitle", log.getStepTitle());
+            item.put("submittedAt", log.getCreatedAt() != null ? log.getCreatedAt().format(fmt) : "");
+            item.put("valuesSummary", summarizeValuesJson(log.getValuesJson()));
+            item.put("validationSummary", summarizeValidationJson(log.getValidationJson()));
+            entries.add(item);
+        }
+        return entries;
+    }
+
+    private String summarizeValuesJson(String json) {
+        if (json == null || json.isBlank()) {
+            return "—";
+        }
+        try {
+            Map<String, Object> values = objectMapper.readValue(json, new TypeReference<>() {});
+            if (values.isEmpty()) {
+                return "—";
+            }
+            return values.entrySet().stream()
+                    .map(e -> e.getKey() + "=" + e.getValue())
+                    .collect(Collectors.joining("，"));
+        } catch (Exception e) {
+            return json;
+        }
+    }
+
+    private String summarizeValidationJson(String json) {
+        if (json == null || json.isBlank()) {
+            return "—";
+        }
+        try {
+            Map<String, Object> validation = objectMapper.readValue(json, new TypeReference<>() {});
+            Object ok = validation.get("ok");
+            if (Boolean.TRUE.equals(ok)) {
+                return "通过";
+            }
+            Object errors = validation.get("errors");
+            if (errors instanceof List<?> list && !list.isEmpty()) {
+                return list.stream().map(String::valueOf).collect(Collectors.joining("；"));
+            }
+            return "未通过";
+        } catch (Exception e) {
+            return "—";
+        }
+    }
+
+    private int parseStepId(String key) {
+        try {
+            return Integer.parseInt(key);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private String resolveExperimentType(String fromRequest, String fromSession, String fromConfig) {
