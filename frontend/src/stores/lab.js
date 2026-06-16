@@ -793,6 +793,9 @@ export const useLabStore = defineStore('lab', {
     setEnvCaptureFn(fn) {
       this._envCaptureFn = typeof fn === 'function' ? fn : null
     },
+    setEnvEnsureCamFn(fn) {
+      this._envEnsureCamFn = typeof fn === 'function' ? fn : null
+    },
     async uploadEnvSnapshot(blob) {
       if (!blob) return ''
       const file = new File([blob], `env-${Date.now()}.jpg`, { type: 'image/jpeg' })
@@ -837,12 +840,16 @@ export const useLabStore = defineStore('lab', {
       let blob = null
       if (this._envCaptureFn) {
         try {
+          if (this._envEnsureCamFn) {
+            await this._envEnsureCamFn()
+          }
           blob = await this._envCaptureFn()
         } catch {
           blob = null
         }
       }
-      await this.runEnvCheck(blob || '')
+      if (!blob) return
+      await this.runEnvCheck(blob)
     },
     startEnvTimer() {
       this.stopEnvTimer()

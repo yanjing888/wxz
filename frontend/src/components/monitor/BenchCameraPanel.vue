@@ -7,21 +7,32 @@
         ref="previewRef"
         class="relative w-[100px] h-[68px] shrink-0 rounded-xl overflow-hidden border border-line-soft bg-gradient-to-br from-slate-900 to-slate-800 shadow-card"
       >
-        <div v-if="camUiActive" class="absolute inset-0 flex flex-col items-center justify-center">
-          <div class="w-full h-full opacity-30 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,.06)_2px,rgba(255,255,255,.06)_4px)]" />
-          <div class="absolute top-1 left-1 flex items-center gap-0.5">
-            <span class="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
-            <span class="text-[7px] text-red-400 font-mono font-bold">REC</span>
-          </div>
-          <p class="absolute bottom-1 left-1 text-[7px] text-emerald-400 font-mono">DEMO</p>
-          <button
-            type="button"
-            class="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-white/15 backdrop-blur text-white text-[9px] leading-none hover:bg-white/25 flex items-center justify-center"
-            title="关闭画面"
-            @click="stopCamUi"
-          >×</button>
+        <video
+          v-show="camUiActive && camReady"
+          ref="videoRef"
+          class="absolute inset-0 w-full h-full object-cover"
+          playsinline
+          muted
+        />
+        <div v-if="camUiActive && !camReady" class="absolute inset-0 flex flex-col items-center justify-center gap-1">
+          <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <p class="text-[7px] text-slate-400">连接中…</p>
         </div>
-        <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-center px-1 gap-1">
+        <div v-if="camUiActive && camReady" class="absolute top-1 left-1 flex items-center gap-0.5 pointer-events-none">
+          <span class="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
+          <span class="text-[7px] text-red-400 font-mono font-bold">REC</span>
+        </div>
+        <div v-if="camUiActive && camReady" class="absolute bottom-1 left-1 pointer-events-none">
+          <p class="text-[7px] text-emerald-400 font-mono">LIVE</p>
+        </div>
+        <button
+          v-if="camUiActive"
+          type="button"
+          class="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-white/15 backdrop-blur text-white text-[9px] leading-none hover:bg-white/25 flex items-center justify-center z-10"
+          title="关闭画面"
+          @click="stopCamUi"
+        >×</button>
+        <div v-if="!camUiActive" class="absolute inset-0 flex flex-col items-center justify-center text-center px-1 gap-1">
           <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
             <rect x="3" y="6" width="18" height="14" rx="2.5" />
             <circle cx="12" cy="13" r="3.5" />
@@ -34,7 +45,7 @@
             开启
           </button>
         </div>
-        <div v-if="flash" class="pointer-events-none absolute inset-0 bg-white opacity-40 transition-opacity duration-300" />
+        <div v-if="flash" class="pointer-events-none absolute inset-0 bg-white opacity-40 transition-opacity duration-300 z-20" />
       </div>
 
       <!-- 状态区 -->
@@ -73,6 +84,7 @@
         >
           {{ displayHint }}
         </p>
+        <p v-if="camError" class="text-[9px] text-amber-600 leading-tight">{{ camError }}</p>
         <div class="flex items-center gap-1.5">
           <button
             type="button"
@@ -113,9 +125,10 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 const previewRef = ref(null)
+const videoRef = ref(null)
 
 const props = defineProps({
   envCheckEnabled: { type: Boolean, default: true },
@@ -128,21 +141,14 @@ const props = defineProps({
 const emit = defineEmits(['toggle-env', 'env-check'])
 
 const camUiActive = ref(false)
+const camReady = ref(false)
+const camError = ref('')
 const flash = ref(false)
 const logsOpen = ref(false)
-
-function briefSummary(text, maxLen = 80) {
-  if (!text) return ''
-  const plain = String(text)
-    .replace(/[#*_>`[\]()]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!plain) return ''
-  return plain.length <= maxLen ? plain : `${plain.slice(0, maxLen)}…`
-}
+let mediaStream = null
 
 const displayHint = computed(() => {
-  if (!props.envCheckEnabled) return '巡检已暂停，仅手动检查'
+  if (!props.envCheckEnabled) return '巡检已暂停，可手动立即检查'
   return briefSummary(props.envHint) || '暂无异常'
 })
 
@@ -156,6 +162,16 @@ const levelClass = computed(() => {
   return map[props.envLevel] || map.L0
 })
 
+function briefSummary(text, maxLen = 80) {
+  if (!text) return ''
+  const plain = String(text)
+    .replace(/[#*_>`[\]()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!plain) return ''
+  return plain.length <= maxLen ? plain : `${plain.slice(0, maxLen)}…`
+}
+
 function logLevelClass(level) {
   if (level === 'L3') return 'text-red-500 bg-red-50'
   if (level === 'L2') return 'text-orange-500 bg-orange-50'
@@ -163,76 +179,129 @@ function logLevelClass(level) {
   return 'text-emerald-500 bg-emerald-50'
 }
 
-function startCamUi() {
+function stopMediaTracks() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop())
+    mediaStream = null
+  }
+  if (videoRef.value) {
+    videoRef.value.srcObject = null
+  }
+}
+
+async function startCamUi() {
+  camError.value = ''
   camUiActive.value = true
+  camReady.value = false
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    camError.value = '当前浏览器不支持摄像头，无法抽帧巡检'
+    camUiActive.value = false
+    return
+  }
+
+  stopMediaTracks()
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 640 },
+        height: { ideal: 480 }
+      },
+      audio: false
+    })
+    const video = videoRef.value
+    if (!video) throw new Error('video element missing')
+    video.srcObject = mediaStream
+    await video.play()
+    await waitForVideoFrame(video)
+    camReady.value = true
+  } catch (e) {
+    stopMediaTracks()
+    camUiActive.value = false
+    camReady.value = false
+    camError.value = e?.name === 'NotAllowedError'
+      ? '请允许摄像头权限后再开启监控'
+      : '无法打开摄像头，请检查设备或权限'
+  }
 }
 
 function stopCamUi() {
+  stopMediaTracks()
   camUiActive.value = false
+  camReady.value = false
+}
+
+function waitForVideoFrame(video, timeoutMs = 4000) {
+  return new Promise((resolve, reject) => {
+    if (video.readyState >= 2 && video.videoWidth > 0) {
+      resolve()
+      return
+    }
+    const timer = setTimeout(() => {
+      cleanup()
+      reject(new Error('camera timeout'))
+    }, timeoutMs)
+    const onReady = () => {
+      if (video.videoWidth > 0) {
+        cleanup()
+        resolve()
+      }
+    }
+    const cleanup = () => {
+      clearTimeout(timer)
+      video.removeEventListener('loadeddata', onReady)
+      video.removeEventListener('playing', onReady)
+    }
+    video.addEventListener('loadeddata', onReady)
+    video.addEventListener('playing', onReady)
+  })
 }
 
 async function captureFrame() {
-  const w = 320
-  const h = 216
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
-
-  const grad = ctx.createLinearGradient(0, 0, w, h)
-  grad.addColorStop(0, '#0f172a')
-  grad.addColorStop(1, '#334155')
-  ctx.fillStyle = grad
-  ctx.fillRect(0, 0, w, h)
-
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)'
-  for (let y = 0; y < h; y += 4) {
-    ctx.beginPath()
-    ctx.moveTo(0, y)
-    ctx.lineTo(w, y)
-    ctx.stroke()
+  const video = videoRef.value
+  if (camUiActive.value && camReady.value && video?.videoWidth > 0) {
+    const w = video.videoWidth
+    const h = video.videoHeight
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(video, 0, 0, w, h)
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.88)
+    })
   }
+  return null
+}
 
-  if (camUiActive.value) {
-    ctx.fillStyle = '#f87171'
-    ctx.beginPath()
-    ctx.arc(18, 18, 4, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = '#fca5a5'
-    ctx.font = 'bold 11px monospace'
-    ctx.fillText('REC', 28, 22)
-    ctx.fillStyle = '#6ee7b7'
-    ctx.font = '10px monospace'
-    ctx.fillText('DEMO', 12, h - 12)
-  } else {
-    ctx.fillStyle = 'rgba(255,255,255,0.35)'
-    ctx.font = '12px sans-serif'
-    ctx.fillText('实验台监控（示意）', 72, h / 2)
-  }
-
-  const stamp = new Date().toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-  ctx.fillStyle = 'rgba(255,255,255,0.55)'
-  ctx.font = '10px monospace'
-  ctx.fillText(stamp, w - 148, h - 10)
-
-  return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.88)
-  })
+async function ensureCameraReady() {
+  if (camUiActive.value && camReady.value) return true
+  await startCamUi()
+  return camUiActive.value && camReady.value
 }
 
 async function manualCheck() {
   flash.value = true
   setTimeout(() => { flash.value = false }, 320)
+  const ready = await ensureCameraReady()
+  if (!ready) return
   const blob = await captureFrame()
-  emit('env-check', blob)
+  if (blob) emit('env-check', blob)
 }
 
-defineExpose({ captureFrame })
+watch(
+  () => props.envCheckEnabled,
+  (enabled) => {
+    if (enabled) ensureCameraReady()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  stopMediaTracks()
+})
+
+defineExpose({ captureFrame, ensureCameraReady })
 </script>

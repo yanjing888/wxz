@@ -213,6 +213,7 @@ function retryBoot() {
 
 onMounted(() => {
   lab.setEnvCaptureFn(() => benchCam.value?.captureFrame?.())
+  lab.setEnvEnsureCamFn(() => benchCam.value?.ensureCameraReady?.())
   bootstrap()
 })
 

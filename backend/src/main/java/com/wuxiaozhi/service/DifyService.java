@@ -275,11 +275,12 @@ public class DifyService {
         }
     }
 
-    public EnvCheckResponse envCheck(Map<String, Object> inputs, String userId) {
+    public EnvCheckResponse envCheck(Map<String, Object> inputs, String userId, String imageUrl) {
         if (canCall("env-check")) {
             try {
+                boolean hasImage = imageUrl != null && !imageUrl.isBlank();
                 JsonNode payload = difyProperties.isChatMode()
-                        ? runChat("env-check", inputs, userId, buildEnvCheckQuery(inputs), null)
+                        ? runChat("env-check", inputs, userId, buildEnvCheckQuery(inputs, hasImage), imageUrl)
                         : runWorkflow("env-check", inputs, userId);
                 return parseEnvPayload(payload);
             } catch (Exception e) {
@@ -319,12 +320,16 @@ public class DifyService {
         return "你好";
     }
 
-    private String buildEnvCheckQuery(Map<String, Object> inputs) {
+    private String buildEnvCheckQuery(Map<String, Object> inputs, boolean hasImage) {
         String experimentType = experimentTypeFromInputs(inputs);
+        String action = hasImage
+                ? "请结合本次监控抽帧画面，对实验台环境进行安全巡检"
+                : "请对当前实验台环境进行巡检";
+        String suffix = "，返回等级 L0-L3、摘要与建议。";
         if (experimentType.isBlank()) {
-            return "请对当前实验台环境进行巡检，返回等级 L0-L3、摘要与建议。";
+            return action + suffix;
         }
-        return "实验类型：" + experimentType + "。请对当前实验台环境进行巡检，返回等级 L0-L3、摘要与建议。";
+        return "实验类型：" + experimentType + "。" + action + suffix;
     }
 
     private String textFromInputs(Map<String, Object> inputs, String key, String defaultValue) {

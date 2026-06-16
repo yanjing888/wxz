@@ -6,6 +6,9 @@ Vue 3 + Spring Boot 大学物理实验多模态智能指导平台。AI 能力通
 
 ```
 物小智-项目/
+├── config/
+│   ├── ports.env       # 前后端端口（唯一入口）
+│   └── dify.env        # Dify 全部配置（唯一入口）
 ├── index.html          # 原始 HTML 原型（参考）
 ├── backend/            # Spring Boot 后端
 └── frontend/           # Vue 3 前端
@@ -64,42 +67,38 @@ cd backend && mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=$BAC
 | 实验元数据 | `backend/src/main/resources/experiments/*.json` |
 | 步骤引导 | 5 步流程、教程弹窗 |
 | 多模态纠错 | 上传图片 + 求助，对接 Dify 视觉工作流 |
-| 环境巡检 UI | 右上摄像头为 UI 演示（无真实 getUserMedia），定期检查调用后端 Mock/Dify |
+| 环境巡检 UI | 左下安全监测：摄像头抽帧 + Dify 环境巡检（`config/dify.env` → `DIFY_WF_ENV_CHECK`） |
 | 实验报告 | 页面展示 + DOCX 下载 |
 
-## Dify 配置（自建部署）
+## Dify 配置（唯一入口）
 
-已在 `application-local.yml` 写入本地密钥（该文件已加入 `.gitignore`）。
+所有 Dify 相关配置集中在项目根目录 **`config/dify.env`**（与 `config/ports.env` 同级，格式相同）。部署时实施人员只需修改该文件并重启后端。
 
-默认连接：
+```env
+# config/dify.env
+DIFY_BASE_URL=http://你的dify地址/v1
+DIFY_APP_MODE=chat
 
-- Base URL: `http://188.18.18.149:5001/v1`
-- App Mode: `chat`（对话型 / Chatflow 应用，走 `/chat-messages`）
+# 默认 Key（AI 助手、视觉纠错等）
+DIFY_API_KEY=app-文字问答Key
 
-若你的应用是纯 Workflow 类型，将 `app-mode` 改为 `workflow`。
+# 各工作流独立 Key（留空则回退 DIFY_API_KEY）
+DIFY_WF_VISION_CORRECTION=
+DIFY_WF_TEXT_ASSIST=
+DIFY_WF_ENV_CHECK=app-环境巡检Key
+DIFY_WF_REPORT_GENERATE=
+
+DIFY_KB_API_KEY=
+DIFY_KB_TOP_K=5
+```
+
+**说明：** `DIFY_BASE_URL` 所有接口共用；`DIFY_API_KEY` 是原有默认 Key。安全监测（`DIFY_WF_ENV_CHECK`）是**另一个 Dify 应用**，Key 与默认不同，需单独填写。
+
+若应用是纯 Workflow 类型，将 `app-mode` 改为 `workflow`。
 
 **重要：** Dify 工作流开始节点需包含输入变量 `query`（后端会自动将用户问题写入 `inputs.query`）。若调用失败，系统会回退到 JSON Mock。
 
-```yaml
-wuxiaozhi:
-  dify:
-    base-url: http://你的dify地址/v1
-    api-key: ${DIFY_API_KEY:}          # 全局 Key（可选，作为各工作流未单独配置时的回退）
-    workflows:
-      vision-correction: app-视觉纠错Key
-      text-assist: app-文字问答Key
-      env-check: app-环境巡检Key
-      report-generate: app-报告生成Key
-```
-
-环境变量示例（每个 Dify 工作流应用各有一个 API Key）：
-
-```bash
-set DIFY_API_KEY=app-xxxx
-set DIFY_WF_VISION_KEY=app-vision-xxxx
-set DIFY_WF_TEXT_KEY=app-text-xxxx
-set DIFY_WF_ENV_KEY=app-env-xxxx
-```
+启动后可通过 `GET /api/system/dify-status` 查看各工作流是否已配置 Key。
 
 ### Dify 工作流输出字段约定
 
@@ -131,7 +130,7 @@ set DIFY_WF_ENV_KEY=app-env-xxxx
 
 求助时（**含带图**）后端会先调用 `/datasets/{datasetId}/retrieve`，将召回内容写入 `inputs.kb_context` 再调 Chatflow。Dify 工作流开始节点需增加变量：`experiment_code`、`kb_context`、`dataset_id`（可选）、`step_title` 等；**带图分支的 LLM 也要引用 `kb_context`**，不要只做视觉分析。
 
-知识库检索 API Key 可在 `wuxiaozhi.dify.knowledge.api-key` 单独配置，留空则使用 `text-assist` Key。
+知识库检索 API Key 可在 `config/dify.env` 的 `DIFY_KB_API_KEY` 单独配置，留空则使用 `DIFY_API_KEY`。
 
 ## API 概览
 

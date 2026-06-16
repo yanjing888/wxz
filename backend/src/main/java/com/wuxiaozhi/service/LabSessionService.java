@@ -443,10 +443,12 @@ public class LabSessionService {
         if (!"general".equals(session.getExperimentCode())) {
             putExperimentInputs(inputs, session.getExperimentName(), session.getExperimentCode());
         }
-        inputs.put("note", "camera_ui_only");
         String snapshotUrl = req != null && req.getSnapshotUrl() != null ? req.getSnapshotUrl().trim() : "";
+        if (!snapshotUrl.isBlank()) {
+            inputs.put("snapshot_url", snapshotUrl);
+        }
 
-        EnvCheckResponse resp = difyService.envCheck(inputs, "guest-" + sessionId);
+        EnvCheckResponse resp = difyService.envCheck(inputs, "guest-" + sessionId, snapshotUrl);
 
         EnvCheckLog log = new EnvCheckLog();
         log.setSessionId(sessionId);

@@ -6,28 +6,25 @@ cd /d "%~dp0.."
 set "ROOT=%CD%"
 call "%~dp0_read-ports.bat"
 
-if defined MAVEN_HOME (
-  set "MVN=%MAVEN_HOME%\bin\mvn.cmd"
-) else (
-  set "MVN=mvn"
-)
-
-echo 配置端口：后端 %BACKEND_PORT%，前端 %FRONTEND_PORT%（%ROOT%\config\ports.env）
-echo 正在确保配置端口可用（释放占用该端口的其他进程）...
-call "%~dp0_free-port.bat" %BACKEND_PORT% 后端
-call "%~dp0_free-port.bat" %FRONTEND_PORT% 前端
+echo Ports: backend=%BACKEND_PORT% frontend=%FRONTEND_PORT%
+echo Config: %ROOT%\config\ports.env
+echo Freeing ports...
+call "%~dp0_free-port.bat" %BACKEND_PORT% backend
+call "%~dp0_free-port.bat" %FRONTEND_PORT% frontend
 timeout /t 1 /nobreak >nul
 
-echo 启动后端...
-start "物小智-后端" cmd /k "cd /d "%ROOT%\backend" && set BACKEND_PORT=%BACKEND_PORT% && "%MVN%" spring-boot:run -Dspring-boot.run.arguments=--server.port=%BACKEND_PORT%"
+echo Starting backend...
+start "WXZ-Backend" cmd /k call "%~dp0run-backend.bat"
 
 timeout /t 2 /nobreak >nul
 
-echo 启动前端...
-start "物小智-前端" cmd /k "cd /d "%ROOT%\frontend" && npm run dev -- --host 0.0.0.0 --port %FRONTEND_PORT%"
+echo Starting frontend...
+start "WXZ-Frontend" cmd /k call "%~dp0run-frontend.bat"
 
 echo.
-echo 已启动：
-echo   前端 http://localhost:%FRONTEND_PORT%/
-echo   后端 http://localhost:%BACKEND_PORT%/
-exit /b 0
+echo Started in new windows:
+echo   Frontend http://localhost:%FRONTEND_PORT%/
+echo   Backend  http://localhost:%BACKEND_PORT%/
+echo.
+echo Close this window after two new windows appear.
+pause

@@ -12,8 +12,8 @@ if defined MAVEN_HOME (
   set "MVN=mvn"
 )
 
-set "BACKEND_PORT=%BACKEND_PORT%"
-echo 后端端口 %BACKEND_PORT%（%ROOT%\config\ports.env）
+echo Backend port %BACKEND_PORT% (%ROOT%\config\ports.env)
 
 cd /d "%ROOT%\backend"
 "%MVN%" spring-boot:run -Dspring-boot.run.arguments=--server.port=%BACKEND_PORT%
+if errorlevel 1 pause
