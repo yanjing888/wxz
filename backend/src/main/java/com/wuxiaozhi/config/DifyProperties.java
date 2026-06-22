@@ -16,6 +16,8 @@ public class DifyProperties {
     /** workflow = /workflows/run；chat = /chat-messages（对话型/Chatflow 应用） */
     private String appMode = "chat";
     private Map<String, String> workflows = new HashMap<>();
+    /** 单个 Dify 应用可覆盖全局 appMode，例如 env-check=workflow。 */
+    private Map<String, String> workflowModes = new HashMap<>();
     private Knowledge knowledge = new Knowledge();
 
     @Data
@@ -50,5 +52,21 @@ public class DifyProperties {
 
     public boolean isChatMode() {
         return "chat".equalsIgnoreCase(appMode);
+    }
+
+    public boolean isChatMode(String workflowKey) {
+        return "chat".equalsIgnoreCase(resolveAppMode(workflowKey));
+    }
+
+    public boolean isWorkflowMode(String workflowKey) {
+        return "workflow".equalsIgnoreCase(resolveAppMode(workflowKey));
+    }
+
+    private String resolveAppMode(String workflowKey) {
+        String perWorkflow = workflowModes.get(workflowKey);
+        if (perWorkflow != null && !perWorkflow.isBlank()) {
+            return perWorkflow.trim();
+        }
+        return appMode != null && !appMode.isBlank() ? appMode.trim() : "chat";
     }
 }

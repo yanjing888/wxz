@@ -10,6 +10,7 @@ import java.util.List;
 public class StepConfig {
     private String title;
     private String desc;
+    private String guidePath;
     /** data：表单采集纠错；vision：拍照纠错 */
     private String correctionMode;
     /** device：仪器自动采集；缺省为手填 */

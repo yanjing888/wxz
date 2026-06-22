@@ -29,6 +29,8 @@ function parseSseBlock(block, handlers) {
   } else if (event === 'marks') {
     const marks = Array.isArray(payload) ? payload : payload.marks
     if (marks?.length) handlers.onMarks?.(marks)
+  } else if (event === 'answer_end') {
+    handlers.onAnswerEnd?.(payload)
   } else if (event === 'done') {
     handlers.onDone?.(payload)
   } else if (event === 'error') {

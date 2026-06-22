@@ -1,0 +1,176 @@
+# 物小智知识库映射表
+#
+# 用途：
+# 1. 统一系统实验编号、步骤编号与 Dify 知识库文档/章节的对应关系。
+# 2. 支持两个通用 Dify 知识库：
+#    - teaching: 所有物理实验教学知识点
+#    - correction_rules: 所有物理实验纠错规则
+# 3. 后端向 Dify 传参时，可根据当前 session 的 experiment_code / step_id
+#    补齐 teaching_doc、rules_doc、section_key 等稳定检索锚点。
+#
+# 注意：
+# - datasetId 需要在 Dify 中创建知识库后填写。
+# - doc 字段建议与导入 Dify 知识库的文件名/文档标识保持一致。
+# - sectionKey 建议写入对应 Markdown 元信息或标题中，方便检索命中。
+
+version: 1
+
+datasets:
+  teaching:
+    name: "物理实验教学知识点通用库"
+    datasetId: ""
+    envKey: "DIFY_KB_TEACHING_DATASET_ID"
+    knowledgeType: "teaching"
+    description: "覆盖所有物理实验的原理、操作步骤、数据处理、误差分析和注意事项。"
+  correction_rules:
+    name: "物理实验纠错规则通用库"
+    datasetId: ""
+    envKey: "DIFY_KB_CORRECTION_RULES_DATASET_ID"
+    knowledgeType: "correction_rule"
+    description: "覆盖所有物理实验的视觉纠错、数据纠错、常见错误、判断依据和修正建议。"
+
+experiments:
+  general:
+    name: "物小智智能助手"
+    category: "general"
+    teaching:
+      dataset: "teaching"
+      doc: "general/teaching-knowledge.md"
+      sectionKey: "general"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "general/visual-rules.md"
+      sectionKey: "general"
+    steps: {}
+
+  newton_rings:
+    name: "牛顿环实验"
+    category: "optics"
+    teaching:
+      dataset: "teaching"
+      doc: "newton_rings/teaching-knowledge.md"
+      sectionKey: "newton_rings"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "newton_rings/visual-rules.md"
+      sectionKey: "newton_rings"
+    steps:
+      "1":
+        title: "仪器检查与光路调节"
+        correctionMode: "vision"
+        guide: "newton_rings/steps/1.md"
+        teachingSection: "newton_rings.step.1.teaching"
+        rulesSection: "newton_rings.step.1.rules"
+        retrievalTags:
+          - "newton_rings"
+          - "step:1"
+          - "光路调节"
+          - "视觉纠错"
+      "2":
+        title: "零级环心定位与视场居中"
+        correctionMode: "vision"
+        guide: "newton_rings/steps/2.md"
+        teachingSection: "newton_rings.step.2.teaching"
+        rulesSection: "newton_rings.step.2.rules"
+        retrievalTags:
+          - "newton_rings"
+          - "step:2"
+          - "环心定位"
+          - "视觉纠错"
+      "3":
+        title: "暗环直径测量"
+        correctionMode: "data"
+        guide: "newton_rings/steps/3.md"
+        teachingSection: "newton_rings.step.3.teaching"
+        rulesSection: "newton_rings.step.3.rules"
+        retrievalTags:
+          - "newton_rings"
+          - "step:3"
+          - "暗环直径"
+          - "读数"
+          - "数据纠错"
+      "4":
+        title: "曲率半径或波长计算"
+        correctionMode: "data"
+        guide: "newton_rings/steps/4.md"
+        teachingSection: "newton_rings.step.4.teaching"
+        rulesSection: "newton_rings.step.4.rules"
+        retrievalTags:
+          - "newton_rings"
+          - "step:4"
+          - "曲率半径"
+          - "波长计算"
+          - "数据纠错"
+
+  tensile_steel:
+    name: "低碳钢拉伸实验"
+    category: "mechanics"
+    teaching:
+      dataset: "teaching"
+      doc: "tensile_steel/teaching-knowledge.md"
+      sectionKey: "tensile_steel"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "tensile_steel/visual-rules.md"
+      sectionKey: "tensile_steel"
+    steps:
+      "1":
+        title: "试样测量与编号"
+        correctionMode: "data"
+        guide: "tensile_steel/steps/1.md"
+        teachingSection: "tensile_steel.step.1.teaching"
+        rulesSection: "tensile_steel.step.1.rules"
+        retrievalTags:
+          - "tensile_steel"
+          - "step:1"
+          - "试样测量"
+          - "尺寸测量"
+          - "数据纠错"
+      "2":
+        title: "装夹与引伸计安装"
+        correctionMode: "vision"
+        guide: "tensile_steel/steps/2.md"
+        teachingSection: "tensile_steel.step.2.teaching"
+        rulesSection: "tensile_steel.step.2.rules"
+        retrievalTags:
+          - "tensile_steel"
+          - "step:2"
+          - "装夹"
+          - "引伸计"
+          - "视觉纠错"
+      "3":
+        title: "预加载与对中检查"
+        correctionMode: "vision"
+        guide: "tensile_steel/steps/3.md"
+        teachingSection: "tensile_steel.step.3.teaching"
+        rulesSection: "tensile_steel.step.3.rules"
+        retrievalTags:
+          - "tensile_steel"
+          - "step:3"
+          - "预加载"
+          - "对中检查"
+          - "视觉纠错"
+      "4":
+        title: "分级加载与曲线记录"
+        correctionMode: "data"
+        guide: "tensile_steel/steps/4.md"
+        teachingSection: "tensile_steel.step.4.teaching"
+        rulesSection: "tensile_steel.step.4.rules"
+        retrievalTags:
+          - "tensile_steel"
+          - "step:4"
+          - "应力应变曲线"
+          - "分级加载"
+          - "数据纠错"
+      "5":
+        title: "断后测量与指标计算"
+        correctionMode: "data"
+        guide: "tensile_steel/steps/5.md"
+        teachingSection: "tensile_steel.step.5.teaching"
+        rulesSection: "tensile_steel.step.5.rules"
+        retrievalTags:
+          - "tensile_steel"
+          - "step:5"
+          - "断后测量"
+          - "指标计算"
+          - "数据纠错"

@@ -1,0 +1,205 @@
+{
+  "code": "newton_rings",
+  "name": "牛顿环实验",
+  "category": "optics",
+  "dataCollection": {
+    "enabled": true
+  },
+  "menuLabels": [
+    "仪器检查与光路调节",
+    "零级环心定位与视场居中",
+    "暗环直径测量",
+    "曲率半径或波长计算"
+  ],
+  "steps": {
+    "1": {
+      "title": "仪器检查与光路调节",
+      "correctionMode": "vision",
+      "assistMock": {
+        "errorType": "光路调节",
+        "detail": "反射镜倾角过大或光源未对准，视场环纹模糊、亮度不均。",
+        "feedback": "**原因分析**：光路未对准会导致环纹对比度差，影响后续读数。\n\n**纠错指导**：\n1. **编号1**：检查反射镜是否使光束落在透镜中心。\n2. **编号2**：重新调焦，先十字丝后环纹。",
+        "marks": [
+          {
+            "x": 268,
+            "y": 182,
+            "w": 124,
+            "h": 104,
+            "n": 1
+          },
+          {
+            "x": 518,
+            "y": 252,
+            "w": 110,
+            "h": 92,
+            "n": 2
+          }
+        ]
+      },
+      "guidePath": "steps/1.md"
+    },
+    "2": {
+      "title": "零级环心定位与视场居中",
+      "correctionMode": "vision",
+      "assistMock": {
+        "errorType": "环心定位",
+        "detail": "十字丝未对准环心，或初读数未记录导致后续直径计算基准缺失。",
+        "feedback": "**原因分析**：环心偏移会系统性增大或减小各环直径。\n\n**纠错指导**：\n1. **编号1**：从正面观察十字丝交点是否与暗环中心重合。\n2. **编号2**：确认已记录 D₀ 并写在数据表表头。",
+        "marks": [
+          {
+            "x": 302,
+            "y": 168,
+            "w": 118,
+            "h": 100,
+            "n": 1
+          },
+          {
+            "x": 548,
+            "y": 278,
+            "w": 104,
+            "h": 88,
+            "n": 2
+          }
+        ]
+      },
+      "guidePath": "steps/2.md"
+    },
+    "3": {
+      "title": "暗环直径测量",
+      "correctionMode": "data",
+      "dataSource": "device",
+      "deviceType": "reading_microscope",
+      "dataFields": [
+        {
+          "key": "ring_m",
+          "label": "暗环序号 m",
+          "type": "number",
+          "required": true,
+          "placeholder": "如 10"
+        },
+        {
+          "key": "reading_left_mm",
+          "label": "左读数",
+          "type": "number",
+          "unit": "mm",
+          "min": 0,
+          "max": 30,
+          "required": true
+        },
+        {
+          "key": "reading_right_mm",
+          "label": "右读数",
+          "type": "number",
+          "unit": "mm",
+          "min": 0,
+          "max": 30,
+          "required": true
+        },
+        {
+          "key": "diameter_D_mm",
+          "label": "直径 Dₘ",
+          "type": "number",
+          "unit": "mm",
+          "min": 0,
+          "max": 20,
+          "required": false,
+          "placeholder": "可由左右读数差求得"
+        }
+      ],
+      "assistMock": {
+        "errorType": "暗环读数",
+        "detail": "左右读数差与直径不一致，或环序号记录混乱。",
+        "feedback": "**原因分析**：读数误差与回程间隙会直接影响 Dₘ² 计算。\n\n**纠错指导**：\n1. **编号1**：复核 D = |右读数 − 左读数|。\n2. **编号2**：检查环序号是否与数据表一一对应。",
+        "marks": [
+          {
+            "x": 276,
+            "y": 194,
+            "w": 122,
+            "h": 106,
+            "n": 1
+          },
+          {
+            "x": 532,
+            "y": 264,
+            "w": 108,
+            "h": 90,
+            "n": 2
+          }
+        ]
+      },
+      "guidePath": "steps/3.md"
+    },
+    "4": {
+      "title": "曲率半径或波长计算",
+      "correctionMode": "data",
+      "dataSource": "device",
+      "deviceType": "newton_analyzer",
+      "dataFields": [
+        {
+          "key": "delta_m",
+          "label": "环序差 Δm",
+          "type": "number",
+          "required": true,
+          "placeholder": "如 5"
+        },
+        {
+          "key": "delta_D2_mm2",
+          "label": "Dₘ² − Dₙ²",
+          "type": "number",
+          "unit": "mm²",
+          "min": 0,
+          "required": true
+        },
+        {
+          "key": "lambda_nm",
+          "label": "波长 λ",
+          "type": "number",
+          "unit": "nm",
+          "min": 400,
+          "max": 700,
+          "required": false,
+          "placeholder": "钠光约 589.3"
+        },
+        {
+          "key": "radius_R_mm",
+          "label": "曲率半径 R",
+          "type": "number",
+          "unit": "mm",
+          "min": 100,
+          "max": 10000,
+          "required": false
+        },
+        {
+          "key": "error_pct",
+          "label": "相对误差",
+          "type": "number",
+          "unit": "%",
+          "required": false
+        }
+      ],
+      "assistMock": {
+        "errorType": "结果计算",
+        "detail": "公式代换单位不统一，或 λ、R 数量级明显偏离合理范围。",
+        "feedback": "**原因分析**：单位换算错误是光学实验最常见计算失误。\n\n**纠错指导**：\n1. **编号1**：将 D 换算为 m 后再代入公式。\n2. **编号2**：钠光 λ 约为 589 nm，R 通常在米级，请核对结果量级。",
+        "marks": [
+          {
+            "x": 288,
+            "y": 176,
+            "w": 120,
+            "h": 102,
+            "n": 1
+          },
+          {
+            "x": 556,
+            "y": 286,
+            "w": 102,
+            "h": 86,
+            "n": 2
+          }
+        ]
+      },
+      "guidePath": "steps/4.md"
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

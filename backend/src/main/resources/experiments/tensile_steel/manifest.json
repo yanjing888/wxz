@@ -1,0 +1,239 @@
+{
+  "code": "tensile_steel",
+  "name": "低碳钢拉伸实验",
+  "category": "mechanics",
+  "dataCollection": {
+    "enabled": true
+  },
+  "menuLabels": [
+    "试样测量与编号",
+    "装夹与引伸计安装",
+    "预加载与对中检查",
+    "分级加载与曲线记录",
+    "断后测量与指标计算"
+  ],
+  "steps": {
+    "1": {
+      "title": "试样测量与编号",
+      "correctionMode": "data",
+      "dataSource": "device",
+      "deviceType": "dimension_measure",
+      "dataFields": [
+        {
+          "key": "specimen_id",
+          "label": "试样编号",
+          "type": "text",
+          "required": true,
+          "placeholder": "如 S-01"
+        },
+        {
+          "key": "d_mm",
+          "label": "直径 d",
+          "type": "number",
+          "unit": "mm",
+          "min": 3,
+          "max": 20,
+          "required": true
+        },
+        {
+          "key": "L0_mm",
+          "label": "标距 L₀",
+          "type": "number",
+          "unit": "mm",
+          "min": 20,
+          "max": 200,
+          "required": true
+        }
+      ],
+      "assistMock": {
+        "errorType": "试样尺寸测量",
+        "detail": "标距或直径测量位置不在标距段，或读数有效数字不规范。",
+        "feedback": "**原因分析**：面积与标距误差会直接进入应力、应变计算。\n\n**纠错指导**：\n1. **编号1**：确认测量点在标距段中部，避开夹持影响区。\n2. **编号2**：核对 d、L0 单位与记录表一致。",
+        "marks": [
+          {
+            "x": 255,
+            "y": 188,
+            "w": 128,
+            "h": 108,
+            "n": 1
+          },
+          {
+            "x": 528,
+            "y": 248,
+            "w": 112,
+            "h": 92,
+            "n": 2
+          }
+        ]
+      },
+      "guidePath": "steps/1.md"
+    },
+    "2": {
+      "title": "装夹与引伸计安装",
+      "correctionMode": "vision",
+      "assistMock": {
+        "errorType": "装夹与引伸计",
+        "detail": "引伸计滑移或试样偏心，导致应变读数异常。",
+        "feedback": "**原因分析**：偏心加载会产生附加弯曲应力。\n\n**纠错指导**：\n1. **编号1**：从正面、侧面观察试样是否居中。\n2. **编号2**：轻拉试样确认无松动后再接线调零。",
+        "marks": [
+          {
+            "x": 268,
+            "y": 172,
+            "w": 120,
+            "h": 102,
+            "n": 1
+          },
+          {
+            "x": 512,
+            "y": 268,
+            "w": 108,
+            "h": 88,
+            "n": 2
+          }
+        ]
+      },
+      "guidePath": "steps/2.md"
+    },
+    "3": {
+      "title": "预加载与对中检查",
+      "correctionMode": "vision",
+      "assistMock": {
+        "errorType": "预载与对中",
+        "detail": "未预载或零点未清除，曲线起点漂移。",
+        "feedback": "**原因分析**：间隙与零点误差会扭曲弹性段斜率。\n\n**纠错指导**：\n1. **编号1**：按讲义要求完成预载—卸载—清零流程。\n2. **编号2**：检查曲线采集是否同步。",
+        "marks": [
+          {
+            "x": 248,
+            "y": 198,
+            "w": 126,
+            "h": 108,
+            "n": 1
+          },
+          {
+            "x": 548,
+            "y": 258,
+            "w": 106,
+            "h": 94,
+            "n": 2
+          }
+        ]
+      },
+      "guidePath": "steps/3.md"
+    },
+    "4": {
+      "title": "分级加载与曲线记录",
+      "correctionMode": "data",
+      "dataSource": "device",
+      "deviceType": "universal_tester",
+      "dataFields": [
+        {
+          "key": "F_yield_kN",
+          "label": "屈服力 Fₛ",
+          "type": "number",
+          "unit": "kN",
+          "min": 0,
+          "max": 500,
+          "required": false
+        },
+        {
+          "key": "F_max_kN",
+          "label": "最大力 Fᵦ",
+          "type": "number",
+          "unit": "kN",
+          "min": 0,
+          "max": 500,
+          "required": true
+        },
+        {
+          "key": "strain_yield_pct",
+          "label": "屈服应变 εₛ",
+          "type": "number",
+          "unit": "%",
+          "min": 0,
+          "max": 5,
+          "required": false
+        }
+      ],
+      "assistMock": {
+        "errorType": "加载与曲线",
+        "detail": "加载速率突变或采样不同步，曲线出现阶梯或失真。",
+        "feedback": "**原因分析**：动态效应会影响屈服强度判定。\n\n**纠错指导**：\n1. **编号1**：核对试验机速率设定。\n2. **编号2**：检查应变通道是否滑移。",
+        "marks": [
+          {
+            "x": 286,
+            "y": 168,
+            "w": 118,
+            "h": 100,
+            "n": 1
+          },
+          {
+            "x": 504,
+            "y": 292,
+            "w": 104,
+            "h": 88,
+            "n": 2
+          }
+        ]
+      },
+      "guidePath": "steps/4.md"
+    },
+    "5": {
+      "title": "断后测量与指标计算",
+      "correctionMode": "data",
+      "dataSource": "device",
+      "deviceType": "post_measure",
+      "dataFields": [
+        {
+          "key": "d1_mm",
+          "label": "断后最小直径 d₁",
+          "type": "number",
+          "unit": "mm",
+          "min": 1,
+          "max": 30,
+          "required": true
+        },
+        {
+          "key": "Lu_mm",
+          "label": "断后标距 Lu",
+          "type": "number",
+          "unit": "mm",
+          "min": 10,
+          "max": 250,
+          "required": true
+        },
+        {
+          "key": "delta_pct",
+          "label": "延伸率 δ",
+          "type": "number",
+          "unit": "%",
+          "min": 0,
+          "max": 80,
+          "required": false
+        }
+      ],
+      "assistMock": {
+        "errorType": "断后与计算",
+        "detail": "断后测量位置错误或公式用错原始/断后尺寸。",
+        "feedback": "**原因分析**：塑性指标对测量位置敏感。\n\n**纠错指导**：\n1. **编号1**：在最小截面处测 d1。\n2. **编号2**：复核 δ、ψ 分母是否用 L0、A0。",
+        "marks": [
+          {
+            "x": 296,
+            "y": 172,
+            "w": 120,
+            "h": 104,
+            "n": 1
+          },
+          {
+            "x": 568,
+            "y": 278,
+            "w": 100,
+            "h": 86,
+            "n": 2
+          }
+        ]
+      },
+      "guidePath": "steps/5.md"
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

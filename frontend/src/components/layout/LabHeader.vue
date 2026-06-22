@@ -100,14 +100,14 @@ const envChipClass = computed(() => {
   const map = {
     L0: 'text-emerald-600 border-emerald-200 bg-emerald-50',
     L1: 'text-amber-600 border-amber-200 bg-amber-50',
-    L2: 'text-orange-600 border-orange-200 bg-orange-50',
+    L2: 'text-red-600 border-red-200 bg-red-50',
     L3: 'text-red-600 border-red-200 bg-red-50'
   }
   return map[props.envLevel] || map.L0
 })
 
 const envDotClass = computed(() => {
-  const map = { L0: 'bg-emerald-500', L1: 'bg-amber-500', L2: 'bg-orange-500', L3: 'bg-red-500' }
+  const map = { L0: 'bg-emerald-500', L1: 'bg-amber-500', L2: 'bg-red-500', L3: 'bg-red-500' }
   return map[props.envLevel] || map.L0
 })
 </script>

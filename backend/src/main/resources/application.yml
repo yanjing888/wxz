@@ -4,8 +4,6 @@ server:
 spring:
   application:
     name: wuxiaozhi-backend
-  config:
-    import: optional:file:../config/dify.env
   datasource:
     url: jdbc:h2:file:./data/wuxiaozhi;DB_CLOSE_DELAY=-1;MODE=MySQL
     driver-class-name: org.h2.Driver
@@ -44,10 +42,12 @@ wuxiaozhi:
       text-assist: ${DIFY_WF_TEXT_ASSIST:}
       env-check: ${DIFY_WF_ENV_CHECK:}
       report-generate: ${DIFY_WF_REPORT_GENERATE:}
+    workflow-modes:
+      env-check: ${DIFY_WF_ENV_CHECK_MODE:${DIFY_APP_MODE:chat}}
     knowledge:
       top-k: ${DIFY_KB_TOP_K:5}
       api-key: ${DIFY_KB_API_KEY:}
-  # Dify 全部配置见项目根目录 config/dify.env（由 spring.config.import 加载）
+  # Dify 配置见 config/dify.env，须通过 scripts/run-backend.bat 启动（会注入 DIFY_* 环境变量）
 
 logging:
   level:

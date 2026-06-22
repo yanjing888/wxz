@@ -30,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 @Service
@@ -60,7 +61,7 @@ public class DifyService {
                                  String imageUrl, boolean hasData) {
         if (canCall(workflowKey)) {
             try {
-                JsonNode payload = difyProperties.isChatMode()
+                JsonNode payload = difyProperties.isChatMode(workflowKey)
                         ? runChat(workflowKey, inputs, userId, buildAssistQuery(inputs, hasImage, hasData), imageUrl)
                         : runWorkflow(workflowKey, inputs, userId);
                 return parseAssistPayload(payload, true, hasImage, hasData);
@@ -78,8 +79,8 @@ public class DifyService {
     public AssistResponse streamAssist(String workflowKey, Map<String, Object> inputs, String userId,
                                        ExperimentConfig experiment, int stepId, boolean hasImage,
                                        String imageUrl, Consumer<String> onDelta,
-                                       Consumer<List<MarkDto>> onMarks) {
-        if (canCall(workflowKey) && difyProperties.isChatMode()) {
+                                       Consumer<List<MarkDto>> onMarks, Runnable onAnswerComplete) {
+        if (canCall(workflowKey) && difyProperties.isChatMode(workflowKey)) {
             try {
                 boolean hasData = hasDataAssist(inputs);
                 String query = buildAssistQuery(inputs, hasImage, hasData);
@@ -89,7 +90,9 @@ public class DifyService {
                 String url = difyProperties.getBaseUrl().replaceAll("/$", "") + "/chat-messages";
                 StringBuilder full = new StringBuilder();
                 List<MarkDto> streamMarks = new ArrayList<>();
+                AtomicBoolean answerEnded = new AtomicBoolean(false);
                 streamChatSse(url, apiKey, body, node -> {
+                    notifyAnswerComplete(node, answerEnded, onAnswerComplete);
                     absorbStreamMeta(node, streamMarks, onMarks);
                     String delta = extractStreamDelta(node);
                     if (!delta.isEmpty()) {
@@ -110,7 +113,22 @@ public class DifyService {
             onMarks.accept(mock.getMarks());
         }
         streamMockFeedback(mock.getFeedback(), onDelta);
+        if (onAnswerComplete != null) {
+            onAnswerComplete.run();
+        }
         return mock;
+    }
+
+    /** Dify 正文流结束后仍会跑知识库等节点；在 message_end 时通知前端收起光标。 */
+    private void notifyAnswerComplete(JsonNode node, AtomicBoolean answerEnded, Runnable onAnswerComplete) {
+        if (onAnswerComplete == null || answerEnded.get()) {
+            return;
+        }
+        String event = node.path("event").asText("");
+        if ("message_end".equals(event) || "agent_message_end".equals(event)) {
+            answerEnded.set(true);
+            onAnswerComplete.run();
+        }
     }
 
     /** 从 Dify SSE 的 node_finished 采集参数提取器 / 多模态 LLM 的 regions，并即时回调 */
@@ -279,9 +297,9 @@ public class DifyService {
         if (canCall("env-check")) {
             try {
                 boolean hasImage = imageUrl != null && !imageUrl.isBlank();
-                JsonNode payload = difyProperties.isChatMode()
+                JsonNode payload = difyProperties.isChatMode("env-check")
                         ? runChat("env-check", inputs, userId, buildEnvCheckQuery(inputs, hasImage), imageUrl)
-                        : runWorkflow("env-check", inputs, userId);
+                        : runWorkflow("env-check", buildEnvWorkflowInputs(inputs, imageUrl, userId), userId);
                 return parseEnvPayload(payload);
             } catch (Exception e) {
                 log.warn("Dify env-check failed, fallback to mock: {}", e.getMessage());
@@ -325,11 +343,23 @@ public class DifyService {
         String action = hasImage
                 ? "请结合本次监控抽帧画面，对实验台环境进行安全巡检"
                 : "请对当前实验台环境进行巡检";
-        String suffix = "，返回等级 L0-L3、摘要与建议。";
+        String suffix = "，返回等级 L0-L2、摘要与建议。";
         if (experimentType.isBlank()) {
             return action + suffix;
         }
         return "实验类型：" + experimentType + "。" + action + suffix;
+    }
+
+    private Map<String, Object> buildEnvWorkflowInputs(Map<String, Object> inputs, String imageUrl, String userId) {
+        Map<String, Object> workflowInputs = new LinkedHashMap<>(inputs);
+        if (imageUrl != null && !imageUrl.isBlank()) {
+            String apiKey = difyProperties.resolveApiKey("env-check");
+            Map<String, Object> fileRef = difyFileRef(uploadImageToDify(imageUrl, userId, apiKey));
+            workflowInputs.put("frame_image", fileRef);
+            workflowInputs.put("image", fileRef);
+            workflowInputs.putIfAbsent("frame_url", imageUrl);
+        }
+        return workflowInputs;
     }
 
     private String textFromInputs(Map<String, Object> inputs, String key, String defaultValue) {
@@ -484,7 +514,7 @@ public class DifyService {
             if (answer.startsWith("{")) {
                 try {
                     JsonNode json = objectMapper.readTree(answer);
-                    resp.setLevel(text(json, "level", "L0"));
+                    resp.setLevel(normalizeEnvLevel(text(json, "level", "L0")));
                     resp.setSummary(text(json, "summary", "暂无异常"));
                     resp.setSuggestion(text(json, "suggestion", ""));
                     return resp;
@@ -496,7 +526,7 @@ public class DifyService {
             resp.setSuggestion("");
             return resp;
         }
-        resp.setLevel(text(payload, "level", "L0"));
+        resp.setLevel(normalizeEnvLevel(text(payload, "level", "L0")));
         resp.setSummary(text(payload, "summary", "暂无异常"));
         resp.setSuggestion(text(payload, "suggestion", ""));
         return resp;
@@ -504,9 +534,18 @@ public class DifyService {
 
     private String extractLevel(String text) {
         if (text == null) return "L0";
-        for (String lv : List.of("L3", "L2", "L1", "L0")) {
+        for (String lv : List.of("L2", "L1", "L0")) {
             if (text.contains(lv)) return lv;
         }
+        return "L0";
+    }
+
+    private String normalizeEnvLevel(String level) {
+        if ("L3".equalsIgnoreCase(level)) {
+            return "L2";
+        }
+        if ("L2".equalsIgnoreCase(level)) return "L2";
+        if ("L1".equalsIgnoreCase(level)) return "L1";
         return "L0";
     }
 
@@ -599,11 +638,7 @@ public class DifyService {
             }
             case "L2" -> {
                 resp.setSummary("检测到可能的违规操作或遮挡（示意）");
-                resp.setSuggestion("暂停操作，请教师或助教确认后再继续");
-            }
-            case "L3" -> {
-                resp.setSummary("严重安全隐患（示意）");
-                resp.setSuggestion("立即停止实验并报告教师");
+                resp.setSuggestion("严重告警：暂停操作，请教师或助教确认后再继续");
             }
             default -> {
                 resp.setSummary("暂无异常");

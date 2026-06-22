@@ -48,7 +48,7 @@
               <p class="text-3xl font-black text-emerald-500">{{ report?.tutViewCount ?? 0 }}</p>
             </div>
             <div class="p-5 surface-card rounded-2xl text-center">
-              <p class="text-[10px] text-ink-faint uppercase mb-2 font-bold tracking-wider">严重告警(L3)</p>
+              <p class="text-[10px] text-ink-faint uppercase mb-2 font-bold tracking-wider">严重告警(L2)</p>
               <p class="text-3xl font-black text-red-500">{{ report?.labL3Count ?? 0 }}</p>
             </div>
           </div>
@@ -219,15 +219,15 @@ function levelLabel(level) {
   const map = {
     L0: 'L0 正常',
     L1: 'L1 注意',
-    L2: 'L2 警告',
-    L3: 'L3 严重'
+    L2: 'L2 严重',
+    L3: 'L2 严重'
   }
   return map[level] || level || '—'
 }
 
 function envLevelClass(level) {
   if (level === 'L3') return 'text-red-600 bg-red-50 border border-red-100'
-  if (level === 'L2') return 'text-orange-600 bg-orange-50 border border-orange-100'
+  if (level === 'L2') return 'text-red-600 bg-red-50 border border-red-100'
   if (level === 'L1') return 'text-amber-600 bg-amber-50 border border-amber-100'
   return 'text-emerald-600 bg-emerald-50 border border-emerald-100'
 }

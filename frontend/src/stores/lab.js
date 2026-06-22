@@ -747,6 +747,12 @@ export const useLabStore = defineStore('lab', {
               applyMarksIfReady()
               this.messages[aiIndex].text += chunk
             },
+            onAnswerEnd: () => {
+              if (this.messages[aiIndex]) {
+                this.messages[aiIndex].streaming = false
+              }
+              this.loadingAssist = false
+            },
             onDone: (data) => {
               this.messages[aiIndex].streaming = false
               if (data.feedback) {
@@ -765,9 +771,6 @@ export const useLabStore = defineStore('lab', {
           },
           abortCtrl.signal
         )
-        if (!abortCtrl.signal.aborted) {
-          this.session = (await sessionApi.get(this.session.id)).data
-        }
       } catch (e) {
         const aborted = e.name === 'AbortError' || abortCtrl.signal.aborted
         if (this.messages[aiIndex]) {
@@ -787,6 +790,11 @@ export const useLabStore = defineStore('lab', {
         if (this.messages[aiIndex]) {
           this.messages[aiIndex].streaming = false
         }
+      }
+      if (!abortCtrl.signal.aborted && this.session?.id) {
+        sessionApi.get(this.session.id).then(({ data }) => {
+          this.session = data
+        }).catch(() => {})
       }
       return true
     },

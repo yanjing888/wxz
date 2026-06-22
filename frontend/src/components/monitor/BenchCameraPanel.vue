@@ -156,7 +156,7 @@ const levelClass = computed(() => {
   const map = {
     L0: 'bg-emerald-50 text-emerald-600 border-emerald-200',
     L1: 'bg-amber-50 text-amber-600 border-amber-200',
-    L2: 'bg-orange-50 text-orange-600 border-orange-200',
+    L2: 'bg-red-50 text-red-600 border-red-200',
     L3: 'bg-red-50 text-red-600 border-red-200'
   }
   return map[props.envLevel] || map.L0
@@ -174,7 +174,7 @@ function briefSummary(text, maxLen = 80) {
 
 function logLevelClass(level) {
   if (level === 'L3') return 'text-red-500 bg-red-50'
-  if (level === 'L2') return 'text-orange-500 bg-orange-50'
+  if (level === 'L2') return 'text-red-500 bg-red-50'
   if (level === 'L1') return 'text-amber-500 bg-amber-50'
   return 'text-emerald-500 bg-emerald-50'
 }

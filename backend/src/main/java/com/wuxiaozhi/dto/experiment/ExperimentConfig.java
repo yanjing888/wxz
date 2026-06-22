@@ -15,6 +15,7 @@ public class ExperimentConfig {
     private List<String> menuLabels;
     private List<String> reportKnowledge;
     private List<String> reportPath;
+    private String reportGuidePath;
     private Map<String, StepConfig> steps;
     private DataCollectionConfig dataCollection;
     /** Dify 侧配置：知识库 ID 等 */

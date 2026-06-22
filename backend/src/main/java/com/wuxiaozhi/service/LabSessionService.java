@@ -45,6 +45,7 @@ public class LabSessionService {
     private final ExperimentConfigService experimentConfigService;
     private final DifyService difyService;
     private final DifyRetrieveService difyRetrieveService;
+    private final KnowledgeMapService knowledgeMapService;
     private final SessionDataLogRepository sessionDataLogRepository;
     private final DataValidationService dataValidationService;
     private final ObjectMapper objectMapper;
@@ -57,6 +58,7 @@ public class LabSessionService {
                              ExperimentConfigService experimentConfigService,
                              DifyService difyService,
                              DifyRetrieveService difyRetrieveService,
+                             KnowledgeMapService knowledgeMapService,
                              DataValidationService dataValidationService,
                              ObjectMapper objectMapper,
                              PlatformTransactionManager transactionManager) {
@@ -67,6 +69,7 @@ public class LabSessionService {
         this.experimentConfigService = experimentConfigService;
         this.difyService = difyService;
         this.difyRetrieveService = difyRetrieveService;
+        this.knowledgeMapService = knowledgeMapService;
         this.dataValidationService = dataValidationService;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -135,18 +138,16 @@ public class LabSessionService {
         String dataJson = writeJson(values);
         inputs.put("query", buildDataAssistQuery(step, validation, values));
         inputs.put("data_json", dataJson);
-        inputs.put("correction_mode", "data");
         putExperimentInputs(inputs, exp.getName(), exp.getCode());
-        if (exp.getCategory() != null && !exp.getCategory().isBlank()) {
-            inputs.put("category", exp.getCategory());
-        }
-        inputs.put("step_id", stepId);
+        inputs.put("step_id", String.valueOf(stepId));
         if (step.getTitle() != null) {
             inputs.put("step_title", step.getTitle());
         }
         if (step.getDesc() != null) {
             inputs.put("step_desc", step.getDesc());
         }
+        putDifyRoutingInputs(inputs, step, false, true);
+        attachKnowledgeMapInputs(inputs, exp, stepId, true);
         attachKnowledgeContext(inputs, exp, session, step, inputs.get("query").toString(), false);
 
         AssistResponse assist = difyService.assist("text-assist", inputs, "guest-" + sessionId, exp, stepId, false, null, true);
@@ -285,7 +286,8 @@ public class LabSessionService {
                         prepare.experiment(), prepare.session().getActiveStep(), prepare.hasImage(),
                         prepare.hasImage() ? req.getImageUrl() : null,
                         delta -> sendChunk(emitter, delta),
-                        marks -> sendMarks(emitter, marks));
+                        marks -> sendMarks(emitter, marks),
+                        () -> sendAnswerEnd(emitter));
                 transactionTemplate.executeWithoutResult(status ->
                         persistAssistResult(sessionId, req, prepare, resp));
                 emitter.send(SseEmitter.event().name("done").data(resp));
@@ -306,6 +308,13 @@ public class LabSessionService {
             emitter.complete();
         } catch (IOException ignored) {
             emitter.completeWithError(e);
+        }
+    }
+
+    private void sendAnswerEnd(SseEmitter emitter) {
+        try {
+            emitter.send(SseEmitter.event().name("answer_end").data(Map.of("ok", true)));
+        } catch (IOException ignored) {
         }
     }
 
@@ -346,13 +355,10 @@ public class LabSessionService {
         Map<String, Object> inputs = new LinkedHashMap<>();
         inputs.put("query", userMessage);
         putExperimentInputs(inputs, exp.getName(), exp.getCode());
-        if (exp.getCategory() != null && !exp.getCategory().isBlank()) {
-            inputs.put("category", exp.getCategory());
-        }
 
         StepConfig step = resolveStep(exp, session.getActiveStep());
         if (step != null) {
-            inputs.put("step_id", session.getActiveStep());
+            inputs.put("step_id", String.valueOf(session.getActiveStep()));
             if (step.getTitle() != null) {
                 inputs.put("step_title", step.getTitle());
             }
@@ -360,6 +366,8 @@ public class LabSessionService {
                 inputs.put("step_desc", step.getDesc());
             }
         }
+        putDifyRoutingInputs(inputs, step, hasImage, false);
+        attachKnowledgeMapInputs(inputs, exp, session.getActiveStep(), hasImage);
 
         attachKnowledgeContext(inputs, exp, session, step, userMessage, hasImage);
 
@@ -381,6 +389,13 @@ public class LabSessionService {
         inputs.put("kb_context", kbContext);
         log.info("KB retrieve sessionId={}, experiment={}, hasImage={}, retrievalQueryLen={}, kbContextLen={}",
                 session.getId(), exp.getCode(), hasImage, retrievalQuery.length(), kbContext.length());
+    }
+
+    private void attachKnowledgeMapInputs(Map<String, Object> inputs, ExperimentConfig exp, int stepId, boolean correctionMode) {
+        if (knowledgeMapService == null || exp == null || exp.getCode() == null) {
+            return;
+        }
+        knowledgeMapService.enrichInputs(inputs, exp.getCode(), String.valueOf(stepId), correctionMode);
     }
 
     private String buildRetrievalQuery(ExperimentConfig exp, StepConfig step, String userMessage, boolean hasImage) {
@@ -461,7 +476,7 @@ public class LabSessionService {
         }
         envCheckLogRepository.save(log);
 
-        if ("L3".equals(resp.getLevel())) {
+        if ("L2".equals(resp.getLevel())) {
             session.setLabL3Count(session.getLabL3Count() + 1);
             sessionRepository.save(session);
         }
@@ -598,5 +613,24 @@ public class LabSessionService {
         inputs.put("experiment_type", experimentType);
         inputs.put("experiment_name", experimentType);
         inputs.put("experiment_code", experimentCode);
+    }
+
+    /**
+     * Dify 工作流「问题类别 category / 纠错模式 correction_mode」与实验 JSON 的 category（optics 等学科标签）不是同一字段。
+     * 见 docs/dify/物理实验智能纠错与指导-优化版-含知识库检索.yml 开始节点。
+     */
+    private void putDifyRoutingInputs(Map<String, Object> inputs, StepConfig step, boolean hasImage, boolean hasData) {
+        if (hasData) {
+            inputs.put("category", "data");
+            inputs.put("correction_mode", "data");
+            return;
+        }
+        if (hasImage) {
+            inputs.put("category", "vision");
+            inputs.put("correction_mode", "vision");
+            return;
+        }
+        inputs.put("category", "teaching");
+        inputs.put("correction_mode", "auto");
     }
 }

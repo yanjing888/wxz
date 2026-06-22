@@ -1,0 +1,931 @@
+app:
+  description: 支持实验教学问答、实验数据纠错、按实验步骤进行图片视觉纠错的 Dify Chatflow 应用示例。
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: 物理实验智能纠错与指导-优化版
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/xinference:0.0.5@f24040a5f10ca2d2724b1b345faf7a2a178a56ef9a7ad3faf9833bc1321f499b
+    version: null
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: true
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .WEBP
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 20
+        image_file_size_limit: 20
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: true
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: 你好，我是物理实验智能纠错与指导助手。你可以询问实验原理、上传实验图片进行视觉纠错，或提交实验数据让我帮你检查。
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions:
+    - 电流表接线有什么常见错误？
+    - 伏安法测电阻时电流表应该内接还是外接？
+    - 螺旋测微器读数需要注意什么？
+    suggested_questions_after_answer:
+      enabled: true
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - id: 1779853028414-source-1779854194447-target
+      source: '1779853028414'
+      sourceHandle: source
+      target: '1779854194447'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    - id: 1779854194447-source-1779857861794-target
+      source: '1779854194447'
+      sourceHandle: source
+      target: '1779857861794'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    - id: 1779857861794-data-1781000000002-target
+      source: '1779857861794'
+      sourceHandle: data
+      target: '1781000000002'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    - id: 1781000000002-source-1781000000003-target
+      source: '1781000000002'
+      sourceHandle: source
+      target: '1781000000003'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    - id: 1779857861794-vision-1779858136115-target
+      source: '1779857861794'
+      sourceHandle: vision
+      target: '1779858136115'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    - id: 1779858136115-source-1781000000001-target
+      source: '1779858136115'
+      sourceHandle: source
+      target: '1781000000001'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    - id: 1781000000001-source-1779960945383-target
+      source: '1781000000001'
+      sourceHandle: source
+      target: '1779960945383'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    - id: 1779960945383-source-1779858712451-target
+      source: '1779960945383'
+      sourceHandle: source
+      target: '1779858712451'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    - id: 1779858712451-source-1779859794336-target
+      source: '1779858712451'
+      sourceHandle: source
+      target: '1779859794336'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    - id: 1779857861794-false-1779858308963-target
+      source: '1779857861794'
+      sourceHandle: 'false'
+      target: '1779858308963'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    - id: 1779858308963-source-1779858605374-target
+      source: '1779858308963'
+      sourceHandle: source
+      target: '1779858605374'
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: ''
+        targetType: ''
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - label: 用户问题
+          variable: query
+          required: false
+          type: paragraph
+          max_length: 2000
+          options: []
+        - label: 上传图片
+          variable: image
+          required: false
+          type: file
+          allowed_file_types:
+          - image
+          allowed_file_upload_methods:
+          - local_file
+          - remote_url
+          max_length: 48
+          options: []
+        - label: 实验代码
+          variable: experiment_code
+          required: false
+          type: text-input
+          max_length: 64
+          options: []
+        - label: 实验名称
+          variable: experiment_type
+          required: false
+          type: text-input
+          max_length: 64
+          options: []
+        - label: 问题类别
+          variable: category
+          required: false
+          type: select
+          options:
+          - auto
+          - teaching
+          - vision
+          - data
+          max_length: 48
+        - label: 当前步骤编号
+          variable: step_id
+          required: false
+          type: text-input
+          max_length: 32
+          options: []
+        - label: 当前步骤标题
+          variable: step_title
+          required: false
+          type: text-input
+          max_length: 128
+          options: []
+        - label: 当前步骤说明
+          variable: step_desc
+          required: false
+          type: paragraph
+          max_length: 1000
+          options: []
+        - label: 纠错模式
+          variable: correction_mode
+          required: false
+          type: select
+          options:
+          - auto
+          - vision
+          - data
+          max_length: 48
+        - label: 实验数据 JSON
+          variable: data_json
+          required: false
+          type: paragraph
+          max_length: 5000
+          options: []
+        - label: 教学知识库上下文
+          variable: teaching_kb_context
+          required: false
+          type: paragraph
+          max_length: 10000
+          options: []
+        - label: 纠错规则库上下文
+          variable: correction_rule_context
+          required: false
+          type: paragraph
+          max_length: 10000
+          options: []
+        - label: 兼容旧版知识库上下文
+          variable: kb_context
+          required: false
+          type: paragraph
+          max_length: 10000
+          options: []
+      height: 114
+      id: '1779853028414'
+      position: &id001
+        x: 80
+        y: 260
+      positionAbsolute: *id001
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def _clean(value):\n    if value is None:\n        return \"\"\n    return str(value).strip()\n\n\ndef main(query=\"\
+          \", image_name=\"\", image_url=\"\", mime_type=\"\", experiment_code=\"\", experiment_type=\"\", category=\"\",\
+          \ step_id=\"\", step_title=\"\", step_desc=\"\", correction_mode=\"\", data_json=\"\", teaching_kb_context=\"\"\
+          , correction_rule_context=\"\", kb_context=\"\"):\n    query = _clean(query)\n    experiment_code = _clean(experiment_code)\
+          \ or \"newton_rings\"\n    experiment_type = _clean(experiment_type) or \"牛顿环实验\"\n    category = (_clean(category)\
+          \ or \"auto\").lower()\n    correction_mode = (_clean(correction_mode) or \"auto\").lower()\n    step_id = _clean(step_id)\n\
+          \    step_title = _clean(step_title)\n    step_desc = _clean(step_desc)\n    data_json = _clean(data_json)\n   \
+          \ teaching_context = _clean(teaching_kb_context) or _clean(kb_context)\n    rule_context = _clean(correction_rule_context)\
+          \ or _clean(kb_context)\n\n    has_image = bool(_clean(image_name) or _clean(image_url))\n    has_data = bool(data_json)\
+          \ or correction_mode == \"data\" or category == \"data\"\n\n    if has_data:\n        mode = \"data\"\n    elif\
+          \ has_image or correction_mode == \"vision\" or category == \"vision\":\n        mode = \"vision\"\n    else:\n\
+          \        mode = \"text\"\n\n    if not query:\n        if mode == \"vision\":\n            query = \"请根据当前实验和步骤，对上传图片进行视觉纠错。\"\
+          \n        elif mode == \"data\":\n            query = \"请根据当前实验和步骤，对实验数据进行纠错分析。\"\n        else:\n            query\
+          \ = \"请结合实验教学知识库回答我的问题。\"\n\n    step_part = \" \".join([x for x in [step_id, step_title, step_desc] if x])\n  \
+          \  retrieval_query_teaching = f\"{experiment_type} {experiment_code} {step_part} {query} 实验原理 操作步骤 数据处理 注意事项\"\n\
+          \    retrieval_query_rules = f\"{experiment_type} {experiment_code} {step_part} 视觉纠错 规则 常见错误 evidence fix_instruction\"\
+          \n\n    return {\n        \"mode\": mode,\n        \"query\": query,\n        \"experiment_code\": experiment_code,\n\
+          \        \"experiment_type\": experiment_type,\n        \"category\": category,\n        \"step_id\": step_id,\n\
+          \        \"step_title\": step_title,\n        \"step_desc\": step_desc,\n        \"data_json\": data_json,\n   \
+          \     \"teaching_context\": teaching_context,\n        \"rule_context\": rule_context,\n        \"retrieval_query_teaching\"\
+          : retrieval_query_teaching,\n        \"retrieval_query_rules\": retrieval_query_rules,\n    }\n"
+        code_language: python3
+        outputs:
+          mode:
+            type: string
+            children: null
+          query:
+            type: string
+            children: null
+          experiment_code:
+            type: string
+            children: null
+          experiment_type:
+            type: string
+            children: null
+          category:
+            type: string
+            children: null
+          step_id:
+            type: string
+            children: null
+          step_title:
+            type: string
+            children: null
+          step_desc:
+            type: string
+            children: null
+          data_json:
+            type: string
+            children: null
+          teaching_context:
+            type: string
+            children: null
+          rule_context:
+            type: string
+            children: null
+          retrieval_query_teaching:
+            type: string
+            children: null
+          retrieval_query_rules:
+            type: string
+            children: null
+        selected: false
+        title: 输入解析
+        type: code
+        variables:
+        - value_selector:
+          - '1779853028414'
+          - query
+          variable: query
+        - value_selector:
+          - '1779853028414'
+          - image
+          - name
+          variable: image_name
+        - value_selector:
+          - '1779853028414'
+          - image
+          - url
+          variable: image_url
+        - value_selector:
+          - '1779853028414'
+          - image
+          - mime_type
+          variable: mime_type
+        - value_selector:
+          - '1779853028414'
+          - experiment_code
+          variable: experiment_code
+        - value_selector:
+          - '1779853028414'
+          - experiment_type
+          variable: experiment_type
+        - value_selector:
+          - '1779853028414'
+          - category
+          variable: category
+        - value_selector:
+          - '1779853028414'
+          - step_id
+          variable: step_id
+        - value_selector:
+          - '1779853028414'
+          - step_title
+          variable: step_title
+        - value_selector:
+          - '1779853028414'
+          - step_desc
+          variable: step_desc
+        - value_selector:
+          - '1779853028414'
+          - correction_mode
+          variable: correction_mode
+        - value_selector:
+          - '1779853028414'
+          - data_json
+          variable: data_json
+        - value_selector:
+          - '1779853028414'
+          - teaching_kb_context
+          variable: teaching_kb_context
+        - value_selector:
+          - '1779853028414'
+          - correction_rule_context
+          variable: correction_rule_context
+        - value_selector:
+          - '1779853028414'
+          - kb_context
+          variable: kb_context
+      height: 52
+      id: '1779854194447'
+      position: &id002
+        x: 360
+        y: 260
+      positionAbsolute: *id002
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - id: data
+          case_id: data
+          logical_operator: and
+          conditions:
+          - id: data-mode
+            varType: string
+            variable_selector:
+            - '1779854194447'
+            - mode
+            comparison_operator: is
+            value: data
+        - id: vision
+          case_id: vision
+          logical_operator: and
+          conditions:
+          - id: vision-mode
+            varType: string
+            variable_selector:
+            - '1779854194447'
+            - mode
+            comparison_operator: is
+            value: vision
+        selected: false
+        title: 模式分支
+        type: if-else
+      height: 124
+      id: '1779857861794'
+      position: &id003
+        x: 660
+        y: 260
+      positionAbsolute: *id003
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            max_tokens: 40960
+            temperature: 0.7
+          mode: chat
+          name: xingkong3
+          provider: langgenius/xinference/xinference
+        prompt_template:
+        - role: system
+          text: "你是大学物理实验视觉纠错专家。你的任务是根据用户上传的实验图片，结合当前实验、当前步骤、教学知识库上下文和纠错规则库上下文，识别图片中可见的实验操作问题、仪器使用问题、读数/记录问题，并只输出 JSON 文本。\n\
+            \n当前实验信息：\n- 实验名称：{{#1779854194447.experiment_type#}}\n- 实验代码：{{#1779854194447.experiment_code#}}\n- 当前步骤编号：{{#1779854194447.step_id#}}\n\
+            - 当前步骤标题：{{#1779854194447.step_title#}}\n- 当前步骤说明：{{#1779854194447.step_desc#}}\n\n用户问题：{{#1779854194447.query#}}\n\
+            \n教学知识库参考：\n{{#1779854194447.teaching_context#}}\n\n纠错规则库参考：\n{{#1779854194447.rule_context#}}\n\n判断规则：\n1. 必须优先依据当前步骤判断，不要泛化到无关实验或无关步骤。\n\
+            2. 只标注图片中确实可见的问题，不要臆测；无法判断的项目不要判错。\n3. 如果图片与当前实验或当前步骤明显无关，is_step_related=false，issues 和 regions 返回空数组，并在 summary\
+            \ 说明原因。\n4. 如果没有明显问题，issues 和 regions 返回空数组。\n5. 每个问题都必须给出 evidence，说明你在图片中看到了什么。\n6. severity 只能是“高”“中”“低”。\n\
+            7. confidence 范围是 0 到 1。\n8. regions 使用 0-1000 归一化坐标，左上角为 (0,0)，右下角为 (1000,1000)。坐标框要贴近错误元素，不要框整张图。\n9. 如果问题无法定位到具体区域，可以写入\
+            \ issues，但不要生成 region；此时 issue 的 region_ref 设为 null。\n10. issue_id 优先使用纠错规则库中的 rule_id；没有匹配规则时使用“实验代码_STEP步骤号_简短英文问题”的格式。\n\
+            11. 不要输出 Markdown，不要输出解释文字，不要把 JSON 包在代码块中。\n\n输出 JSON 格式：\n{\n  \"experiment\": \"{{#1779854194447.experiment_type#}}\"\
+            ,\n  \"experiment_code\": \"{{#1779854194447.experiment_code#}}\",\n  \"step_id\": \"{{#1779854194447.step_id#}}\"\
+            ,\n  \"step_title\": \"{{#1779854194447.step_title#}}\",\n  \"is_step_related\": true,\n  \"summary\": \"一句话概括图片内容和总体判断\"\
+            ,\n  \"issues\": [\n    {\n      \"issue_id\": \"NR_STEP2_CENTER_OFF\",\n      \"error_type\": \"环心定位\",\n   \
+            \   \"severity\": \"高\",\n      \"description\": \"十字丝交点未与牛顿环中心重合\",\n      \"evidence\": \"图片中环心明显位于十字丝交点右下方\"\
+            ,\n      \"fix_instruction\": \"先粗调载物台将环心移至视场中央，再微调显微镜使十字丝交点接近环心\",\n      \"confidence\": 0.86,\n      \"region_ref\"\
+            : 1\n    }\n  ],\n  \"regions\": [\n    {\n      \"topLeftX\": 420,\n      \"topLeftY\": 360,\n      \"bottomRightX\"\
+            : 560,\n      \"bottomRightY\": 500,\n      \"label\": \"环心偏离十字丝\"\n    }\n  ],\n  \"next_action\": \"建议学生重新调节载物台和显微镜，使环心居中后再记录\
+            \ D0\"\n}"
+        selected: false
+        structured_output_enabled: true
+        title: LLM：多模态视觉识别
+        type: llm
+        vision:
+          enabled: true
+        completion_params:
+          temperature: 0.15
+          max_tokens: 4096
+        variables: []
+      height: 88
+      id: '1779858136115'
+      position: &id004
+        x: 960
+        y: 340
+      positionAbsolute: *id004
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            max_tokens: 40960
+            temperature: 0.7
+          mode: chat
+          name: xingkong3
+          provider: langgenius/xinference/xinference
+        prompt_template:
+        - role: system
+          text: '你是大学物理实验教学助手，负责回答学生关于实验原理、操作步骤、数据处理、报告撰写和注意事项的问题。
+
+
+            当前实验信息：
+
+            - 实验名称：{{#1779854194447.experiment_type#}}
+
+            - 实验代码：{{#1779854194447.experiment_code#}}
+
+            - 当前步骤编号：{{#1779854194447.step_id#}}
+
+            - 当前步骤标题：{{#1779854194447.step_title#}}
+
+            - 当前步骤说明：{{#1779854194447.step_desc#}}
+
+
+            用户问题：{{#1779854194447.query#}}
+
+
+            教学知识库参考：
+
+            {{#1779854194447.teaching_context#}}
+
+
+            纠错规则库参考（仅在用户询问操作错误、图片纠错规则、评分依据时使用）：
+
+            {{#1779854194447.rule_context#}}
+
+
+            回答要求：
+
+            1. 优先依据当前实验和当前步骤回答。
+
+            2. 如果问题是实验原理、步骤、公式、报告写作，主要使用教学知识库。
+
+            3. 如果问题是“我这样做对不对”“哪里错了”“图片纠错规则是什么”，再结合纠错规则库。
+
+            4. 不要假装看到了图片；没有图片时只做文本指导。
+
+            5. 回答简洁、可操作，必要时给出公式和单位换算提醒。'
+        selected: false
+        title: LLM：文本问答
+        type: llm
+        vision:
+          enabled: false
+        completion_params:
+          temperature: 0.35
+          max_tokens: 2048
+      height: 88
+      id: '1779858308963'
+      position: &id005
+        x: 960
+        y: 120
+      positionAbsolute: *id005
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '{{#1779858308963.text#}}'
+        selected: false
+        title: 直接回复
+        type: answer
+        variables: []
+      height: 103
+      id: '1779858605374'
+      position: &id006
+        x: 1260
+        y: 120
+      positionAbsolute: *id006
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            max_tokens: 40960
+            temperature: 0.7
+          mode: chat
+          name: xingkong3
+          provider: langgenius/xinference/xinference
+        prompt_template:
+        - role: system
+          text: '你是物理实验教学助手。请把下面的视觉纠错 JSON 转成学生能直接理解的中文反馈。
+
+
+            当前实验：{{#1779854194447.experiment_type#}}
+
+            当前步骤：{{#1779854194447.step_id#}} {{#1779854194447.step_title#}}
+
+            视觉纠错 JSON：
+
+            {{#1781000000001.vision_json#}}
+
+
+            输出要求：
+
+            1. 用 Markdown 输出。
+
+            2. 如果没有明显问题，先明确说明“本次图片未发现明显可见错误”。
+
+            3. 如果有问题，按严重程度高到低列出：问题、证据、建议修改。
+
+            4. 最后给出“下一步建议”。
+
+            5. 不要编造 JSON 中没有的错误。'
+        selected: false
+        title: LLM：综合反馈
+        type: llm
+        vision:
+          enabled: false
+        completion_params:
+          temperature: 0.25
+          max_tokens: 2048
+      height: 88
+      id: '1779858712451'
+      position: &id007
+        x: 1860
+        y: 340
+      positionAbsolute: *id007
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '{{#1779858712451.text#}}
+
+
+          ---
+
+
+          可视化标注 regions：
+
+          {{#1781000000001.regions#}}'
+        selected: false
+        title: 有图片
+        type: answer
+        variables: []
+      height: 103
+      id: '1779859794336'
+      position: &id008
+        x: 2160
+        y: 340
+      positionAbsolute: *id008
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        instruction: '从输入的视觉纠错 JSON 中提取 regions 字段。
+
+          要求：
+
+          1. 只返回一个 JSON 对象，形如 {"regions": [...]}。
+
+          2. regions 数组中的每个元素保留 topLeftX、topLeftY、bottomRightX、bottomRightY、label。
+
+          3. 如果 regions 不存在、不是数组或为空，返回 {"regions": []}。
+
+          4. 不要输出 Markdown，不要输出解释文字。'
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: xingkong3
+          provider: langgenius/xinference/xinference
+        parameters:
+        - name: regions
+          type: array[object]
+          required: false
+          description: 视觉纠错区域框，坐标为 0-1000 归一化坐标。
+        query:
+        - '1781000000001'
+        - vision_json
+        reasoning_mode: prompt
+        selected: false
+        title: 参数提取器：regions
+        type: parameter-extractor
+        vision:
+          enabled: false
+      height: 88
+      id: '1779960945383'
+      position: &id009
+        x: 1560
+        y: 340
+      positionAbsolute: *id009
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "import json\nimport re\n\n\ndef _strip_code_fence(text):\n    text = (text or \"\").strip()\n    text = re.sub(r\"\
+          ^```(?:json)?\\s*\", \"\", text, flags=re.I)\n    text = re.sub(r\"\\s*```$\", \"\", text)\n    return text.strip()\n\
+          \n\ndef _extract_json(text):\n    text = _strip_code_fence(text)\n    if not text:\n        return None\n    try:\n\
+          \        return json.loads(text)\n    except Exception:\n        pass\n    start = text.find(\"{\")\n    end = text.rfind(\"\
+          }\")\n    if start >= 0 and end > start:\n        try:\n            return json.loads(text[start:end + 1])\n   \
+          \     except Exception:\n            return None\n    return None\n\n\ndef _norm_region(region):\n    def clamp(v):\n\
+          \        try:\n            v = int(round(float(v)))\n        except Exception:\n            v = 0\n        return\
+          \ max(0, min(1000, v))\n    return {\n        \"topLeftX\": clamp(region.get(\"topLeftX\")),\n        \"topLeftY\"\
+          : clamp(region.get(\"topLeftY\")),\n        \"bottomRightX\": clamp(region.get(\"bottomRightX\")),\n        \"bottomRightY\"\
+          : clamp(region.get(\"bottomRightY\")),\n        \"label\": str(region.get(\"label\") or \"问题区域\")[:60],\n    }\n\
+          \n\ndef main(raw_text=\"\", experiment_type=\"\", experiment_code=\"\", step_id=\"\", step_title=\"\"):\n    parsed\
+          \ = _extract_json(raw_text)\n    if not isinstance(parsed, dict):\n        parsed = {\n            \"experiment\"\
+          : experiment_type or \"未知实验\",\n            \"experiment_code\": experiment_code or \"\",\n            \"step_id\"\
+          : step_id or \"\",\n            \"step_title\": step_title or \"\",\n            \"is_step_related\": False,\n \
+          \           \"summary\": \"模型输出无法解析为有效 JSON，建议重新上传清晰图片或重试。\",\n            \"issues\": [],\n            \"regions\"\
+          : [],\n            \"next_action\": \"请重新检查输入图片、当前实验和步骤信息后再次分析。\",\n        }\n\n    parsed.setdefault(\"experiment\"\
+          , experiment_type or \"未知实验\")\n    parsed.setdefault(\"experiment_code\", experiment_code or \"\")\n    parsed.setdefault(\"\
+          step_id\", step_id or \"\")\n    parsed.setdefault(\"step_title\", step_title or \"\")\n    parsed.setdefault(\"\
+          is_step_related\", True)\n    parsed.setdefault(\"summary\", \"\")\n    parsed.setdefault(\"issues\", [])\n    parsed.setdefault(\"\
+          regions\", [])\n    parsed.setdefault(\"next_action\", \"\")\n\n    if not isinstance(parsed.get(\"issues\"), list):\n\
+          \        parsed[\"issues\"] = []\n    if not isinstance(parsed.get(\"regions\"), list):\n        parsed[\"regions\"\
+          ] = []\n\n    parsed[\"regions\"] = [_norm_region(r) for r in parsed[\"regions\"] if isinstance(r, dict)]\n    normalized_issues\
+          \ = []\n    for issue in parsed[\"issues\"]:\n        if not isinstance(issue, dict):\n            continue\n  \
+          \      severity = issue.get(\"severity\") if issue.get(\"severity\") in [\"高\", \"中\", \"低\"] else \"中\"\n     \
+          \   try:\n            confidence = float(issue.get(\"confidence\", 0.5))\n        except Exception:\n          \
+          \  confidence = 0.5\n        issue[\"severity\"] = severity\n        issue[\"confidence\"] = max(0, min(1, confidence))\n\
+          \        normalized_issues.append(issue)\n    parsed[\"issues\"] = normalized_issues\n\n    return {\n        \"\
+          vision_json\": json.dumps(parsed, ensure_ascii=False),\n        \"regions\": json.dumps(parsed.get(\"regions\",\
+          \ []), ensure_ascii=False),\n        \"summary\": str(parsed.get(\"summary\", \"\")),\n        \"issues_count\"\
+          : len(parsed.get(\"issues\", [])),\n    }\n"
+        code_language: python3
+        outputs:
+          vision_json:
+            type: string
+            children: null
+          regions:
+            type: string
+            children: null
+          summary:
+            type: string
+            children: null
+          issues_count:
+            type: number
+            children: null
+        selected: false
+        title: Code：视觉 JSON 清洗
+        type: code
+        variables:
+        - value_selector:
+          - '1779858136115'
+          - text
+          variable: raw_text
+        - value_selector:
+          - '1779854194447'
+          - experiment_type
+          variable: experiment_type
+        - value_selector:
+          - '1779854194447'
+          - experiment_code
+          variable: experiment_code
+        - value_selector:
+          - '1779854194447'
+          - step_id
+          variable: step_id
+        - value_selector:
+          - '1779854194447'
+          - step_title
+          variable: step_title
+        desc: ''
+      height: 52
+      id: '1781000000001'
+      position: &id010
+        x: 1260
+        y: 340
+      positionAbsolute: *id010
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            max_tokens: 40960
+            temperature: 0.7
+          mode: chat
+          name: xingkong3
+          provider: langgenius/xinference/xinference
+        prompt_template:
+        - role: system
+          text: '你是大学物理实验数据纠错专家。请根据当前实验、当前步骤、教学知识库和用户提交的数据 JSON，检查数据记录、公式、单位换算、数量级、有效数字和结果合理性。
+
+
+            当前实验信息：
+
+            - 实验名称：{{#1779854194447.experiment_type#}}
+
+            - 实验代码：{{#1779854194447.experiment_code#}}
+
+            - 当前步骤编号：{{#1779854194447.step_id#}}
+
+            - 当前步骤标题：{{#1779854194447.step_title#}}
+
+            - 当前步骤说明：{{#1779854194447.step_desc#}}
+
+
+            用户问题：{{#1779854194447.query#}}
+
+
+            实验数据 JSON：
+
+            {{#1779854194447.data_json#}}
+
+
+            教学知识库参考：
+
+            {{#1779854194447.teaching_context#}}
+
+
+            纠错规则库参考：
+
+            {{#1779854194447.rule_context#}}
+
+
+            输出要求：
+
+            1. 用 Markdown 输出。
+
+            2. 先给出总体判断。
+
+            3. 再列出发现的问题：字段/数据、问题说明、证据、修改建议。
+
+            4. 牛顿环实验需要重点检查：D_m^2-D_n^2、环序差 Δm、单位 mm/m/nm 换算、R 或 λ 的数量级、相对误差。
+
+            5. 如果缺少必要数据，明确指出缺少哪些字段。
+
+            6. 不要编造用户未提供的数据。'
+        selected: false
+        title: LLM：数据纠错分析
+        type: llm
+        vision:
+          enabled: false
+        completion_params:
+          temperature: 0.2
+          max_tokens: 4096
+        desc: ''
+        memory:
+          query_prompt_template: '{{#sys.query#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 10
+        variables: []
+      height: 88
+      id: '1781000000002'
+      position:
+        x: 960
+        y: 560
+      positionAbsolute:
+        x: 960
+        y: 560
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '{{#1781000000002.text#}}'
+        selected: false
+        title: 数据纠错回复
+        type: answer
+        variables: []
+        desc: ''
+      height: 103
+      id: '1781000000003'
+      position:
+        x: 1260
+        y: 560
+      positionAbsolute:
+        x: 1260
+        y: 560
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.7
+  rag_pipeline_variables: []

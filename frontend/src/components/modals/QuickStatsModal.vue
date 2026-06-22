@@ -29,7 +29,7 @@
           <span class="font-mono font-bold text-emerald-500 text-base">{{ tutViewCount }}</span>
         </li>
         <li class="flex justify-between items-center p-3 rounded-xl bg-red-50/60 border border-red-100">
-          <span class="text-ink-muted text-[12px]">严重告警 (L3)</span>
+          <span class="text-ink-muted text-[12px]">严重告警 (L2)</span>
           <span class="font-mono font-bold text-red-500 text-base">{{ labL3Count }}</span>
         </li>
       </ul>

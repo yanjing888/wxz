@@ -21,10 +21,4 @@ timeout /t 2 /nobreak >nul
 echo Starting frontend...
 start "WXZ-Frontend" cmd /k call "%~dp0run-frontend.bat"
 
-echo.
-echo Started in new windows:
-echo   Frontend http://localhost:%FRONTEND_PORT%/
-echo   Backend  http://localhost:%BACKEND_PORT%/
-echo.
-echo Close this window after two new windows appear.
-pause
+exit /b 0

@@ -76,7 +76,7 @@ public class ReportService {
         setTableWidth(table, 9000);
         setHeaderRow(table, new String[]{"指标", "数值", "指标", "数值"});
         fillRow(table, 1, "有效纠错次数", str(report.get("helpCount")), "纠错标注点数", str(report.get("errorPointCount")));
-        fillRow(table, 2, "教程查阅次数", str(report.get("tutViewCount")), "严重告警 (L3)", str(report.get("labL3Count")));
+        fillRow(table, 2, "教程查阅次数", str(report.get("tutViewCount")), "严重告警 (L2)", str(report.get("labL3Count")));
         styleDataTable(table);
     }
 
@@ -298,8 +298,8 @@ public class ReportService {
         return switch (level) {
             case "L0" -> "L0 正常";
             case "L1" -> "L1 注意";
-            case "L2" -> "L2 警告";
-            case "L3" -> "L3 严重";
+            case "L2" -> "L2 严重";
+            case "L3" -> "L2 严重";
             default -> level;
         };
     }
