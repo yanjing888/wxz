@@ -22,6 +22,7 @@
       @quick-stats="showQuickStats = true"
       @report="openReport"
       @experiment-change="onExperimentChange"
+      @logout="logout"
     />
 
     <!-- 主体：嵌入式工作台 — 贴顶栏底、贴左右边、贴底，仅保留顶部圆角 -->
@@ -150,7 +151,9 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useLabStore } from '../stores/lab'
+import { useAuthStore } from '../stores/auth'
 import LabHeader from '../components/layout/LabHeader.vue'
 import StepPanel from '../components/step/StepPanel.vue'
 import InstrumentDataPanel from '../components/data/InstrumentDataPanel.vue'
@@ -164,6 +167,8 @@ import ReportModal from '../components/modals/ReportModal.vue'
 import QuickStatsModal from '../components/modals/QuickStatsModal.vue'
 
 const lab = useLabStore()
+const auth = useAuthStore()
+const router = useRouter()
 
 const uploadZone = ref(null)
 const benchCam = ref(null)
@@ -193,8 +198,8 @@ async function bootstrap() {
     if (!lab.session?.id) {
       await lab.loadExperiments()
       const code = localStorage.getItem('wxz_exp') || 'newton_rings'
-      const name = localStorage.getItem('wxz_name') || '学生'
-      const cls = localStorage.getItem('wxz_class') || ''
+      const name = auth.displayName || localStorage.getItem('wxz_name') || '学生'
+      const cls = auth.studentClass || localStorage.getItem('wxz_class') || ''
       await lab.loadExperiment(code)
       await lab.startSession(code, name, cls)
     }
@@ -209,6 +214,12 @@ async function bootstrap() {
 
 function retryBoot() {
   bootstrap()
+}
+
+function logout() {
+  lab.stopEnvTimer()
+  auth.logout()
+  router.replace('/login')
 }
 
 onMounted(() => {

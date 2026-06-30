@@ -6,4 +6,7 @@ backend/uploads/
 backend/src/main/resources/application-local.yml
 *.log
 .env
+config/*.env
+!config/dify.env
+!config/ports.env
 .DS_Store

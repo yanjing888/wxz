@@ -22,17 +22,20 @@ export const useAuthStore = defineStore('auth', {
       localStorage.setItem('wxz_displayName', data.displayName)
       localStorage.setItem('wxz_class', data.studentClass || '')
     },
-    async register(form) {
-      const { data } = await authApi.register(form)
-      this.persist(data)
-    },
     async login(form) {
       const { data } = await authApi.login(form)
+      this.persist(data)
+    },
+    async resetPassword(form) {
+      const { data } = await authApi.resetPassword(form)
       this.persist(data)
     },
     logout() {
       this.token = ''
       this.userId = null
+      this.username = ''
+      this.displayName = ''
+      this.studentClass = ''
       ;['wxz_token', 'wxz_userId', 'wxz_username', 'wxz_displayName', 'wxz_class'].forEach((k) => localStorage.removeItem(k))
     }
   }

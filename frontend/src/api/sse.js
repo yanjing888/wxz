@@ -40,11 +40,13 @@ function parseSseBlock(block, handlers) {
 }
 
 export async function postSse(url, body, handlers = {}, signal) {
+  const token = localStorage.getItem('wxz_token')
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'text/event-stream'
+      Accept: 'text/event-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     body: JSON.stringify(body),
     signal
@@ -92,9 +94,13 @@ export async function postSse(url, body, handlers = {}, signal) {
 }
 
 export async function getSse(url, handlers = {}, signal) {
+  const token = localStorage.getItem('wxz_token')
   const res = await fetch(url, {
     method: 'GET',
-    headers: { Accept: 'text/event-stream' },
+    headers: {
+      Accept: 'text/event-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
     signal
   })
 

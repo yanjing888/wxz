@@ -71,6 +71,14 @@
         </svg>
         生成报告
       </button>
+      <button
+        type="button"
+        class="btn-ghost px-3 py-2 rounded-xl text-xs font-semibold"
+        title="退出登录"
+        @click="$emit('logout')"
+      >
+        退出
+      </button>
     </div>
   </header>
 </template>
@@ -88,7 +96,7 @@ const props = defineProps({
   switching: { type: Boolean, default: false }
 })
 
-defineEmits(['quick-stats', 'report', 'experiment-change'])
+defineEmits(['quick-stats', 'report', 'experiment-change', 'logout'])
 
 const studentInitial = computed(() => {
   const n = (props.studentName || '').trim()

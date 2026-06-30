@@ -77,9 +77,14 @@ public class LabSessionService {
 
     @Transactional
     public LabSession startSession(StartSessionRequest req) {
+        return startSession(req, GUEST_USER_ID);
+    }
+
+    @Transactional
+    public LabSession startSession(StartSessionRequest req, Long userId) {
         ExperimentConfig exp = experimentConfigService.getByCode(req.getExperimentCode());
         LabSession session = new LabSession();
-        session.setUserId(GUEST_USER_ID);
+        session.setUserId(userId != null ? userId : GUEST_USER_ID);
         session.setExperimentCode(exp.getCode());
         session.setExperimentName(exp.getName());
         session.setStudentName(req.getStudentName().trim());
@@ -94,6 +99,11 @@ public class LabSessionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));
     }
 
+    public LabSession getSession(Long sessionId, Long userId) {
+        return sessionRepository.findByIdAndUserId(sessionId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));
+    }
+
     @Transactional
     public LabSession updateStep(Long sessionId, int stepId) {
         LabSession session = getSession(sessionId);
@@ -101,8 +111,24 @@ public class LabSessionService {
         return sessionRepository.save(session);
     }
 
+    @Transactional
+    public LabSession updateStep(Long sessionId, Long userId, int stepId) {
+        LabSession session = getSession(sessionId, userId);
+        session.setActiveStep(stepId);
+        return sessionRepository.save(session);
+    }
+
     public Map<String, Object> getSessionData(Long sessionId) {
         getSession(sessionId);
+        return getSessionDataBody(sessionId);
+    }
+
+    public Map<String, Object> getSessionData(Long sessionId, Long userId) {
+        getSession(sessionId, userId);
+        return getSessionDataBody(sessionId);
+    }
+
+    private Map<String, Object> getSessionDataBody(Long sessionId) {
         List<SessionDataLog> logs = sessionDataLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
         Map<String, Object> byStep = new LinkedHashMap<>();
         for (SessionDataLog log : logs) {
@@ -123,6 +149,17 @@ public class LabSessionService {
     @Transactional
     public SessionDataSubmitResponse submitSessionData(Long sessionId, SubmitSessionDataRequest req) {
         LabSession session = getSession(sessionId);
+        return submitSessionData(session, req);
+    }
+
+    @Transactional
+    public SessionDataSubmitResponse submitSessionData(Long sessionId, Long userId, SubmitSessionDataRequest req) {
+        LabSession session = getSession(sessionId, userId);
+        return submitSessionData(session, req);
+    }
+
+    private SessionDataSubmitResponse submitSessionData(LabSession session, SubmitSessionDataRequest req) {
+        Long sessionId = session.getId();
         ExperimentConfig exp = experimentConfigService.getByCode(session.getExperimentCode());
         int stepId = req.getStepId() != null ? req.getStepId() : session.getActiveStep();
         StepConfig step = resolveStep(exp, stepId);
@@ -267,13 +304,26 @@ public class LabSessionService {
         return resp;
     }
 
+    @Transactional
+    public AssistResponse assist(Long sessionId, Long userId, AssistRequest req) {
+        AssistPrepare prepare = prepareAssist(sessionId, userId, req);
+        AssistResponse resp = difyService.assist("text-assist", prepare.inputs(), "user-" + userId, prepare.experiment(),
+                prepare.session().getActiveStep(), prepare.hasImage(), prepare.hasImage() ? req.getImageUrl() : null);
+        persistAssistResult(sessionId, req, prepare, resp);
+        return resp;
+    }
+
     public SseEmitter assistStream(Long sessionId, AssistRequest req) {
+        return assistStream(sessionId, null, req);
+    }
+
+    public SseEmitter assistStream(Long sessionId, Long userId, AssistRequest req) {
         SseEmitter emitter = new SseEmitter(300_000L);
         emitter.onTimeout(emitter::complete);
 
         AssistPrepare prepare;
         try {
-            prepare = prepareAssist(sessionId, req);
+            prepare = userId != null ? prepareAssist(sessionId, userId, req) : prepareAssist(sessionId, req);
             emitter.send(SseEmitter.event().name("start").data(Map.of("ok", true)));
         } catch (Exception e) {
             sendStreamError(emitter, e);
@@ -282,7 +332,8 @@ public class LabSessionService {
 
         CompletableFuture.runAsync(() -> {
             try {
-                AssistResponse resp = difyService.streamAssist("text-assist", prepare.inputs(), "guest-" + sessionId,
+                AssistResponse resp = difyService.streamAssist("text-assist", prepare.inputs(),
+                        userId != null ? "user-" + userId : "guest-" + sessionId,
                         prepare.experiment(), prepare.session().getActiveStep(), prepare.hasImage(),
                         prepare.hasImage() ? req.getImageUrl() : null,
                         delta -> sendChunk(emitter, delta),
@@ -339,6 +390,16 @@ public class LabSessionService {
 
     private AssistPrepare prepareAssist(Long sessionId, AssistRequest req) {
         LabSession session = getSession(sessionId);
+        return prepareAssist(session, req);
+    }
+
+    private AssistPrepare prepareAssist(Long sessionId, Long userId, AssistRequest req) {
+        LabSession session = getSession(sessionId, userId);
+        return prepareAssist(session, req);
+    }
+
+    private AssistPrepare prepareAssist(LabSession session, AssistRequest req) {
+        Long sessionId = session.getId();
 
         boolean hasImage = req.getImageUrl() != null && !req.getImageUrl().isBlank();
         String userMessage = req.getUserMessage() != null ? req.getUserMessage().trim() : "";
@@ -454,6 +515,17 @@ public class LabSessionService {
     @Transactional
     public EnvCheckResponse envCheck(Long sessionId, EnvCheckRequest req) {
         LabSession session = getSession(sessionId);
+        return envCheck(session, req, "guest-" + sessionId);
+    }
+
+    @Transactional
+    public EnvCheckResponse envCheck(Long sessionId, Long userId, EnvCheckRequest req) {
+        LabSession session = getSession(sessionId, userId);
+        return envCheck(session, req, "user-" + userId);
+    }
+
+    private EnvCheckResponse envCheck(LabSession session, EnvCheckRequest req, String difyUser) {
+        Long sessionId = session.getId();
         Map<String, Object> inputs = new LinkedHashMap<>();
         if (!"general".equals(session.getExperimentCode())) {
             putExperimentInputs(inputs, session.getExperimentName(), session.getExperimentCode());
@@ -463,7 +535,7 @@ public class LabSessionService {
             inputs.put("snapshot_url", snapshotUrl);
         }
 
-        EnvCheckResponse resp = difyService.envCheck(inputs, "guest-" + sessionId, snapshotUrl);
+        EnvCheckResponse resp = difyService.envCheck(inputs, difyUser, snapshotUrl);
 
         EnvCheckLog log = new EnvCheckLog();
         log.setSessionId(sessionId);
@@ -486,6 +558,16 @@ public class LabSessionService {
     @Transactional
     public LabSession incrementTutView(Long sessionId) {
         LabSession session = getSession(sessionId);
+        return incrementTutView(session);
+    }
+
+    @Transactional
+    public LabSession incrementTutView(Long sessionId, Long userId) {
+        LabSession session = getSession(sessionId, userId);
+        return incrementTutView(session);
+    }
+
+    private LabSession incrementTutView(LabSession session) {
         session.setTutViewCount(session.getTutViewCount() + 1);
         return sessionRepository.save(session);
     }
@@ -493,6 +575,16 @@ public class LabSessionService {
     @Transactional
     public LabSession finishSession(Long sessionId) {
         LabSession session = getSession(sessionId);
+        return finishSession(session);
+    }
+
+    @Transactional
+    public LabSession finishSession(Long sessionId, Long userId) {
+        LabSession session = getSession(sessionId, userId);
+        return finishSession(session);
+    }
+
+    private LabSession finishSession(LabSession session) {
         session.setStatus("FINISHED");
         session.setEndTime(LocalDateTime.now());
         return sessionRepository.save(session);
@@ -500,6 +592,16 @@ public class LabSessionService {
 
     public Map<String, Object> buildReportData(Long sessionId) {
         LabSession session = getSession(sessionId);
+        return buildReportData(session);
+    }
+
+    public Map<String, Object> buildReportData(Long sessionId, Long userId) {
+        LabSession session = getSession(sessionId, userId);
+        return buildReportData(session);
+    }
+
+    private Map<String, Object> buildReportData(LabSession session) {
+        Long sessionId = session.getId();
         ExperimentConfig exp = experimentConfigService.getByCode(session.getExperimentCode());
         List<CorrectionLog> corrections = correctionLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
         List<EnvCheckLog> envLogs = envCheckLogRepository.findBySessionIdOrderByCreatedAtDesc(sessionId);

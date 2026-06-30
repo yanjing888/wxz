@@ -4,9 +4,11 @@ import com.wuxiaozhi.config.AppProperties;
 import com.wuxiaozhi.dto.AuthResponse;
 import com.wuxiaozhi.dto.LoginRequest;
 import com.wuxiaozhi.dto.RegisterRequest;
+import com.wuxiaozhi.dto.ResetPasswordRequest;
 import com.wuxiaozhi.entity.User;
 import com.wuxiaozhi.repository.UserRepository;
 import com.wuxiaozhi.security.JwtUtil;
+import jakarta.annotation.PostConstruct;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AuthService {
+
+    private static final String DEFAULT_USERNAME = "test01";
+    private static final String DEFAULT_PASSWORD = "test01";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -23,6 +28,19 @@ public class AuthService {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+    }
+
+    @PostConstruct
+    public void ensureDefaultUser() {
+        if (userRepository.existsByUsername(DEFAULT_USERNAME)) {
+            return;
+        }
+        User user = new User();
+        user.setUsername(DEFAULT_USERNAME);
+        user.setPasswordHash(passwordEncoder.encode(DEFAULT_PASSWORD));
+        user.setDisplayName("测试用户");
+        user.setStudentClass("测试班级");
+        userRepository.save(user);
     }
 
     public AuthResponse register(RegisterRequest req) {
@@ -44,6 +62,14 @@ public class AuthService {
         if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
         }
+        return buildAuthResponse(user);
+    }
+
+    public AuthResponse resetPassword(ResetPasswordRequest req) {
+        User user = userRepository.findByUsername(req.getUsername())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "账号不存在"));
+        user.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
+        userRepository.save(user);
         return buildAuthResponse(user);
     }
 

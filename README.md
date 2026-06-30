@@ -27,6 +27,27 @@ FRONTEND_PORT=5174
 
 部署到其他服务器时，若端口被占用，**只需修改该文件后重新启动**。前端开发服务器会自动将 `/api`、`/uploads` 代理到配置的后端端口。
 
+### 数据库存储
+
+本地开发默认使用 H2 文件库：`backend/data/wuxiaozhi`，无需额外安装数据库。
+
+学校实验室正式部署建议使用 MySQL。配置入口为 `config/mysql.env`：
+
+```env
+MYSQL_ENABLED=true
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_DATABASE=wuxiaozhi
+MYSQL_USER=root
+MYSQL_PASSWORD=你的密码
+```
+
+启用后，`scripts/run-backend.bat` 和 `scripts/start.bat` 会自动设置 `SPRING_PROFILES_ACTIVE=mysql`，后端使用 `application-mysql.yml` 连接 MySQL。首次部署前请先在 MySQL 中创建数据库：
+
+```sql
+CREATE DATABASE wuxiaozhi DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
 ### 一键启动
 
 ```bat

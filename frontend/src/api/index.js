@@ -2,8 +2,8 @@ import http from './http'
 import { postSse } from './sse'
 
 export const authApi = {
-  register: (data) => http.post('/api/auth/register', data),
-  login: (data) => http.post('/api/auth/login', data)
+  login: (data) => http.post('/api/auth/login', data),
+  resetPassword: (data) => http.patch('/api/auth/password', data)
 }
 
 export const experimentApi = {
@@ -37,10 +37,15 @@ export const uploadApi = {
   async image(file) {
     const fd = new FormData()
     fd.append('file', file, file.name || 'image.jpg')
+    const token = localStorage.getItem('wxz_token')
 
     let res
     try {
-      res = await fetch('/api/upload', { method: 'POST', body: fd })
+      res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd
+      })
     } catch {
       throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/ports.env）')
     }

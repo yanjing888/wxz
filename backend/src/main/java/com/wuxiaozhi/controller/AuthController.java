@@ -15,13 +15,13 @@ public class AuthController {
         this.authService = authService;
     }
 
-    @PostMapping("/register")
-    public AuthResponse register(@Valid @RequestBody RegisterRequest req) {
-        return authService.register(req);
-    }
-
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest req) {
         return authService.login(req);
+    }
+
+    @PatchMapping("/password")
+    public AuthResponse resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
+        return authService.resetPassword(req);
     }
 }
