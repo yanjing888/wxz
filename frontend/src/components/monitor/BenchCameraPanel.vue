@@ -1,11 +1,12 @@
 <template>
-  <div class="shrink-0 p-3">
+  <div class="shrink-0 p-3 flex flex-col gap-2">
     <!-- 主体一行：摄像头小窗 + 状态 + 操作 -->
-    <div class="flex items-start gap-2.5">
+    <div class="flex flex-col min-h-0 gap-2.5">
       <!-- 摄像头窗 -->
       <div
         ref="previewRef"
-        class="relative w-[100px] h-[68px] shrink-0 rounded-xl overflow-hidden border border-line-soft bg-gradient-to-br from-slate-900 to-slate-800 shadow-card"
+        class="bench-camera-preview aspect-video shrink-0 overflow-hidden border border-line-soft bg-gradient-to-br from-slate-900 to-slate-800"
+        :class="isExpanded ? 'fixed left-1/2 top-1/2 z-50 w-[min(78vw,960px)] max-w-none -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-2xl' : 'relative w-full max-w-[280px] mx-auto rounded-xl shadow-card'"
       >
         <video
           v-show="camUiActive && camReady"
@@ -14,32 +15,53 @@
           playsinline
           muted
         />
-        <div v-if="camUiActive && !camReady" class="absolute inset-0 flex flex-col items-center justify-center gap-1">
-          <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        <div v-if="camUiActive && !camReady" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <div class="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           <p class="text-[7px] text-slate-400">连接中…</p>
         </div>
-        <div v-if="camUiActive && camReady" class="absolute top-1 left-1 flex items-center gap-0.5 pointer-events-none">
-          <span class="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
-          <span class="text-[7px] text-red-400 font-mono font-bold">REC</span>
+        <div v-if="camUiActive && camReady" class="absolute top-2 left-2 flex items-center gap-1 pointer-events-none">
+          <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+          <span class="text-[9px] text-red-400 font-mono font-bold">REC</span>
         </div>
-        <div v-if="camUiActive && camReady" class="absolute bottom-1 left-1 pointer-events-none">
-          <p class="text-[7px] text-emerald-400 font-mono">LIVE</p>
+        <div v-if="camUiActive && camReady" class="absolute bottom-2 left-2 pointer-events-none">
+          <p class="text-[9px] text-emerald-400 font-mono">LIVE</p>
         </div>
         <button
-          v-if="camUiActive"
+          v-if="camUiActive && !isExpanded"
           type="button"
-          class="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-white/15 backdrop-blur text-white text-[9px] leading-none hover:bg-white/25 flex items-center justify-center z-10"
+          class="absolute top-2 right-2 w-5 h-5 rounded-full bg-white/15 backdrop-blur text-white text-[11px] leading-none hover:bg-white/25 flex items-center justify-center z-10"
           title="关闭画面"
           @click="stopCamUi"
         >×</button>
-        <div v-if="!camUiActive" class="absolute inset-0 flex flex-col items-center justify-center text-center px-1 gap-1">
-          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <button
+          v-if="camUiActive && camReady && !isExpanded"
+          type="button"
+          class="absolute top-2 right-8 w-5 h-5 rounded-full bg-white/15 backdrop-blur text-white hover:bg-white/25 flex items-center justify-center z-10"
+          title="放大观看"
+          aria-label="放大观看"
+          @click="openExpanded"
+        >
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 3H3v5m13-5h5v5M8 21H3v-5m18 0v5h-5" />
+          </svg>
+        </button>
+        <button
+          v-if="isExpanded"
+          type="button"
+          class="bench-camera-exit absolute top-3 right-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/25 font-bold leading-none text-white backdrop-blur hover:bg-black/40"
+          title="退出放大"
+          @click="closeExpanded"
+        >
+          退出
+        </button>
+        <div v-if="!camUiActive" class="absolute inset-0 flex flex-col items-center justify-center text-center px-3 gap-2">
+          <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
             <rect x="3" y="6" width="18" height="14" rx="2.5" />
             <circle cx="12" cy="13" r="3.5" />
           </svg>
           <button
             type="button"
-            class="px-1.5 py-0.5 rounded brand-gradient text-[8px] font-bold text-white shadow-brand btn-active-scale"
+            class="px-3 py-1.5 rounded-lg brand-gradient text-[11px] font-bold text-white shadow-brand btn-active-scale"
             @click="startCamUi"
           >
             开启
@@ -49,7 +71,15 @@
       </div>
 
       <!-- 状态区 -->
-      <div class="flex-1 min-w-0 flex flex-col justify-between gap-1.5">
+      <button
+        v-if="isExpanded"
+        type="button"
+        class="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[2px]"
+        title="退出放大"
+        aria-label="退出放大"
+        @click="closeExpanded"
+      />
+      <div class="w-full min-w-0 flex flex-col gap-1.5">
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-1.5 min-w-0">
             <span class="text-[11px] font-bold text-ink-strong shrink-0">安全监测</span>
@@ -125,6 +155,7 @@
 </template>
 
 <script setup>
+import flvjs from 'flv.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 const previewRef = ref(null)
@@ -135,7 +166,8 @@ const props = defineProps({
   envLevel: { type: String, default: 'L0' },
   envHint: { type: String, default: '暂无异常' },
   envLogs: { type: Array, default: () => [] },
-  envCheckRunning: { type: Boolean, default: false }
+  envCheckRunning: { type: Boolean, default: false },
+  benchCamera: { type: Object, default: null }
 })
 
 const emit = defineEmits(['toggle-env', 'env-check'])
@@ -145,7 +177,16 @@ const camReady = ref(false)
 const camError = ref('')
 const flash = ref(false)
 const logsOpen = ref(false)
+const isExpanded = ref(false)
 let mediaStream = null
+let flvPlayer = null
+
+const configuredCamera = computed(() => {
+  const cfg = props.benchCamera || {}
+  if (!cfg.enabled) return null
+  if (!cfg.browserStreamUrl && !cfg.rtspUrl) return null
+  return cfg
+})
 
 const displayHint = computed(() => {
   if (!props.envCheckEnabled) return '巡检已暂停，可手动立即检查'
@@ -180,12 +221,21 @@ function logLevelClass(level) {
 }
 
 function stopMediaTracks() {
+  if (flvPlayer) {
+    flvPlayer.pause()
+    flvPlayer.unload()
+    flvPlayer.detachMediaElement()
+    flvPlayer.destroy()
+    flvPlayer = null
+  }
   if (mediaStream) {
     mediaStream.getTracks().forEach((track) => track.stop())
     mediaStream = null
   }
   if (videoRef.value) {
     videoRef.value.srcObject = null
+    videoRef.value.removeAttribute('src')
+    videoRef.value.load()
   }
 }
 
@@ -193,6 +243,60 @@ async function startCamUi() {
   camError.value = ''
   camUiActive.value = true
   camReady.value = false
+
+  if (configuredCamera.value) {
+    await startConfiguredCamera(configuredCamera.value)
+    return
+  }
+
+  await startLocalCamera()
+}
+
+async function startConfiguredCamera(camera) {
+  stopMediaTracks()
+
+  if (!camera.browserStreamUrl) {
+    camUiActive.value = false
+    return
+    camError.value = '已配置 RTSP 地址，但浏览器不能直接播放 RTSP；请配置 browserStreamUrl 后再预览'
+  }
+
+  if (!flvjs.isSupported()) {
+    camUiActive.value = false
+    camError.value = '当前浏览器不支持 FLV 实时预览，请换用 Chrome/Edge 最新版或配置 HLS/WebRTC 播放地址'
+    return
+  }
+
+  try {
+    const video = videoRef.value
+    if (!video) throw new Error('video element missing')
+    video.muted = true
+    flvPlayer = flvjs.createPlayer({
+      type: 'flv',
+      url: camera.browserStreamUrl,
+      isLive: true,
+      cors: true
+    }, {
+      enableWorker: false,
+      enableStashBuffer: false,
+      stashInitialSize: 32,
+      maxBufferLength: 0.3,
+      autoCleanupSourceBuffer: true
+    })
+    flvPlayer.attachMediaElement(video)
+    flvPlayer.load()
+    await video.play()
+    await waitForVideoFrame(video, 7000)
+    camReady.value = true
+  } catch (e) {
+    stopMediaTracks()
+    camUiActive.value = false
+    camReady.value = false
+    camError.value = '无法播放实验台摄像头视频流，请确认摄像头在线或检查配置地址'
+  }
+}
+
+async function startLocalCamera() {
 
   if (!navigator.mediaDevices?.getUserMedia) {
     camError.value = '当前浏览器不支持摄像头，无法抽帧巡检'
@@ -227,9 +331,22 @@ async function startCamUi() {
 }
 
 function stopCamUi() {
+  closeExpanded()
   stopMediaTracks()
   camUiActive.value = false
   camReady.value = false
+}
+
+async function openExpanded() {
+  if (!camReady.value) return
+  isExpanded.value = true
+  return
+    camError.value = '当前浏览器不支持全屏放大观看'
+    return
+}
+
+function closeExpanded() {
+  isExpanded.value = false
 }
 
 function waitForVideoFrame(video, timeoutMs = 4000) {
@@ -305,3 +422,19 @@ onBeforeUnmount(() => {
 
 defineExpose({ captureFrame, ensureCameraReady })
 </script>
+
+<style scoped>
+.bench-camera-exit {
+  font-size: 0;
+}
+
+.bench-camera-exit::before {
+  content: "×";
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.bench-camera-preview.fixed video {
+  object-fit: contain;
+}
+</style>

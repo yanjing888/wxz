@@ -5,10 +5,10 @@
         <div class="w-12 h-12 brand-gradient rounded-2xl flex items-center justify-center text-white font-black shadow-brand">
           智
         </div>
-        <h1 class="text-2xl font-black text-ink-strong tracking-tight">物小智实验台</h1>
+        <h1 class="text-2xl font-black text-ink-strong tracking-tight">物小智</h1>
       </div>
 
-      <h2 class="text-lg font-black text-ink-strong mb-5">{{ mode === 'login' ? '账号登录' : '重置密码' }}</h2>
+      <h2 class="text-lg font-black text-ink-strong mb-5">{{ pageTitle }}</h2>
 
       <form class="space-y-3" @submit.prevent="submit">
         <div class="login-field">
@@ -24,6 +24,19 @@
           />
         </div>
 
+        <div v-if="mode === 'register'" class="login-field">
+          <svg class="login-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4z" />
+            <path d="M6 20c0-2.21 2.69-4 6-4s6 1.79 6 4" />
+          </svg>
+          <input
+            v-model.trim="form.displayName"
+            class="login-input"
+            autocomplete="name"
+            placeholder="请输入姓名"
+          />
+        </div>
+
         <div class="login-field">
           <svg class="login-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -33,8 +46,8 @@
             v-model="form.password"
             class="login-input"
             :type="showPassword ? 'text' : 'password'"
-            autocomplete="current-password"
-            :placeholder="mode === 'login' ? '请输入密码' : '请输入新密码，至少 6 位'"
+            :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+            :placeholder="passwordPlaceholder"
           />
           <button type="button" class="login-field-toggle" @click="showPassword = !showPassword" :aria-label="showPassword ? '隐藏密码' : '显示密码'">
             <svg v-if="showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -55,23 +68,33 @@
         </p>
 
         <button type="submit" class="btn-brand w-full h-12 rounded-xl text-sm font-black mt-2" :disabled="loading">
-          {{ loading ? '处理中...' : mode === 'login' ? '登录' : '确认重置并进入实验台' }}
+          {{ loading ? '处理中...' : submitLabel }}
         </button>
 
-        <button type="button" class="w-full h-9 text-xs font-bold text-brand-700" @click="toggleMode">
-          {{ mode === 'login' ? '忘记密码？重置密码' : '返回登录' }}
-        </button>
+        <div class="flex items-center justify-center gap-4 text-xs font-bold text-brand-700">
+          <button v-if="mode !== 'register'" type="button" class="h-9" @click="setMode('register')">
+            注册新账号
+          </button>
+          <button v-if="mode !== 'reset'" type="button" class="h-9" @click="setMode('reset')">
+            忘记密码？重置密码
+          </button>
+          <button v-if="mode !== 'login'" type="button" class="h-9" @click="setMode('login')">
+            返回登录
+          </button>
+        </div>
       </form>
     </section>
   </main>
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useLabStore } from '../stores/lab'
 
 const auth = useAuthStore()
+const lab = useLabStore()
 const route = useRoute()
 const router = useRouter()
 const mode = ref('login')
@@ -80,7 +103,26 @@ const tip = ref('')
 const showPassword = ref(false)
 const form = reactive({
   username: '',
-  password: ''
+  password: '',
+  displayName: ''
+})
+
+const pageTitle = computed(() => {
+  if (mode.value === 'register') return '注册账号'
+  if (mode.value === 'reset') return '重置密码'
+  return '账号登录'
+})
+
+const passwordPlaceholder = computed(() => {
+  if (mode.value === 'login') return '请输入密码'
+  if (mode.value === 'register') return '请设置密码'
+  return '请输入新密码，至少 6 位'
+})
+
+const submitLabel = computed(() => {
+  if (mode.value === 'register') return '注册并进入实验台'
+  if (mode.value === 'reset') return '确认重置并进入实验台'
+  return '登录'
 })
 
 let tipTimer
@@ -100,31 +142,47 @@ async function submit() {
     return
   }
   if (!form.password) {
-    showTip(mode.value === 'login' ? '请输入密码' : '请输入新密码')
+    showTip(mode.value === 'login' ? '请输入密码' : '请输入密码')
+    return
+  }
+  if (mode.value === 'register' && !form.displayName) {
+    showTip('请输入姓名')
     return
   }
   loading.value = true
   try {
     if (mode.value === 'login') {
       await auth.login({ username: form.username, password: form.password })
+    } else if (mode.value === 'register') {
+      await auth.register({
+        username: form.username,
+        password: form.password,
+        displayName: form.displayName
+      })
     } else {
       await auth.resetPassword({
         username: form.username,
         newPassword: form.password
       })
     }
+    lab.$reset()
     router.replace(route.query.redirect || '/')
   } catch (e) {
-    showTip(mode.value === 'login' ? '账号或密码错误' : '重置失败，请稍后重试')
+    if (mode.value === 'register') {
+      showTip(e.response?.status === 409 ? '账号已存在' : '注册失败，请稍后重试')
+    } else {
+      showTip(mode.value === 'login' ? '账号或密码错误' : '重置失败，请稍后重试')
+    }
   } finally {
     loading.value = false
   }
 }
 
-function toggleMode() {
-  mode.value = mode.value === 'login' ? 'reset' : 'login'
+function setMode(nextMode) {
+  mode.value = nextMode
   tip.value = ''
   form.password = ''
+  form.displayName = ''
   showPassword.value = false
 }
 </script>

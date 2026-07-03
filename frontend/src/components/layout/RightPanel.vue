@@ -25,6 +25,7 @@
       @send="onComposerSend"
       @stop="$emit('stop')"
       @upload-image="(file) => $emit('upload-image', file)"
+      @capture-image="(file) => $emit('capture-image', file)"
       @clear-image="$emit('clear-image')"
     />
   </section>
@@ -47,7 +48,7 @@ const props = defineProps({
   suggestions: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['send', 'stop', 'upload-image', 'clear-image'])
+const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clear-image'])
 
 const subtitle = computed(() => {
   const exp = props.experimentName

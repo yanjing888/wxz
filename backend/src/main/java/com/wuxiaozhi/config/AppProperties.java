@@ -11,6 +11,7 @@ public class AppProperties {
     private Jwt jwt = new Jwt();
     private Upload upload = new Upload();
     private Experiments experiments = new Experiments();
+    private BenchCamera benchCamera = new BenchCamera();
 
     @Data
     public static class Jwt {
@@ -26,5 +27,14 @@ public class AppProperties {
     @Data
     public static class Experiments {
         private String configDir = "classpath:experiments/";
+    }
+
+    @Data
+    public static class BenchCamera {
+        private boolean enabled = false;
+        private String label = "Bench camera";
+        private String protocol = "rtsp";
+        private String rtspUrl = "";
+        private String browserStreamUrl = "";
     }
 }

@@ -19,6 +19,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -59,18 +60,38 @@ class AuthSessionIntegrationTest {
     }
 
     @Test
-    void registerIsNotPublic() throws Exception {
+    void registerCreatesUserWithDisplayNameOnly() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "username": "student001",
                                   "password": "secret123",
-                                  "displayName": "王同学",
-                                  "studentClass": "物理一班"
+                                  "displayName": "Student Wang"
                                 }
                                 """))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("student001"))
+                .andExpect(jsonPath("$.displayName").value("Student Wang"))
+                .andExpect(jsonPath("$.studentClass").doesNotExist());
+
+        User user = userRepository.findByUsername("student001").orElseThrow();
+        assertThat(user.getDisplayName()).isEqualTo("Student Wang");
+        assertThat(user.getStudentClass()).isBlank();
+    }
+
+    @Test
+    void registerAllowsSingleCharacterPassword() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "student002",
+                                  "password": "1",
+                                  "displayName": "Student Li"
+                                }
+                                """))
+                .andExpect(status().isOk());
     }
 
     @Test

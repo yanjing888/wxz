@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { experimentApi, sessionApi, uploadApi } from '../api'
+import { experimentApi, sessionApi, systemApi, uploadApi } from '../api'
 import { sniffImageMime, readFileAsDataUrl } from '../utils/imageFile'
 
 function sleep(ms) {
@@ -16,15 +16,14 @@ function briefEnvSummary(text, maxLen = 80) {
   return plain.length <= maxLen ? plain : `${plain.slice(0, maxLen)}…`
 }
 
-const WELCOME_MESSAGE = `你好，我是物小智。
-
-左侧工作区会按步骤引导你操作：
-
-- 需要数据的步骤可**连接仪器自动采集**并提交纠错
-- 需要现场确认的步骤请**上传实验台照片**进行纠错
-- 点击右上角「本步骤教程」可查看操作说明
-
-有疑问随时问我，也可以点输入框上方的推荐问题。`
+const WELCOME_MESSAGE = `<div class="welcome-guide">
+  <p class="welcome-guide-hello">你好，我是物小智。</p>
+  <p class="welcome-guide-title">我会这样协助你：</p>
+  <div class="welcome-guide-row"><strong>数据采集</strong><span>连接仪器自动采集，并提交纠错。</span></div>
+  <div class="welcome-guide-row"><strong>现场确认</strong><span>需要照片时，直接上传实验台照片。</span></div>
+  <div class="welcome-guide-row"><strong>操作说明</strong><span>右上角「本步骤教程」可查看当前步骤。</span></div>
+  <p class="welcome-guide-foot">有疑问随时问我，也可以点击上方推荐问题。</p>
+</div>`
 
 export const useLabStore = defineStore('lab', {
   state: () => ({
@@ -38,12 +37,13 @@ export const useLabStore = defineStore('lab', {
     composerImagePreview: '',
     marks: [],
     messages: [],
-    envCheckEnabled: true,
+    envCheckEnabled: false,
     envLevel: 'L0',
     envHint: '暂无异常',
     envSuggestion: '',
     envLogs: [],
     envCheckRunning: false,
+    benchCamera: null,
     envTimer: null,
     _envCaptureFn: null,
     tutViewCount: 0,
@@ -154,6 +154,14 @@ export const useLabStore = defineStore('lab', {
       const { data } = await experimentApi.get(code)
       this.experiment = data
     },
+    async loadBenchCamera() {
+      try {
+        const { data } = await systemApi.benchCamera()
+        this.benchCamera = data || null
+      } catch {
+        this.benchCamera = null
+      }
+    },
     async switchExperiment(experimentCode) {
       const code = (experimentCode || '').trim()
       if (!code || code === this.experiment?.code) return false
@@ -162,10 +170,9 @@ export const useLabStore = defineStore('lab', {
       this.stopEnvTimer()
       try {
         localStorage.setItem('wxz_exp', code)
-        const name = localStorage.getItem('wxz_name') || this.session?.studentName || '学生'
-        const cls = localStorage.getItem('wxz_class') || this.session?.studentClass || ''
+        const name = localStorage.getItem('wxz_displayName') || this.session?.studentName || '学生'
         await this.loadExperiment(code)
-        await this.startSession(code, name, cls)
+        await this.startSession(code, name, '')
         this.startEnvTimer()
         return true
       } catch (e) {
@@ -174,7 +181,7 @@ export const useLabStore = defineStore('lab', {
         this.switchingExperiment = false
       }
     },
-    async startSession(experimentCode, studentName, studentClass) {
+    async startSession(experimentCode, studentName, studentClass = '') {
       const { data } = await sessionApi.start({ experimentCode, studentName, studentClass })
       this.session = data
       this.activeStep = 1
@@ -193,6 +200,7 @@ export const useLabStore = defineStore('lab', {
       this.marks = []
       this.messages = []
       this.envLogs = []
+      this.envCheckEnabled = false
       this.envLevel = 'L0'
       this.envHint = '暂无异常'
       this.envSuggestion = ''

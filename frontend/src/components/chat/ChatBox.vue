@@ -18,10 +18,10 @@
         {{ msg.role === 'ai' ? '智' : userInitial }}
       </div>
       <div
-        class="px-3 py-2.5 rounded-2xl leading-relaxed border max-w-[88%] chat-md shadow-card"
-        :class="msg.role === 'ai'
-          ? 'bg-white text-ink-base border-line-soft rounded-tl-sm text-[13px]'
-          : 'brand-gradient-soft text-ink-base border-brand-100 rounded-tr-sm text-[12px]'"
+        :class="[
+          bubbleBaseClass,
+          msg.role === 'ai' ? aiBubbleClass : userBubbleClass
+        ]"
       >
         <img
           v-if="msg.image"
@@ -85,6 +85,10 @@ const props = defineProps({
   welcomeSubtitle: { type: String, default: '' },
   studentName: { type: String, default: '' }
 })
+
+const bubbleBaseClass = 'px-3 py-2.5 rounded-2xl leading-relaxed border chat-md shadow-card'
+const aiBubbleClass = 'w-[min(78%,680px)] bg-white text-ink-base border-line-soft rounded-tl-sm text-[13px]'
+const userBubbleClass = 'max-w-[88%] brand-gradient-soft text-ink-base border-brand-100 rounded-tr-sm text-[12px]'
 
 const hasStreaming = computed(() => props.messages.some(m => m.streaming))
 

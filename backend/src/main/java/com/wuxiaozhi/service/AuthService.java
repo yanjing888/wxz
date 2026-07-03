@@ -39,7 +39,7 @@ public class AuthService {
         user.setUsername(DEFAULT_USERNAME);
         user.setPasswordHash(passwordEncoder.encode(DEFAULT_PASSWORD));
         user.setDisplayName("测试用户");
-        user.setStudentClass("测试班级");
+        user.setStudentClass("");
         userRepository.save(user);
     }
 
@@ -50,8 +50,8 @@ public class AuthService {
         User user = new User();
         user.setUsername(req.getUsername());
         user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
-        user.setDisplayName(req.getDisplayName());
-        user.setStudentClass(req.getStudentClass());
+        user.setDisplayName(req.getDisplayName().trim());
+        user.setStudentClass("");
         userRepository.save(user);
         return buildAuthResponse(user);
     }
@@ -80,6 +80,6 @@ public class AuthService {
 
     private AuthResponse buildAuthResponse(User user) {
         String token = jwtUtil.generateToken(user.getId(), user.getUsername());
-        return new AuthResponse(token, user.getId(), user.getUsername(), user.getDisplayName(), user.getStudentClass());
+        return new AuthResponse(token, user.getId(), user.getUsername(), user.getDisplayName());
     }
 }

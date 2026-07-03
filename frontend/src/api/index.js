@@ -2,6 +2,7 @@ import http from './http'
 import { postSse } from './sse'
 
 export const authApi = {
+  register: (data) => http.post('/api/auth/register', data),
   login: (data) => http.post('/api/auth/login', data),
   resetPassword: (data) => http.patch('/api/auth/password', data)
 }
@@ -67,5 +68,6 @@ export const uploadApi = {
 }
 
 export const systemApi = {
-  difyStatus: () => http.get('/api/system/dify-status')
+  difyStatus: () => http.get('/api/system/dify-status'),
+  benchCamera: () => http.get('/api/system/bench-camera')
 }

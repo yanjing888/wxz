@@ -20,6 +20,11 @@ public class AuthController {
         return authService.login(req);
     }
 
+    @PostMapping("/register")
+    public AuthResponse register(@Valid @RequestBody RegisterRequest req) {
+        return authService.register(req);
+    }
+
     @PatchMapping("/password")
     public AuthResponse resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
         return authService.resetPassword(req);

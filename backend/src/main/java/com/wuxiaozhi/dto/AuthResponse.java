@@ -10,5 +10,4 @@ public class AuthResponse {
     private Long userId;
     private String username;
     private String displayName;
-    private String studentClass;
 }

@@ -10,13 +10,12 @@
     <button type="button" class="btn-brand px-7 py-2.5 rounded-xl text-sm font-bold" @click="retryBoot">重新连接</button>
   </div>
 
-  <div v-else class="flex flex-col w-full h-full overflow-hidden">
+  <div v-else class="lab-page flex flex-col w-full overflow-hidden">
     <!-- 顶栏 -->
     <LabHeader
       :experiments="lab.experiments"
       :experiment-code="lab.experiment?.code || ''"
       :student-name="lab.session?.studentName || '学生'"
-      :student-class="lab.session?.studentClass || ''"
       :env-level="lab.envLevel"
       :switching="lab.switchingExperiment"
       @quick-stats="showQuickStats = true"
@@ -87,6 +86,7 @@
           :upload-error="lab.uploadError"
           :marks="lab.marks"
           @upload="onZoneUpload"
+          @capture="onZoneCapture"
           @clear="lab.clearImage()"
         />
         <div class="workzone-divider" />
@@ -97,6 +97,7 @@
           :env-hint="lab.envHint"
           :env-logs="lab.envLogs"
           :env-check-running="lab.envCheckRunning"
+          :bench-camera="lab.benchCamera"
           @toggle-env="lab.toggleEnvCheck"
           @env-check="(blob) => lab.runEnvCheck(blob)"
         />
@@ -117,6 +118,7 @@
           @send="onSendMessage"
           @stop="lab.stopAssist()"
           @upload-image="onComposerUpload"
+          @capture-image="onComposerCapture"
           @clear-image="lab.clearComposerImage()"
         />
       </section>
@@ -146,6 +148,12 @@
       :lab-l3-count="lab.session?.labL3Count ?? 0"
       @close="showQuickStats = false"
     />
+    <TabletCameraCapture
+      :visible="tabletCameraOpen"
+      :target-label="tabletCameraTarget === 'zone' ? '拍摄实验台画面用于左侧视觉纠错' : '拍摄实验台画面作为问答附件'"
+      @close="tabletCameraOpen = false"
+      @captured="onTabletCameraCaptured"
+    />
   </div>
 </template>
 
@@ -162,6 +170,7 @@ import DataCollectionSection from '../components/data/DataCollectionSection.vue'
 import ImageUploadZone from '../components/upload/ImageUploadZone.vue'
 import BenchCameraPanel from '../components/monitor/BenchCameraPanel.vue'
 import RightPanel from '../components/layout/RightPanel.vue'
+import TabletCameraCapture from '../components/camera/TabletCameraCapture.vue'
 import TutorialModal from '../components/modals/TutorialModal.vue'
 import ReportModal from '../components/modals/ReportModal.vue'
 import QuickStatsModal from '../components/modals/QuickStatsModal.vue'
@@ -179,6 +188,8 @@ const reportData = ref(null)
 const downloadingDocx = ref(false)
 const booting = ref(true)
 const bootError = ref('')
+const tabletCameraOpen = ref(false)
+const tabletCameraTarget = ref('composer')
 
 const quickSuggestions = computed(() => {
   const stepTitle = lab.stepConfig?.title
@@ -195,13 +206,13 @@ async function bootstrap() {
   booting.value = true
   bootError.value = ''
   try {
+    await lab.loadBenchCamera()
     if (!lab.session?.id) {
       await lab.loadExperiments()
       const code = localStorage.getItem('wxz_exp') || 'newton_rings'
-      const name = auth.displayName || localStorage.getItem('wxz_name') || '学生'
-      const cls = auth.studentClass || localStorage.getItem('wxz_class') || ''
+      const name = auth.displayName || localStorage.getItem('wxz_displayName') || '学生'
       await lab.loadExperiment(code)
-      await lab.startSession(code, name, cls)
+      await lab.startSession(code, name, '')
     }
     lab.startEnvTimer()
   } catch (e) {
@@ -218,6 +229,8 @@ function retryBoot() {
 
 function logout() {
   lab.stopEnvTimer()
+  lab.teardownDevice()
+  lab.$reset()
   auth.logout()
   router.replace('/login')
 }
@@ -246,8 +259,26 @@ function onComposerUpload(file) {
   return uploadTo(file, 'composer')
 }
 
+function onComposerCapture() {
+  return openTabletCamera('composer')
+}
+
 function onZoneUpload(file) {
   return uploadTo(file, 'zone')
+}
+
+function onZoneCapture() {
+  return openTabletCamera('zone')
+}
+
+function openTabletCamera(target) {
+  tabletCameraTarget.value = target
+  tabletCameraOpen.value = true
+}
+
+async function onTabletCameraCaptured(file) {
+  tabletCameraOpen.value = false
+  return uploadTo(file, tabletCameraTarget.value)
 }
 
 async function onSendMessage(text) {

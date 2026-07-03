@@ -33,15 +33,31 @@
         @keydown="onKeydown"
       />
       <div class="flex justify-between items-center mt-1.5 gap-2">
-        <button
-          type="button"
-          class="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-ink-muted hover:text-brand-600 rounded-md hover:bg-brand-50 transition-all btn-active-scale shrink-0"
-          title="上传附件求助"
-          @click="triggerUpload"
-        >
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
-          附件
-        </button>
+        <div class="flex items-center gap-1.5 min-w-0">
+          <button
+            type="button"
+            class="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-ink-muted hover:text-brand-600 rounded-md hover:bg-brand-50 transition-all btn-active-scale shrink-0"
+            title="上传附件求助"
+            :disabled="uploadingImage"
+            @click="triggerUpload"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+            附件
+          </button>
+          <button
+            type="button"
+            class="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-ink-muted hover:text-brand-600 rounded-md hover:bg-brand-50 transition-all btn-active-scale shrink-0 disabled:opacity-50"
+            title="使用平板摄像头拍照求助"
+            :disabled="uploadingImage"
+            @click="triggerCapture"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 8.5A2.5 2.5 0 016.5 6H8l1.4-2h5.2L16 6h1.5A2.5 2.5 0 0120 8.5v8A2.5 2.5 0 0117.5 19h-11A2.5 2.5 0 014 16.5v-8z" />
+              <circle cx="12" cy="12.5" r="3.2" />
+            </svg>
+            拍照
+          </button>
+        </div>
         <button
           v-if="loadingAssist"
           type="button"
@@ -79,7 +95,7 @@ const props = defineProps({
   suggestions: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['send', 'stop', 'upload-image', 'clear-image'])
+const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clear-image'])
 
 const input = ref('')
 const fileInput = ref(null)
@@ -111,7 +127,13 @@ function onKeydown(e) {
 }
 
 function triggerUpload() {
+  if (props.uploadingImage) return
   fileInput.value?.click()
+}
+
+function triggerCapture() {
+  if (props.uploadingImage) return
+  emit('capture-image')
 }
 
 function onSuggestion(text) {
@@ -125,4 +147,5 @@ function onFileChange(e) {
   if (file) emit('upload-image', file)
   e.target.value = ''
 }
+
 </script>

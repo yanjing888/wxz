@@ -6,7 +6,7 @@
         <div class="w-9 h-9 brand-gradient rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-brand">智</div>
         <span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white" />
       </div>
-      <span class="text-[14px] font-bold text-ink-strong tracking-tight">物小智实验台</span>
+      <span class="text-[14px] font-bold text-ink-strong tracking-tight">物小智</span>
     </div>
 
     <span class="w-px h-7 bg-line-soft shrink-0" />
@@ -31,19 +31,13 @@
       </div>
     </div>
 
-    <!-- 学生身份 -->
+    <!-- 用户信息 -->
     <div class="flex items-center gap-2.5 shrink-0 pl-3 border-l border-line-soft">
       <div class="w-8 h-8 rounded-full brand-gradient flex items-center justify-center text-white text-xs font-bold shadow-card">
         {{ studentInitial }}
       </div>
-      <div class="flex flex-col leading-tight">
-        <span class="text-[10px] text-ink-faint">学生</span>
-        <div class="flex items-center gap-1.5">
-          <span class="text-xs font-semibold text-ink-base truncate max-w-[100px]">{{ studentName }}</span>
-          <span v-if="studentClass" class="text-[9px] px-1.5 py-0.5 text-brand-700 bg-brand-50 border border-brand-100 rounded">
-            {{ studentClass }}
-          </span>
-        </div>
+      <div class="flex items-center leading-tight">
+        <span class="text-xs font-semibold text-ink-base truncate max-w-[100px]">{{ studentName }}</span>
       </div>
     </div>
 
@@ -91,7 +85,6 @@ const props = defineProps({
   experiments: { type: Array, default: () => [] },
   experimentCode: { type: String, default: '' },
   studentName: { type: String, default: '--' },
-  studentClass: { type: String, default: '' },
   envLevel: { type: String, default: 'L0' },
   switching: { type: Boolean, default: false }
 })

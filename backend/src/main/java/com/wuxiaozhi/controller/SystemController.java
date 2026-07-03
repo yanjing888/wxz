@@ -1,5 +1,6 @@
 package com.wuxiaozhi.controller;
 
+import com.wuxiaozhi.config.AppProperties;
 import com.wuxiaozhi.config.DifyProperties;
 import com.wuxiaozhi.service.DifyService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,10 +17,12 @@ public class SystemController {
 
     private final DifyService difyService;
     private final DifyProperties difyProperties;
+    private final AppProperties appProperties;
 
-    public SystemController(DifyService difyService, DifyProperties difyProperties) {
+    public SystemController(DifyService difyService, DifyProperties difyProperties, AppProperties appProperties) {
         this.difyService = difyService;
         this.difyProperties = difyProperties;
+        this.appProperties = appProperties;
     }
 
     @GetMapping("/dify-status")
@@ -35,5 +38,10 @@ public class SystemController {
                 "configFile", "config/dify.env",
                 "workflows", workflowConfigured
         );
+    }
+
+    @GetMapping("/bench-camera")
+    public AppProperties.BenchCamera benchCamera() {
+        return appProperties.getBenchCamera();
     }
 }

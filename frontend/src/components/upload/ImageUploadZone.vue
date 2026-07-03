@@ -21,6 +21,16 @@
         <button
           v-if="imagePreview"
           type="button"
+          class="text-[10px] font-semibold text-ink-muted hover:text-brand-600 px-1.5 py-0.5 rounded-md transition-colors btn-active-scale disabled:opacity-50"
+          :disabled="uploadingImage"
+          title="使用平板摄像头重新拍照"
+          @click.stop="triggerCapture"
+        >
+          重拍
+        </button>
+        <button
+          v-if="imagePreview"
+          type="button"
           class="w-6 h-6 flex items-center justify-center text-ink-muted hover:text-red-500 rounded-md hover:bg-red-50 transition-colors btn-active-scale"
           title="清除图片"
           @click.stop="$emit('clear')"
@@ -60,7 +70,7 @@
         </g>
       </svg>
 
-      <div v-if="!imagePreview" class="flex flex-col items-center justify-center text-ink-muted pointer-events-none px-4 text-center">
+      <div v-if="!imagePreview" class="flex flex-col items-center justify-center text-ink-muted px-4 text-center">
         <div class="w-12 h-12 rounded-2xl flex items-center justify-center mb-3 brand-gradient-soft border border-brand-100">
           <svg class="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
             <rect x="3" y="6" width="18" height="14" rx="2.5" />
@@ -68,8 +78,26 @@
             <path stroke-linecap="round" d="M8 6l1.5-2h5L16 6" />
           </svg>
         </div>
-        <span class="text-[13px] font-bold text-ink-strong mb-1">点击上传实验台画面</span>
-        <span class="text-[11px] text-ink-muted leading-relaxed">JPG / PNG / WEBP，AI 自动识别错误点</span>
+        <span class="text-[13px] font-bold text-ink-strong mb-1">添加实验台画面</span>
+        <span class="text-[11px] text-ink-muted leading-relaxed">可上传图片，也可用平板现场拍照</span>
+        <div class="mt-3 flex items-center justify-center gap-2 pointer-events-auto">
+          <button
+            type="button"
+            class="px-3 py-1.5 rounded-lg border border-brand-200 bg-white text-[11px] font-bold text-brand-600 hover:bg-brand-50 transition-all btn-active-scale disabled:opacity-50"
+            :disabled="uploadingImage"
+            @click.stop="triggerUpload"
+          >
+            上传
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1.5 rounded-lg brand-gradient text-[11px] font-bold text-white shadow-brand btn-active-scale disabled:opacity-50"
+            :disabled="uploadingImage"
+            @click.stop="triggerCapture"
+          >
+            拍照
+          </button>
+        </div>
       </div>
     </div>
 
@@ -87,7 +115,7 @@ const props = defineProps({
   marks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['upload', 'clear'])
+const emit = defineEmits(['upload', 'capture', 'clear'])
 const fileInput = ref(null)
 
 function onZoneClick() {
@@ -100,11 +128,17 @@ function triggerUpload() {
   fileInput.value?.click()
 }
 
-defineExpose({ triggerUpload })
+function triggerCapture() {
+  if (props.uploadingImage) return
+  emit('capture')
+}
+
+defineExpose({ triggerUpload, triggerCapture })
 
 function onFileChange(e) {
   const file = e.target.files?.[0]
   if (file) emit('upload', file)
   e.target.value = ''
 }
+
 </script>

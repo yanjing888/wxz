@@ -11,6 +11,7 @@ marked.setOptions({
  */
 export function normalizeAiMarkdown(text) {
   if (!text) return ''
+  if (text.includes('welcome-guide')) return text
   const lines = text.split('\n')
   return lines.map((line) => {
     const trimmed = line.trim()
