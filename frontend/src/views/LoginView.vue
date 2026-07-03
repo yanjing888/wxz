@@ -20,7 +20,7 @@
             v-model.trim="form.username"
             class="login-input"
             autocomplete="username"
-            placeholder="请输入账号"
+            placeholder="请输入账号或姓名"
           />
         </div>
 
@@ -138,7 +138,7 @@ function showTip(message) {
 async function submit() {
   tip.value = ''
   if (!form.username) {
-    showTip('请输入账号')
+    showTip('请输入账号或姓名')
     return
   }
   if (!form.password) {
@@ -171,7 +171,7 @@ async function submit() {
     if (mode.value === 'register') {
       showTip(e.response?.status === 409 ? '账号已存在' : '注册失败，请稍后重试')
     } else {
-      showTip(mode.value === 'login' ? '账号或密码错误' : '重置失败，请稍后重试')
+      showTip(mode.value === 'login' ? '账号/姓名或密码错误' : '重置失败，请稍后重试')
     }
   } finally {
     loading.value = false

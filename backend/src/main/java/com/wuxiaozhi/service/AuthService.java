@@ -57,10 +57,12 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest req) {
-        User user = userRepository.findByUsername(req.getUsername())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误"));
+        String loginId = req.getUsername().trim();
+        User user = userRepository.findByUsername(loginId)
+                .or(() -> userRepository.findFirstByDisplayName(loginId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "账号/姓名或密码错误"));
         if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "账号/姓名或密码错误");
         }
         return buildAuthResponse(user);
     }

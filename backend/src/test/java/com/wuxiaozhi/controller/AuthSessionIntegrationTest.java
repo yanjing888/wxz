@@ -108,6 +108,23 @@ class AuthSessionIntegrationTest {
     }
 
     @Test
+    void userCanLoginWithDisplayName() throws Exception {
+        saveUser("student003", "secret123", "王同学", "");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "王同学",
+                                  "password": "secret123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("student003"))
+                .andExpect(jsonPath("$.displayName").value("王同学"));
+    }
+
+    @Test
     void resetPasswordAllowsLoginWithNewPassword() throws Exception {
         saveUser("student001", "oldpass1", "王同学", "物理一班");
 
