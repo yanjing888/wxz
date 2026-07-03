@@ -26,9 +26,13 @@
 
     <!-- 主体：嵌入式工作台 — 贴顶栏底、贴左右边、贴底，仅保留顶部圆角 -->
     <div class="flex-1 flex flex-row overflow-hidden min-h-0 px-3">
-      <div class="flex-1 workspace-frame flex flex-row min-h-0 overflow-hidden">
+      <div
+        ref="workspaceFrame"
+        class="flex-1 workspace-frame workspace-frame-resizable min-h-0 overflow-hidden"
+        :style="workspaceColumns"
+      >
       <!-- 左：连续工作区 -->
-      <aside class="w-[400px] shrink-0 flex flex-col min-h-0 overflow-hidden border-r border-line-soft">
+      <aside class="min-w-0 flex flex-col min-h-0 overflow-hidden">
         <StepPanel
           :menu-labels="lab.experiment?.menuLabels || []"
           :active-step="lab.activeStep"
@@ -102,6 +106,15 @@
           @env-check="(blob) => lab.runEnvCheck(blob)"
         />
       </aside>
+
+      <div
+        class="workspace-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整左右区域宽度"
+        title="拖动调整左右区域宽度"
+        @pointerdown="startWorkspaceResize"
+      />
 
       <!-- 右：AI 智能助手主舞台 -->
       <section class="flex-1 min-w-0 flex flex-col">
@@ -190,6 +203,15 @@ const booting = ref(true)
 const bootError = ref('')
 const tabletCameraOpen = ref(false)
 const tabletCameraTarget = ref('composer')
+const workspaceFrame = ref(null)
+const WORKSPACE_WIDTH_KEY = 'wxz_workspace_left_width'
+const DEFAULT_WORKSPACE_LEFT_WIDTH = 400
+const MIN_WORKSPACE_LEFT_WIDTH = 320
+const workspaceLeftWidth = ref(readStoredWorkspaceWidth())
+
+const workspaceColumns = computed(() => ({
+  gridTemplateColumns: `${workspaceLeftWidth.value}px 10px minmax(0, 1fr)`
+}))
 
 const quickSuggestions = computed(() => {
   const stepTitle = lab.stepConfig?.title
@@ -225,6 +247,42 @@ async function bootstrap() {
 
 function retryBoot() {
   bootstrap()
+}
+
+function readStoredWorkspaceWidth() {
+  const raw = Number(localStorage.getItem(WORKSPACE_WIDTH_KEY))
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_WORKSPACE_LEFT_WIDTH
+}
+
+function clampWorkspaceWidth(width) {
+  const frameWidth = workspaceFrame.value?.getBoundingClientRect().width || 0
+  const maxWidth = frameWidth ? Math.max(MIN_WORKSPACE_LEFT_WIDTH, Math.floor(frameWidth * 0.58)) : 640
+  return Math.min(Math.max(Math.round(width), MIN_WORKSPACE_LEFT_WIDTH), maxWidth)
+}
+
+function startWorkspaceResize(event) {
+  if (!workspaceFrame.value) return
+  event.preventDefault()
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
+  document.body.classList.add('is-resizing-workspace')
+
+  const frameLeft = workspaceFrame.value.getBoundingClientRect().left
+
+  const onPointerMove = (moveEvent) => {
+    workspaceLeftWidth.value = clampWorkspaceWidth(moveEvent.clientX - frameLeft)
+  }
+
+  const onPointerUp = () => {
+    localStorage.setItem(WORKSPACE_WIDTH_KEY, String(workspaceLeftWidth.value))
+    document.body.classList.remove('is-resizing-workspace')
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', onPointerUp)
+    window.removeEventListener('pointercancel', onPointerUp)
+  }
+
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp, { once: true })
+  window.addEventListener('pointercancel', onPointerUp, { once: true })
 }
 
 function logout() {

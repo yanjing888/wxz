@@ -109,6 +109,48 @@ body, html, #app {
   box-shadow: 0 -2px 14px rgba(15, 23, 42, 0.04);
 }
 
+.workspace-frame-resizable {
+  display: grid;
+}
+
+.workspace-resizer {
+  position: relative;
+  z-index: 5;
+  width: 10px;
+  min-width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  background: linear-gradient(90deg, transparent 0, transparent 4px, var(--border-soft) 4px, var(--border-soft) 6px, transparent 6px);
+  transition: background 0.18s ease;
+}
+
+.workspace-resizer::after {
+  content: "";
+  position: absolute;
+  inset: 50% 2px auto;
+  height: 44px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--brand-100);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.workspace-resizer:hover,
+.is-resizing-workspace .workspace-resizer {
+  background: linear-gradient(90deg, transparent 0, transparent 3px, var(--brand-300) 3px, var(--brand-300) 7px, transparent 7px);
+}
+
+.workspace-resizer:hover::after,
+.is-resizing-workspace .workspace-resizer::after {
+  opacity: 1;
+}
+
+.is-resizing-workspace {
+  cursor: col-resize;
+  user-select: none;
+}
+
 /* ============================================================
    公用组件类
    ============================================================ */
