@@ -548,7 +548,7 @@ public class LabSessionService {
         }
         envCheckLogRepository.save(log);
 
-        if ("L2".equals(resp.getLevel())) {
+        if (resp.isFromDify() && "L2".equals(resp.getLevel())) {
             session.setLabL3Count(session.getLabL3Count() + 1);
             sessionRepository.save(session);
         }

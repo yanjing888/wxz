@@ -26,7 +26,7 @@
         </span>
         <span class="chip shrink-0" :class="envChipClass">
           <span class="w-1.5 h-1.5 rounded-full" :class="envDotClass" />
-          环境 {{ envLevel }}
+          环境 {{ envLevelLabel }}
         </span>
       </div>
     </div>
@@ -97,8 +97,11 @@ const studentInitial = computed(() => {
   return n.charAt(0)
 })
 
+const envLevelLabel = computed(() => (props.envLevel === 'NA' ? '不可用' : props.envLevel))
+
 const envChipClass = computed(() => {
   const map = {
+    NA: 'text-slate-500 border-slate-200 bg-slate-50',
     L0: 'text-emerald-600 border-emerald-200 bg-emerald-50',
     L1: 'text-amber-600 border-amber-200 bg-amber-50',
     L2: 'text-red-600 border-red-200 bg-red-50',
@@ -108,7 +111,7 @@ const envChipClass = computed(() => {
 })
 
 const envDotClass = computed(() => {
-  const map = { L0: 'bg-emerald-500', L1: 'bg-amber-500', L2: 'bg-red-500', L3: 'bg-red-500' }
+  const map = { NA: 'bg-slate-400', L0: 'bg-emerald-500', L1: 'bg-amber-500', L2: 'bg-red-500', L3: 'bg-red-500' }
   return map[props.envLevel] || map.L0
 })
 </script>

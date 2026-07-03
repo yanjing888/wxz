@@ -83,7 +83,7 @@
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-1.5 min-w-0">
             <span class="text-[11px] font-bold text-ink-strong shrink-0">安全监测</span>
-            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0" :class="levelClass">{{ envLevel }}</span>
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0" :class="levelClass">{{ envLevelLabel }}</span>
           </div>
           <button
             type="button"
@@ -146,7 +146,7 @@
         <p v-if="!envLogs.length" class="text-[10px] text-ink-faint py-2 text-center">暂无记录</p>
         <div v-for="(log, i) in envLogs" :key="i" class="text-[10px] text-ink-muted flex gap-1.5 items-baseline">
           <span class="font-mono text-ink-faint shrink-0">{{ log.time }}</span>
-          <span class="font-bold shrink-0 px-1 rounded" :class="logLevelClass(log.level)">{{ log.level }}</span>
+          <span class="font-bold shrink-0 px-1 rounded" :class="logLevelClass(log.level)">{{ log.level === 'NA' ? '不可用' : log.level }}</span>
           <span class="truncate">{{ log.summary }}</span>
         </div>
       </div>
@@ -193,8 +193,11 @@ const displayHint = computed(() => {
   return briefSummary(props.envHint) || '暂无异常'
 })
 
+const envLevelLabel = computed(() => (props.envLevel === 'NA' ? '不可用' : props.envLevel))
+
 const levelClass = computed(() => {
   const map = {
+    NA: 'bg-slate-100 text-slate-500 border-slate-200',
     L0: 'bg-emerald-50 text-emerald-600 border-emerald-200',
     L1: 'bg-amber-50 text-amber-600 border-amber-200',
     L2: 'bg-red-50 text-red-600 border-red-200',
@@ -214,6 +217,7 @@ function briefSummary(text, maxLen = 80) {
 }
 
 function logLevelClass(level) {
+  if (level === 'NA') return 'text-slate-500 bg-slate-100'
   if (level === 'L3') return 'text-red-500 bg-red-50'
   if (level === 'L2') return 'text-red-500 bg-red-50'
   if (level === 'L1') return 'text-amber-500 bg-amber-50'

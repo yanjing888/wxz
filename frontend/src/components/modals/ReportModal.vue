@@ -217,6 +217,7 @@ function formatLogTime(v) {
 
 function levelLabel(level) {
   const map = {
+    NA: '不可用',
     L0: 'L0 正常',
     L1: 'L1 注意',
     L2: 'L2 严重',
@@ -226,6 +227,7 @@ function levelLabel(level) {
 }
 
 function envLevelClass(level) {
+  if (level === 'NA') return 'text-slate-600 bg-slate-50 border border-slate-200'
   if (level === 'L3') return 'text-red-600 bg-red-50 border border-red-100'
   if (level === 'L2') return 'text-red-600 bg-red-50 border border-red-100'
   if (level === 'L1') return 'text-amber-600 bg-amber-50 border border-amber-100'

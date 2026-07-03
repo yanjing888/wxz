@@ -6,10 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wuxiaozhi.config.DifyProperties;
 import com.wuxiaozhi.dto.AssistResponse;
 import com.wuxiaozhi.dto.EnvCheckResponse;
-import com.wuxiaozhi.dto.experiment.AssistMock;
 import com.wuxiaozhi.dto.experiment.ExperimentConfig;
 import com.wuxiaozhi.dto.experiment.MarkDto;
-import com.wuxiaozhi.dto.experiment.StepConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
@@ -66,10 +64,10 @@ public class DifyService {
                         : runWorkflow(workflowKey, inputs, userId);
                 return parseAssistPayload(payload, true, hasImage, hasData);
             } catch (Throwable e) {
-                log.warn("Dify assist failed, fallback to mock: {}", e.getMessage());
+                log.warn("Dify assist failed: {}", e.getMessage());
             }
         }
-        return mockAssist(experiment, stepId, hasImage, hasData);
+        return unavailableAssist(hasImage, hasData);
     }
 
     /**
@@ -104,19 +102,16 @@ public class DifyService {
                         workflowKey, full.length(), streamMarks.size());
                 return buildStreamAssistResponse(full.toString(), streamMarks, hasImage, hasData);
             } catch (Throwable e) {
-                log.warn("Dify stream failed, fallback to mock: {}", e.getMessage());
+                log.warn("Dify stream failed: {}", e.getMessage());
             }
         }
         boolean hasData = hasDataAssist(inputs);
-        AssistResponse mock = mockAssist(experiment, stepId, hasImage, hasData);
-        if (onMarks != null && mock.getMarks() != null && !mock.getMarks().isEmpty()) {
-            onMarks.accept(mock.getMarks());
-        }
-        streamMockFeedback(mock.getFeedback(), onDelta);
+        AssistResponse unavailable = unavailableAssist(hasImage, hasData);
+        streamMockFeedback(unavailable.getFeedback(), onDelta);
         if (onAnswerComplete != null) {
             onAnswerComplete.run();
         }
-        return mock;
+        return unavailable;
     }
 
     /** Dify 正文流结束后仍会跑知识库等节点；在 message_end 时通知前端收起光标。 */
@@ -302,10 +297,10 @@ public class DifyService {
                         : runWorkflow("env-check", buildEnvWorkflowInputs(inputs, imageUrl, userId), userId);
                 return parseEnvPayload(payload);
             } catch (Exception e) {
-                log.warn("Dify env-check failed, fallback to mock: {}", e.getMessage());
+                log.warn("Dify env-check failed, returning unavailable: {}", e.getMessage());
             }
         }
-        return mockEnvCheck();
+        return unavailableEnvCheck();
     }
 
     public boolean isConfigured() {
@@ -574,77 +569,21 @@ public class DifyService {
         return resp;
     }
 
-    private AssistResponse mockAssist(ExperimentConfig experiment, int stepId, boolean hasImage, boolean hasData) {
+    private AssistResponse unavailableAssist(boolean hasImage, boolean hasData) {
         AssistResponse resp = new AssistResponse();
         resp.setFromDify(false);
-        if (experiment == null) {
-            resp.setType(hasImage ? "vision_correction" : (hasData ? "data_correction" : "text_assist"));
-            resp.setFeedback(hasImage
-                    ? "已收到图片。当前 Dify 不可用，请稍后重试。"
-                    : (hasData ? "已收到实验数据。当前 Dify 不可用，请稍后重试。" : "已收到您的问题。当前 Dify 不可用，请稍后重试。"));
-            resp.setMarks(List.of());
-            return resp;
-        }
-        StepConfig step = experiment.getSteps().get(String.valueOf(stepId > 0 ? stepId : 1));
-        if (step == null) {
-            step = experiment.getSteps().get("1");
-        }
-        AssistMock mock = step != null ? step.getAssistMock() : null;
-        if (hasImage && mock != null) {
-            resp.setType("vision_correction");
-            resp.setErrorType(mock.getErrorType());
-            resp.setDetail(mock.getDetail());
-            List<MarkDto> jsonMarks = mock.getMarks() != null ? mock.getMarks() : List.of();
-            resp.setFeedback(mock.getFeedback());
-            resp.setMarks(jsonMarks);
-        } else if (hasImage) {
-            resp.setType("vision_correction");
-            resp.setFeedback("已收到图片。当前 Dify 不可用，请稍后重试。");
-            resp.setMarks(List.of());
-        } else if (hasData && mock != null) {
-            resp.setType("data_correction");
-            resp.setErrorType(mock.getErrorType());
-            resp.setDetail(mock.getDetail());
-            resp.setFeedback(mock.getFeedback());
-            resp.setMarks(List.of());
-        } else if (hasData && step != null) {
-            resp.setType("data_correction");
-            resp.setFeedback("**" + step.getTitle() + "**\n\n" + step.getDesc()
-                    + "\n\n请核对记录表中的读数、单位与有效数字；若装夹或仪表有疑问，可切换至需拍照的步骤上传实拍图。");
-            resp.setMarks(List.of());
-        } else if (step != null) {
-            resp.setType("text_assist");
-            resp.setFeedback("**" + step.getTitle() + "**\n\n" + step.getDesc()
-                    + "\n\n请对照教程逐步操作；若仍不确定，可上传台面实拍图后再次求助。");
-            resp.setMarks(List.of());
-        } else {
-            resp.setType("text_assist");
-            resp.setFeedback("请描述具体问题，或上传实验台实拍图以便视觉纠错。");
-            resp.setMarks(List.of());
-        }
+        resp.setType(hasImage ? "vision_correction" : (hasData ? "data_correction" : "text_assist"));
+        resp.setFeedback("**暂时无法连接Dify服务**\n\n我现在连接不上 Dify 服务，因此不能可靠回答这个问题。为避免给出不准确的信息，请稍后再试。\n\n如果多次出现，请联系Dify管理员检查 Dify 服务配置。");
+        resp.setMarks(List.of());
         return resp;
     }
 
-    private EnvCheckResponse mockEnvCheck() {
-        String[] levels = {"L0", "L0", "L0", "L1", "L2"};
-        String level = levels[new Random().nextInt(levels.length)];
+    private EnvCheckResponse unavailableEnvCheck() {
         EnvCheckResponse resp = new EnvCheckResponse();
         resp.setFromDify(false);
-        resp.setLevel(level);
-        switch (level) {
-            case "L1" -> {
-                resp.setSummary("台面存在轻微杂物或摆放偏移（示意）");
-                resp.setSuggestion("整理台面，确保试样与仪表区域清晰可见");
-            }
-            case "L2" -> {
-                resp.setSummary("检测到可能的违规操作或遮挡（示意）");
-                resp.setSuggestion("严重告警：暂停操作，请教师或助教确认后再继续");
-            }
-            default -> {
-                resp.setSummary("暂无异常");
-                resp.setSuggestion("");
-            }
-        }
+        resp.setLevel("NA");
+        resp.setSummary("**暂时无法连接Dify服务**\n\n我现在连接不上 Dify 服务，因此不能完成本次安全巡检。为避免给出不准确的等级判断，请稍后再试。\n\n如果多次出现，请联系Dify管理员检查 Dify 服务配置。");
+        resp.setSuggestion("");
         return resp;
     }
 

@@ -300,6 +300,7 @@ public class ReportService {
             case "L1" -> "L1 注意";
             case "L2" -> "L2 严重";
             case "L3" -> "L2 严重";
+            case "NA" -> "不可用";
             default -> level;
         };
     }

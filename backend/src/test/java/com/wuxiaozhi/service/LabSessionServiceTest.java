@@ -46,6 +46,7 @@ class LabSessionServiceTest {
         session.setLabL3Count(0);
 
         EnvCheckResponse response = new EnvCheckResponse();
+        response.setFromDify(true);
         response.setLevel("L2");
         response.setSummary("严重风险");
         response.setSuggestion("立即处理");
@@ -72,6 +73,49 @@ class LabSessionServiceTest {
         service.envCheck(12L, null);
 
         assertThat(session.getLabL3Count()).isEqualTo(1);
+    }
+
+    @Test
+    void envCheckDoesNotCountUnavailableAsSevereWarning() {
+        LabSessionRepository sessionRepository = mock(LabSessionRepository.class);
+        EnvCheckLogRepository envCheckLogRepository = mock(EnvCheckLogRepository.class);
+        DifyService difyService = mock(DifyService.class);
+
+        LabSession session = new LabSession();
+        session.setId(12L);
+        session.setUserId(0L);
+        session.setExperimentCode("general");
+        session.setExperimentName("通用实验");
+        session.setStudentName("学生");
+        session.setLabL3Count(0);
+
+        EnvCheckResponse response = new EnvCheckResponse();
+        response.setFromDify(false);
+        response.setLevel("NA");
+        response.setSummary("暂时无法连接Dify服务");
+        response.setSuggestion("");
+
+        when(sessionRepository.findById(12L)).thenReturn(Optional.of(session));
+        when(envCheckLogRepository.save(any(EnvCheckLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(difyService.envCheck(any(), eq("guest-12"), eq(""))).thenReturn(response);
+
+        LabSessionService service = new LabSessionService(
+                sessionRepository,
+                mock(CorrectionLogRepository.class),
+                envCheckLogRepository,
+                mock(SessionDataLogRepository.class),
+                mock(ExperimentConfigService.class),
+                difyService,
+                mock(DifyRetrieveService.class),
+                mock(KnowledgeMapService.class),
+                mock(DataValidationService.class),
+                new ObjectMapper(),
+                mock(PlatformTransactionManager.class)
+        );
+
+        service.envCheck(12L, null);
+
+        assertThat(session.getLabL3Count()).isEqualTo(0);
     }
 
     @Test
