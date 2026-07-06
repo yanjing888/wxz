@@ -30,22 +30,27 @@ const panel = readFromFrontend('src/components/monitor/BenchCameraPanel.vue')
 
 assertContains(
   appConfig,
-  'browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:/bench-camera-proxy/ws/hdl/hlsram/live0.flv}',
-  'default browser stream URL should use the laptop same-origin proxy path'
+  'browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:/ws/hdl/hlsram/live0.flv}',
+  'default browser stream URL should use the camera WebSocket path through the laptop origin'
 )
 assertNotContains(
   appConfig,
   'browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:ws://192.168.0.15',
   'default browser stream URL should not point tablets directly at the camera IP'
 )
+assertNotContains(
+  appConfig,
+  '/bench-camera-proxy/ws/hdl/hlsram/live0.flv',
+  'default browser stream URL should avoid a rewritten WebSocket proxy prefix'
+)
 
 assertContains(viteConfig, 'cameraProxyTarget', 'vite should define a camera proxy target')
-assertContains(viteConfig, "'/bench-camera-proxy'", 'vite should expose the same-origin camera proxy path')
+assertContains(viteConfig, "'/ws'", 'vite should expose the camera WebSocket path at the same origin')
 assertContains(viteConfig, 'ws: true', 'camera proxy should support WebSocket streaming')
-assertContains(viteConfig, "rewrite: (path) => path.replace(/^\\/bench-camera-proxy/, '')", 'camera proxy should strip the frontend proxy prefix')
+assertNotContains(viteConfig, "rewrite: (path) => path.replace(/^\\/bench-camera-proxy/, '')", 'camera WebSocket proxy should not depend on upgrade path rewriting')
 
 assertContains(panel, 'resolveBrowserStreamUrl', 'camera panel should normalize proxy URLs before flv.js playback')
-assertContains(panel, "url.startsWith('/bench-camera-proxy')", 'camera panel should recognize same-origin camera proxy URLs')
+assertContains(panel, "url.startsWith('/ws/')", 'camera panel should recognize same-origin camera WebSocket URLs')
 assertContains(panel, 'window.location.protocol === \'https:\' ? \'wss\' : \'ws\'', 'camera panel should choose ws or wss from the page protocol')
 assertContains(panel, 'window.location.host', 'camera panel should use the tablet-visible frontend host for proxied streams')
 

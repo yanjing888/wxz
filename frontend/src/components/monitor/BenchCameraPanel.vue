@@ -225,7 +225,7 @@ function logLevelClass(level) {
 }
 
 function resolveBrowserStreamUrl(url) {
-  if (url.startsWith('/bench-camera-proxy')) {
+  if (url.startsWith('/ws/')) {
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
     return `${protocol}://${window.location.host}${url}`
   }

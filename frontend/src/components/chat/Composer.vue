@@ -29,7 +29,7 @@
         ref="textareaRef"
         v-model="input"
         rows="2"
-        placeholder="向物小智询问实验操作问题…（Enter 发送，Shift+Enter 换行）"
+        placeholder="问物小智：实验中遇到的问题，都可以在这里说…（Enter 发送，Shift+Enter 换行）"
         class="w-full bg-transparent border-none text-[13px] text-ink-base outline-none resize-none placeholder:text-ink-faint leading-relaxed"
         :disabled="readOnly"
         @keydown="onKeydown"

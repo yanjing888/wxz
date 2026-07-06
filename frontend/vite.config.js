@@ -19,11 +19,10 @@ export default defineConfig({
         proxyTimeout: 0
       },
       '/uploads': { target: backendOrigin, changeOrigin: true },
-      '/bench-camera-proxy': {
+      '/ws': {
         target: cameraProxyTarget,
         changeOrigin: true,
-        ws: true,
-        rewrite: (path) => path.replace(/^\/bench-camera-proxy/, '')
+        ws: true
       }
     }
   }
