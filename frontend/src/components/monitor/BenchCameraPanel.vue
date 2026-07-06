@@ -224,6 +224,14 @@ function logLevelClass(level) {
   return 'text-emerald-500 bg-emerald-50'
 }
 
+function resolveBrowserStreamUrl(url) {
+  if (url.startsWith('/bench-camera-proxy')) {
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${protocol}://${window.location.host}${url}`
+  }
+  return url
+}
+
 function stopMediaTracks() {
   if (flvPlayer) {
     flvPlayer.pause()
@@ -277,7 +285,7 @@ async function startConfiguredCamera(camera) {
     video.muted = true
     flvPlayer = flvjs.createPlayer({
       type: 'flv',
-      url: camera.browserStreamUrl,
+      url: resolveBrowserStreamUrl(camera.browserStreamUrl),
       isLive: true,
       cors: true
     }, {

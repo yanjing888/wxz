@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:photo-entry": "node scripts/check-photo-capture-entry.mjs",
+    "test:bench-camera-proxy": "node scripts/check-bench-camera-proxy.mjs",
     "test:tablet-viewport": "node scripts/check-tablet-viewport.mjs",
     "test:chat-bubbles": "node scripts/check-chat-bubble-width.mjs",
     "test:resizable-workspace": "node scripts/check-resizable-workspace.mjs"

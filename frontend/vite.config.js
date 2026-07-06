@@ -4,6 +4,7 @@ import { loadPorts } from '../config/loadPorts.mjs'
 
 const { BACKEND_PORT, FRONTEND_PORT } = loadPorts()
 const backendOrigin = `http://127.0.0.1:${BACKEND_PORT}`
+const cameraProxyTarget = process.env.BENCH_CAMERA_PROXY_TARGET || 'ws://192.168.0.15'
 
 export default defineConfig({
   plugins: [vue()],
@@ -17,7 +18,13 @@ export default defineConfig({
         timeout: 0,
         proxyTimeout: 0
       },
-      '/uploads': { target: backendOrigin, changeOrigin: true }
+      '/uploads': { target: backendOrigin, changeOrigin: true },
+      '/bench-camera-proxy': {
+        target: cameraProxyTarget,
+        changeOrigin: true,
+        ws: true,
+        rewrite: (path) => path.replace(/^\/bench-camera-proxy/, '')
+      }
     }
   }
 })
