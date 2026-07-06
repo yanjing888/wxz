@@ -31,17 +31,7 @@
       </div>
     </div>
 
-    <!-- 用户信息 -->
-    <div class="flex items-center gap-2.5 shrink-0 pl-3 border-l border-line-soft">
-      <div class="w-8 h-8 rounded-full brand-gradient flex items-center justify-center text-white text-xs font-bold shadow-card">
-        {{ studentInitial }}
-      </div>
-      <div class="flex items-center leading-tight">
-        <span class="text-xs font-semibold text-ink-base truncate max-w-[100px]">{{ studentName }}</span>
-      </div>
-    </div>
-
-    <!-- 操作按钮组 -->
+    <!-- 实验操作 -->
     <div class="flex items-center gap-2 shrink-0 pl-3 border-l border-line-soft">
       <button
         type="button"
@@ -65,6 +55,16 @@
         </svg>
         生成报告
       </button>
+    </div>
+
+    <!-- 用户信息 -->
+    <div class="flex items-center gap-2.5 shrink-0 pl-3 border-l border-line-soft">
+      <div class="w-8 h-8 rounded-full brand-gradient flex items-center justify-center text-white text-xs font-bold shadow-card">
+        {{ studentInitial }}
+      </div>
+      <div class="flex items-center leading-tight">
+        <span class="text-xs font-semibold text-ink-base truncate max-w-[100px]">{{ studentName }}</span>
+      </div>
       <button
         type="button"
         class="btn-ghost px-3 py-2 rounded-xl text-xs font-semibold"

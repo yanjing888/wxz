@@ -25,14 +25,14 @@
     />
 
     <!-- 主体：嵌入式工作台 — 贴顶栏底、贴左右边、贴底，仅保留顶部圆角 -->
-    <div class="flex-1 flex flex-row overflow-hidden min-h-0 px-3">
+    <div class="flex-1 flex flex-row overflow-hidden min-h-0 h-full px-3">
       <div
         ref="workspaceFrame"
-        class="flex-1 workspace-frame workspace-frame-resizable min-h-0 overflow-hidden"
+        class="flex-1 workspace-frame workspace-frame-resizable min-h-0 h-full overflow-hidden"
         :style="workspaceColumns"
       >
       <!-- 左：连续工作区 -->
-      <aside class="min-w-0 flex flex-col min-h-0 overflow-hidden">
+      <aside class="min-w-0 min-h-0 h-full flex flex-col overflow-hidden">
         <StepPanel
           :menu-labels="lab.experiment?.menuLabels || []"
           :active-step="lab.activeStep"
@@ -117,7 +117,7 @@
       />
 
       <!-- 右：AI 智能助手主舞台 -->
-      <section class="flex-1 min-w-0 flex flex-col">
+      <section class="flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden">
         <RightPanel
           :messages="lab.messages"
           :loading-assist="lab.loadingAssist"
@@ -128,6 +128,12 @@
           :step-title="lab.stepConfig?.title || ''"
           :student-name="lab.session?.studentName || ''"
           :suggestions="quickSuggestions"
+          :read-only="currentSessionReadOnly"
+          :session-history="lab.sessionHistory"
+          :current-session-id="lab.session?.id || 0"
+          :session-history-loading="lab.sessionHistoryLoading"
+          @new-session="startNewSession"
+          @select-session="onSelectSession"
           @send="onSendMessage"
           @stop="lab.stopAssist()"
           @upload-image="onComposerUpload"
@@ -168,6 +174,18 @@
       @captured="onTabletCameraCaptured"
     />
   </div>
+
+  <AppConfirmDialog
+    :visible="appDialog.visible"
+    :mode="appDialog.mode"
+    :title="appDialog.title"
+    :message="appDialog.message"
+    :detail="appDialog.detail"
+    :confirm-text="appDialog.confirmText"
+    :cancel-text="appDialog.cancelText"
+    @confirm="resolveAppDialog(true)"
+    @cancel="resolveAppDialog(false)"
+  />
 </template>
 
 <script setup>
@@ -187,6 +205,7 @@ import TabletCameraCapture from '../components/camera/TabletCameraCapture.vue'
 import TutorialModal from '../components/modals/TutorialModal.vue'
 import ReportModal from '../components/modals/ReportModal.vue'
 import QuickStatsModal from '../components/modals/QuickStatsModal.vue'
+import AppConfirmDialog from '../components/modals/AppConfirmDialog.vue'
 
 const lab = useLabStore()
 const auth = useAuthStore()
@@ -203,6 +222,16 @@ const booting = ref(true)
 const bootError = ref('')
 const tabletCameraOpen = ref(false)
 const tabletCameraTarget = ref('composer')
+const appDialog = ref({
+  visible: false,
+  mode: 'confirm',
+  title: '',
+  message: '',
+  detail: '',
+  confirmText: '确定',
+  cancelText: '取消',
+  resolve: null
+})
 const workspaceFrame = ref(null)
 const WORKSPACE_WIDTH_KEY = 'wxz_workspace_left_width'
 const DEFAULT_WORKSPACE_LEFT_WIDTH = 400
@@ -212,6 +241,8 @@ const workspaceLeftWidth = ref(readStoredWorkspaceWidth())
 const workspaceColumns = computed(() => ({
   gridTemplateColumns: `${workspaceLeftWidth.value}px 10px minmax(0, 1fr)`
 }))
+
+const currentSessionReadOnly = computed(() => lab.session?.status === 'FINISHED')
 
 const quickSuggestions = computed(() => {
   const stepTitle = lab.stepConfig?.title
@@ -234,7 +265,12 @@ async function bootstrap() {
       const code = localStorage.getItem('wxz_exp') || 'newton_rings'
       const name = auth.displayName || localStorage.getItem('wxz_displayName') || '学生'
       await lab.loadExperiment(code)
-      await lab.startSession(code, name, '')
+      const latest = await lab.getLatestActiveSession(code)
+      if (latest) {
+        await lab.resumeSession(latest)
+      } else {
+        await lab.startSession(code, name, '')
+      }
     }
     lab.startEnvTimer()
   } catch (e) {
@@ -247,6 +283,50 @@ async function bootstrap() {
 
 function retryBoot() {
   bootstrap()
+}
+
+function openAppDialog(options = {}) {
+  return new Promise((resolve) => {
+    appDialog.value = {
+      visible: true,
+      mode: options.mode || 'confirm',
+      title: options.title || '确认操作',
+      message: options.message || '',
+      detail: options.detail || '',
+      confirmText: options.confirmText || '确定',
+      cancelText: options.cancelText || '取消',
+      resolve
+    }
+  })
+}
+
+function resolveAppDialog(result) {
+  const done = appDialog.value.resolve
+  appDialog.value = {
+    visible: false,
+    mode: 'confirm',
+    title: '',
+    message: '',
+    detail: '',
+    confirmText: '确定',
+    cancelText: '取消',
+    resolve: null
+  }
+  if (done) done(result)
+}
+
+function showAppAlert(title, message = '') {
+  return openAppDialog({
+    mode: 'alert',
+    title,
+    message,
+    confirmText: '知道了'
+  })
+}
+
+function onGlobalAppAlert(event) {
+  const detail = event.detail || {}
+  showAppAlert(detail.title || '提示', detail.message || '')
 }
 
 function readStoredWorkspaceWidth() {
@@ -294,12 +374,14 @@ function logout() {
 }
 
 onMounted(() => {
+  window.addEventListener('wxz-app-alert', onGlobalAppAlert)
   lab.setEnvCaptureFn(() => benchCam.value?.captureFrame?.())
   lab.setEnvEnsureCamFn(() => benchCam.value?.ensureCameraReady?.())
   bootstrap()
 })
 
 onUnmounted(() => {
+  window.removeEventListener('wxz-app-alert', onGlobalAppAlert)
   lab.stopEnvTimer()
   lab.teardownDevice()
 })
@@ -309,7 +391,7 @@ async function uploadTo(file, target) {
     await lab.uploadImage(file, { target })
   } catch (e) {
     const msg = lab.uploadError || e.response?.data?.message || e.message || '图片上传失败'
-    window.alert(msg)
+    await showAppAlert('上传失败', msg)
   }
 }
 
@@ -343,25 +425,58 @@ async function onSendMessage(text) {
   return lab.sendMessage(text)
 }
 
+async function onSelectSession(item) {
+  await lab.resumeSession(item)
+  if (item.status === 'ACTIVE') {
+    lab.startEnvTimer()
+  } else {
+    lab.stopEnvTimer()
+  }
+}
+
+async function startNewSession() {
+  const code = lab.experiment?.code || localStorage.getItem('wxz_exp') || 'newton_rings'
+  const name = auth.displayName || localStorage.getItem('wxz_displayName') || lab.session?.studentName || '学生'
+  if (lab.session?.status === 'ACTIVE') {
+    const ok = await openAppDialog({
+      title: '开始新的实验会话？',
+      message: '当前实验会话会保留在历史记录中。',
+      detail: '新会话会从第 1 步重新开始，右侧问答也会使用新的上下文。',
+      confirmText: '新建会话',
+      cancelText: '继续当前会话'
+    })
+    if (!ok) return
+  }
+  await lab.startSession(code, name, '')
+  lab.startEnvTimer()
+}
+
 async function onExperimentChange(code) {
   if (!code || code === lab.experiment?.code) return
   const target = lab.experiments.find((e) => e.code === code)
   const label = target?.name || code
-  if (
-    !window.confirm(
-      `将切换到「${label}」并开始新的实验会话，当前步骤与对话记录不会保留。\n\n确定切换吗？`
-    )
-  ) {
+  const ok = await openAppDialog({
+    title: `切换到「${label}」？`,
+    message: '将为目标实验开始新的实验会话。',
+    detail: '当前会话会保留在历史记录中，之后可以从“历史”入口查看或继续。',
+    confirmText: '切换实验',
+    cancelText: '取消'
+  })
+  if (!ok) {
     return
   }
   try {
     await lab.switchExperiment(code)
   } catch (e) {
-    window.alert(e.response?.data?.message || e.message || '切换实验失败')
+    await showAppAlert('切换失败', e.response?.data?.message || e.message || '切换实验失败')
   }
 }
 
 async function onSubmitData(values) {
+  if (currentSessionReadOnly.value) {
+    await showAppAlert('历史会话仅供查看', '已完成的历史会话不能继续提交数据，请新建会话后再操作。')
+    return
+  }
   await lab.submitStepData(values)
 }
 

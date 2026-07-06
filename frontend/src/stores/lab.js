@@ -25,11 +25,74 @@ const WELCOME_MESSAGE = `<div class="welcome-guide">
   <p class="welcome-guide-foot">有疑问随时问我，也可以点击上方推荐问题。</p>
 </div>`
 
+function welcomeChatMessage() {
+  return { role: 'ai', text: WELCOME_MESSAGE, localWelcome: true, ts: 0 }
+}
+
+function mapChatMessage(message) {
+  const imageUrl = message?.imageUrl || ''
+  return {
+    role: message?.role === 'user' ? 'user' : 'ai',
+    text: message?.text || '',
+    image: imageUrl,
+    imageFallback: imageUrl,
+    stepId: message?.stepId,
+    ts: message?.createdAt ? Date.parse(message.createdAt) || Date.now() : Date.now()
+  }
+}
+
+function emitAppAlert(title, message = '') {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('wxz-app-alert', {
+    detail: { title, message }
+  }))
+}
+
+function ellipsis(text, maxLen) {
+  const normalized = String(text || '').trim()
+  if (normalized.length <= maxLen) return normalized
+  return `${normalized.slice(0, maxLen - 1)}…`
+}
+
+function compactQuestion(text) {
+  let plain = String(text || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[#*_>`[\]()]/g, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!plain) return ''
+  if (plain.startsWith('【数据提交】')) return '数据提交纠错'
+  if (plain.startsWith('【仪器采集】')) return '仪器采集纠错'
+  if (plain === '请分析上传的实验图片。' || plain === '请分析上传的实验图片') return '实验图片分析'
+  plain = plain.replace(/^(请问|老师|物小智|我想问一下|想问一下|帮我看看|请帮我|请|帮我)/, '').trim()
+  const stops = ['？', '?', '。', '；', ';', '\n']
+    .map((char) => plain.indexOf(char))
+    .filter((index) => index >= 0)
+  if (stops.length) {
+    plain = plain.slice(0, Math.min(...stops)).trim()
+  }
+  return ellipsis(plain, 12)
+}
+
+function buildHistoryTitleFromMessages(messages = []) {
+  const parts = []
+  for (const msg of messages) {
+    if (msg?.role !== 'user') continue
+    const title = compactQuestion(msg.text)
+    if (title && !parts.includes(title)) parts.push(title)
+    if (parts.length >= 3) break
+  }
+  return ellipsis(parts.join('、'), 24)
+}
+
 export const useLabStore = defineStore('lab', {
   state: () => ({
     experiments: [],
     experiment: null,
     session: null,
+    sessionHistory: [],
+    sessionHistoryLoading: false,
     activeStep: 1,
     imageUrl: '',
     imagePreview: '',
@@ -154,6 +217,72 @@ export const useLabStore = defineStore('lab', {
       const { data } = await experimentApi.get(code)
       this.experiment = data
     },
+    async loadSessionHistory(experimentCode = '') {
+      this.sessionHistoryLoading = true
+      try {
+        const params = experimentCode ? { experimentCode } : {}
+        const { data } = await sessionApi.list(params)
+        this.sessionHistory = data || []
+        this.updateCurrentSessionHistoryTitle()
+        await this.hydrateMissingHistoryTitles()
+        return this.sessionHistory
+      } finally {
+        this.sessionHistoryLoading = false
+      }
+    },
+    async hydrateMissingHistoryTitles() {
+      const missing = this.sessionHistory
+        .filter((item) => item?.id && !item.historyTitle)
+        .slice(0, 20)
+      if (!missing.length) return
+
+      const titles = await Promise.all(missing.map(async (item) => {
+        if (item.id === this.session?.id) {
+          return [item.id, buildHistoryTitleFromMessages(this.messages)]
+        }
+        try {
+          const { data } = await sessionApi.messages(item.id)
+          return [item.id, buildHistoryTitleFromMessages((data || []).map(mapChatMessage))]
+        } catch {
+          return [item.id, '']
+        }
+      }))
+
+      const titleById = new Map(titles.filter(([, title]) => title))
+      if (!titleById.size) return
+      this.sessionHistory = this.sessionHistory.map((item) => {
+        const title = titleById.get(item.id)
+        return title ? { ...item, historyTitle: title } : item
+      })
+    },
+    updateCurrentSessionHistoryTitle() {
+      if (!this.session?.id) return
+      const title = buildHistoryTitleFromMessages(this.messages)
+      if (!title) return
+
+      const current = { ...this.session, historyTitle: title }
+      const index = this.sessionHistory.findIndex((item) => item.id === this.session.id)
+      if (index >= 0) {
+        this.sessionHistory = this.sessionHistory.map((item, i) =>
+          i === index ? { ...item, historyTitle: item.historyTitle || title } : item
+        )
+        return
+      }
+
+      const sameExperiment = !this.experiment?.code || current.experimentCode === this.experiment.code
+      if (sameExperiment) {
+        this.sessionHistory = [current, ...this.sessionHistory]
+      }
+    },
+    async getLatestActiveSession(experimentCode) {
+      try {
+        const { data } = await sessionApi.latest(experimentCode)
+        return data || null
+      } catch (e) {
+        if (e.response?.status === 404) return null
+        throw e
+      }
+    },
     async loadBenchCamera() {
       try {
         const { data } = await systemApi.benchCamera()
@@ -182,14 +311,48 @@ export const useLabStore = defineStore('lab', {
       }
     },
     async startSession(experimentCode, studentName, studentClass = '') {
+      this.stopEnvTimer()
       const { data } = await sessionApi.start({ experimentCode, studentName, studentClass })
       this.session = data
       this.activeStep = 1
       this.resetLabUi()
       await this.loadSessionData()
-      this.pushAi(WELCOME_MESSAGE)
+      this.messages = [welcomeChatMessage()]
       if (this.useDeviceData) {
         await this.prepareDeviceStep()
+      }
+      this.loadSessionHistory(experimentCode).catch(() => {})
+    },
+    async resumeSession(sessionOrId) {
+      this.stopEnvTimer()
+      const session = typeof sessionOrId === 'object'
+        ? sessionOrId
+        : (await sessionApi.get(sessionOrId)).data
+      if (!session?.id) return false
+
+      if (session.experimentCode && session.experimentCode !== this.experiment?.code) {
+        await this.loadExperiment(session.experimentCode)
+        localStorage.setItem('wxz_exp', session.experimentCode)
+      }
+
+      this.resetLabUi()
+      this.session = session
+      this.activeStep = session.activeStep || 1
+      await this.loadSessionData()
+      await this.loadMessages()
+      if (this.useDeviceData && session.status === 'ACTIVE') {
+        await this.prepareDeviceStep()
+      }
+      this.loadSessionHistory(session.experimentCode || '').catch(() => {})
+      return true
+    },
+    async loadMessages() {
+      if (!this.session?.id) return
+      try {
+        const { data } = await sessionApi.messages(this.session.id)
+        this.messages = [welcomeChatMessage(), ...(data || []).map(mapChatMessage)]
+      } catch {
+        this.messages = [welcomeChatMessage()]
       }
     },
     resetLabUi() {
@@ -568,6 +731,7 @@ export const useLabStore = defineStore('lab', {
         .join('，')
       const prefix = fromDevice ? '【仪器采集】' : '【数据提交】'
       this.pushUser(`${prefix}${stepTitle}\n${summary || '(空)'}`)
+      this.updateCurrentSessionHistoryTitle()
 
       const aiIndex = this.messages.length
       this.messages.push({ role: 'ai', text: '', streaming: true, ts: Date.now() })
@@ -591,6 +755,7 @@ export const useLabStore = defineStore('lab', {
           feedback
         }
         this.session = (await sessionApi.get(this.session.id)).data
+        this.loadSessionHistory(this.experiment?.code || '').catch(() => {})
         return true
       } catch (e) {
         this.messages[aiIndex].streaming = false
@@ -704,6 +869,7 @@ export const useLabStore = defineStore('lab', {
     },
     async sendMessage(userMessage) {
       if (!this.session?.id || this.loadingAssist || this.uploadingImage) return false
+      if (this.session.status === 'FINISHED') return false
 
       const text = (userMessage || '').trim()
       const imageUrl = this.readyImageUrl
@@ -711,10 +877,11 @@ export const useLabStore = defineStore('lab', {
 
       if (!text && !imageUrl) {
         if (hasPreview) {
-          window.alert(
+          emitAppAlert(
+            this.uploadError ? '图片上传失败' : '图片仍在上传',
             this.uploadError
-              ? `图片上传失败：${this.uploadError}\n请点「更换图片」重新上传。`
-              : '图片尚未上传完成，请等待上传结束后再发送'
+              ? `图片上传失败：${this.uploadError}\n请点击“更换图片”重新上传。`
+              : '图片尚未上传完成，请等待上传结束后再发送。'
           )
         }
         return false
@@ -730,6 +897,7 @@ export const useLabStore = defineStore('lab', {
       const prompt = text || (hadImage ? '请分析上传的实验图片。' : '')
 
       this.pushUser(prompt, hadImage ? displayImage : '', hadImage ? imageUrl : '')
+      this.updateCurrentSessionHistoryTitle()
       this.clearComposerImage()
 
       const aiIndex = this.messages.length
@@ -802,6 +970,7 @@ export const useLabStore = defineStore('lab', {
       if (!abortCtrl.signal.aborted && this.session?.id) {
         sessionApi.get(this.session.id).then(({ data }) => {
           this.session = data
+          this.loadSessionHistory(this.experiment?.code || '').catch(() => {})
         }).catch(() => {})
       }
       return true
@@ -896,6 +1065,7 @@ export const useLabStore = defineStore('lab', {
       this.session = data
       this.stopEnvTimer()
       const { data: report } = await sessionApi.report(this.session.id)
+      this.loadSessionHistory(this.experiment?.code || '').catch(() => {})
       if (report && (!report.envLogs?.length) && this.envLogs.length) {
         report.envLogs = this.envLogs.map((l, i) => ({
           id: i,

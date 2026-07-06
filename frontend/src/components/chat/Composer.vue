@@ -7,6 +7,7 @@
         type="button"
         class="px-2.5 py-1 rounded-full text-[11px] text-ink-muted bg-white hover:text-brand-700 border border-line-soft hover:border-brand-200 hover:bg-brand-50/40 transition-all btn-active-scale max-w-full truncate"
         :title="s"
+        :disabled="readOnly"
         @click="onSuggestion(s)"
       >
         {{ s }}
@@ -30,6 +31,7 @@
         rows="2"
         placeholder="向物小智询问实验操作问题…（Enter 发送，Shift+Enter 换行）"
         class="w-full bg-transparent border-none text-[13px] text-ink-base outline-none resize-none placeholder:text-ink-faint leading-relaxed"
+        :disabled="readOnly"
         @keydown="onKeydown"
       />
       <div class="flex justify-between items-center mt-1.5 gap-2">
@@ -38,7 +40,7 @@
             type="button"
             class="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-ink-muted hover:text-brand-600 rounded-md hover:bg-brand-50 transition-all btn-active-scale shrink-0"
             title="上传附件求助"
-            :disabled="uploadingImage"
+            :disabled="uploadingImage || readOnly"
             @click="triggerUpload"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
@@ -48,7 +50,7 @@
             type="button"
             class="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-ink-muted hover:text-brand-600 rounded-md hover:bg-brand-50 transition-all btn-active-scale shrink-0 disabled:opacity-50"
             title="使用平板摄像头拍照求助"
-            :disabled="uploadingImage"
+            :disabled="uploadingImage || readOnly"
             @click="triggerCapture"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
@@ -92,7 +94,8 @@ const props = defineProps({
   uploadingImage: { type: Boolean, default: false },
   imagePreview: { type: String, default: '' },
   imageReady: { type: Boolean, default: false },
-  suggestions: { type: Array, default: () => [] }
+  suggestions: { type: Array, default: () => [] },
+  readOnly: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clear-image'])
@@ -102,7 +105,7 @@ const fileInput = ref(null)
 const textareaRef = ref(null)
 
 const canSend = computed(() =>
-  !props.uploadingImage && (input.value.trim().length > 0 || props.imageReady)
+  !props.readOnly && !props.uploadingImage && (input.value.trim().length > 0 || props.imageReady)
 )
 
 const attachHint = computed(() => {
@@ -127,17 +130,17 @@ function onKeydown(e) {
 }
 
 function triggerUpload() {
-  if (props.uploadingImage) return
+  if (props.uploadingImage || props.readOnly) return
   fileInput.value?.click()
 }
 
 function triggerCapture() {
-  if (props.uploadingImage) return
+  if (props.uploadingImage || props.readOnly) return
   emit('capture-image')
 }
 
 function onSuggestion(text) {
-  if (!text || props.loadingAssist) return
+  if (!text || props.loadingAssist || props.readOnly) return
   input.value = text
   nextTick(() => textareaRef.value?.focus())
 }

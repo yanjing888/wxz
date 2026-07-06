@@ -46,4 +46,7 @@ public class LabSession {
     private LocalDateTime startTime = LocalDateTime.now();
 
     private LocalDateTime endTime;
+
+    @Transient
+    private String historyTitle;
 }

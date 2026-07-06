@@ -1,6 +1,7 @@
 package com.wuxiaozhi.controller;
 
 import com.wuxiaozhi.dto.*;
+import com.wuxiaozhi.entity.ChatMessage;
 import com.wuxiaozhi.entity.LabSession;
 import com.wuxiaozhi.dto.device.DeviceStatusDto;
 import com.wuxiaozhi.service.DeviceAcquisitionService;
@@ -16,6 +17,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -39,9 +41,24 @@ public class SessionController {
         return labSessionService.startSession(req, currentUserId(authentication));
     }
 
+    @GetMapping
+    public List<LabSession> list(@RequestParam(required = false) String experimentCode, Authentication authentication) {
+        return labSessionService.listSessions(currentUserId(authentication), experimentCode);
+    }
+
+    @GetMapping("/latest")
+    public LabSession latest(@RequestParam String experimentCode, Authentication authentication) {
+        return labSessionService.getLatestActiveSession(currentUserId(authentication), experimentCode);
+    }
+
     @GetMapping("/{sessionId}")
     public LabSession get(@PathVariable Long sessionId, Authentication authentication) {
         return labSessionService.getSession(sessionId, currentUserId(authentication));
+    }
+
+    @GetMapping("/{sessionId}/messages")
+    public List<ChatMessage> messages(@PathVariable Long sessionId, Authentication authentication) {
+        return labSessionService.getMessages(sessionId, currentUserId(authentication));
     }
 
     @PatchMapping("/{sessionId}/step")

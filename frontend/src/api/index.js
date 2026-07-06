@@ -14,7 +14,10 @@ export const experimentApi = {
 
 export const sessionApi = {
   start: (data) => http.post('/api/sessions', data),
+  list: (params = {}) => http.get('/api/sessions', { params }),
+  latest: (experimentCode) => http.get('/api/sessions/latest', { params: { experimentCode } }),
   get: (id) => http.get(`/api/sessions/${id}`),
+  messages: (id) => http.get(`/api/sessions/${id}/messages`),
   updateStep: (id, stepId) => http.patch(`/api/sessions/${id}/step?stepId=${stepId}`),
   assist: (id, data) => http.post(`/api/sessions/${id}/assist`, data),
   assistStream: (id, data, handlers, signal) =>

@@ -58,6 +58,7 @@ class LabSessionServiceTest {
 
         LabSessionService service = new LabSessionService(
                 sessionRepository,
+                mock(com.wuxiaozhi.repository.ChatMessageRepository.class),
                 mock(CorrectionLogRepository.class),
                 envCheckLogRepository,
                 mock(SessionDataLogRepository.class),
@@ -101,6 +102,7 @@ class LabSessionServiceTest {
 
         LabSessionService service = new LabSessionService(
                 sessionRepository,
+                mock(com.wuxiaozhi.repository.ChatMessageRepository.class),
                 mock(CorrectionLogRepository.class),
                 envCheckLogRepository,
                 mock(SessionDataLogRepository.class),
@@ -159,6 +161,7 @@ class LabSessionServiceTest {
 
         LabSessionService service = new LabSessionService(
                 sessionRepository,
+                mock(com.wuxiaozhi.repository.ChatMessageRepository.class),
                 mock(CorrectionLogRepository.class),
                 mock(EnvCheckLogRepository.class),
                 mock(SessionDataLogRepository.class),

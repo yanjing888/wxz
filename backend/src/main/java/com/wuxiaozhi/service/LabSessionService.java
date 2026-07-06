@@ -7,10 +7,12 @@ import com.wuxiaozhi.dto.experiment.ExperimentConfig;
 import com.wuxiaozhi.dto.experiment.ExperimentDifyConfig;
 import com.wuxiaozhi.dto.experiment.MarkDto;
 import com.wuxiaozhi.dto.experiment.StepConfig;
+import com.wuxiaozhi.entity.ChatMessage;
 import com.wuxiaozhi.entity.CorrectionLog;
 import com.wuxiaozhi.entity.EnvCheckLog;
 import com.wuxiaozhi.entity.LabSession;
 import com.wuxiaozhi.entity.SessionDataLog;
+import com.wuxiaozhi.repository.ChatMessageRepository;
 import com.wuxiaozhi.repository.CorrectionLogRepository;
 import com.wuxiaozhi.repository.EnvCheckLogRepository;
 import com.wuxiaozhi.repository.LabSessionRepository;
@@ -40,6 +42,7 @@ public class LabSessionService {
     private static final long GUEST_USER_ID = 0L;
 
     private final LabSessionRepository sessionRepository;
+    private final ChatMessageRepository chatMessageRepository;
     private final CorrectionLogRepository correctionLogRepository;
     private final EnvCheckLogRepository envCheckLogRepository;
     private final ExperimentConfigService experimentConfigService;
@@ -52,6 +55,7 @@ public class LabSessionService {
     private final TransactionTemplate transactionTemplate;
 
     public LabSessionService(LabSessionRepository sessionRepository,
+                             ChatMessageRepository chatMessageRepository,
                              CorrectionLogRepository correctionLogRepository,
                              EnvCheckLogRepository envCheckLogRepository,
                              SessionDataLogRepository sessionDataLogRepository,
@@ -63,6 +67,7 @@ public class LabSessionService {
                              ObjectMapper objectMapper,
                              PlatformTransactionManager transactionManager) {
         this.sessionRepository = sessionRepository;
+        this.chatMessageRepository = chatMessageRepository;
         this.correctionLogRepository = correctionLogRepository;
         this.envCheckLogRepository = envCheckLogRepository;
         this.sessionDataLogRepository = sessionDataLogRepository;
@@ -92,6 +97,26 @@ public class LabSessionService {
         session.setActiveStep(1);
         session.setStatus("ACTIVE");
         return sessionRepository.save(session);
+    }
+
+    public List<LabSession> listSessions(Long userId, String experimentCode) {
+        List<LabSession> sessions;
+        if (experimentCode != null && !experimentCode.isBlank()) {
+            sessions = sessionRepository.findConversationSessionsByUserIdAndExperimentCode(userId, experimentCode.trim());
+        } else {
+            sessions = sessionRepository.findConversationSessionsByUserId(userId);
+        }
+        sessions.forEach(this::attachHistoryTitle);
+        return sessions;
+    }
+
+    public LabSession getLatestActiveSession(Long userId, String experimentCode) {
+        if (experimentCode == null || experimentCode.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "experimentCode is required");
+        }
+        return sessionRepository
+                .findFirstByUserIdAndExperimentCodeAndStatusOrderByStartTimeDesc(userId, experimentCode.trim(), "ACTIVE")
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No active session"));
     }
 
     public LabSession getSession(Long sessionId) {
@@ -126,6 +151,85 @@ public class LabSessionService {
     public Map<String, Object> getSessionData(Long sessionId, Long userId) {
         getSession(sessionId, userId);
         return getSessionDataBody(sessionId);
+    }
+
+    public List<ChatMessage> getMessages(Long sessionId, Long userId) {
+        getSession(sessionId, userId);
+        return chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+    }
+
+    private void attachHistoryTitle(LabSession session) {
+        List<ChatMessage> firstQuestions = chatMessageRepository.findTop3BySessionIdAndRoleOrderByCreatedAtAsc(session.getId(), "user");
+        session.setHistoryTitle(buildHistoryTitle(firstQuestions));
+    }
+
+    private String buildHistoryTitle(List<ChatMessage> questions) {
+        if (questions == null || questions.isEmpty()) {
+            return "";
+        }
+        List<String> parts = questions.stream()
+                .map(ChatMessage::getText)
+                .map(this::compactQuestion)
+                .filter(s -> !s.isBlank())
+                .distinct()
+                .limit(3)
+                .toList();
+        if (parts.isEmpty()) {
+            return "";
+        }
+        return ellipsis(String.join("、", parts), 24);
+    }
+
+    private String compactQuestion(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String plain = text
+                .replaceAll("<[^>]+>", " ")
+                .replaceAll("[#*_>`\\[\\]()]", "")
+                .replaceAll("https?://\\S+", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (plain.startsWith("【数据提交】")) {
+            return "数据提交纠错";
+        }
+        if ("请分析上传的实验图片。".equals(plain) || "请分析上传的实验图片".equals(plain)) {
+            return "实验图片分析";
+        }
+        plain = plain.replaceFirst("^(请问|老师|物小智|我想问一下|想问一下|帮我看看|请帮我|请|帮我)", "").trim();
+        int splitAt = firstPositive(
+                plain.indexOf('？'),
+                plain.indexOf('?'),
+                plain.indexOf('。'),
+                plain.indexOf('；'),
+                plain.indexOf(';'),
+                plain.indexOf('\n')
+        );
+        if (splitAt >= 0) {
+            plain = plain.substring(0, splitAt).trim();
+        }
+        return ellipsis(plain, 12);
+    }
+
+    private int firstPositive(int... values) {
+        int best = -1;
+        for (int value : values) {
+            if (value >= 0 && (best < 0 || value < best)) {
+                best = value;
+            }
+        }
+        return best;
+    }
+
+    private String ellipsis(String text, int maxLen) {
+        if (text == null) {
+            return "";
+        }
+        String normalized = text.trim();
+        if (normalized.length() <= maxLen) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLen - 1) + "…";
     }
 
     private Map<String, Object> getSessionDataBody(Long sessionId) {
@@ -202,6 +306,12 @@ public class LabSessionService {
 
         session.setHelpCount(session.getHelpCount() + 1);
         sessionRepository.save(session);
+
+        String submittedText = "【数据提交】" + log.getStepTitle() + "\n" + values.entrySet().stream()
+                .map(e -> e.getKey() + ": " + e.getValue())
+                .collect(Collectors.joining("；"));
+        saveChatMessage(sessionId, "user", stepId, submittedText, null);
+        saveChatMessage(sessionId, "ai", stepId, feedback, null);
 
         if ("data_correction".equals(assist.getType()) || !validation.isOk() || !validation.getWarnings().isEmpty()) {
             CorrectionLog correction = new CorrectionLog();
@@ -506,6 +616,19 @@ public class LabSessionService {
             }
             correctionLogRepository.save(log);
         }
+
+        saveChatMessage(sessionId, "user", prepare.session().getActiveStep(), prepare.userMessage(), req.getImageUrl());
+        saveChatMessage(sessionId, "ai", prepare.session().getActiveStep(), resp.getFeedback(), null);
+    }
+
+    private void saveChatMessage(Long sessionId, String role, int stepId, String text, String imageUrl) {
+        ChatMessage message = new ChatMessage();
+        message.setSessionId(sessionId);
+        message.setRole(role);
+        message.setStepId(stepId);
+        message.setText(text != null ? text : "");
+        message.setImageUrl(imageUrl != null ? imageUrl : "");
+        chatMessageRepository.save(message);
     }
 
     private record AssistPrepare(LabSession session, ExperimentConfig experiment, String userMessage,
