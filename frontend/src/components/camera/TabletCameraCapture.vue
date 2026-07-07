@@ -8,7 +8,6 @@
         <header class="flex items-center justify-between gap-3 border-b border-line-soft px-4 py-3">
           <div class="min-w-0">
             <h2 class="text-[15px] font-bold text-ink-strong">拍照上传</h2>
-            <p class="mt-0.5 truncate text-[11px] text-ink-muted">{{ targetLabel }}</p>
           </div>
           <button
             type="button"
@@ -54,7 +53,7 @@
 
         <footer class="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
           <p class="text-[11px] text-ink-muted">
-            {{ pendingFile ? '请确认照片清晰后使用，也可以重拍。' : '系统相机会优先使用平板后置摄像头，拍完后会回到这里预览确认。' }}
+            {{ pendingFile ? '请确认照片清晰后使用，也可以重拍。' : '拍完后会回到这里预览确认。' }}
           </p>
           <div class="flex items-center gap-2">
             <button
@@ -107,8 +106,7 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 const props = defineProps({
-  visible: { type: Boolean, default: false },
-  targetLabel: { type: String, default: '实验台画面' }
+  visible: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['close', 'captured'])

@@ -89,7 +89,8 @@
             type="button"
             role="switch"
             :aria-checked="envCheckEnabled"
-            :title="envCheckEnabled ? '已开启自动巡检（约 1 分钟 / 次），点击关闭' : '已关闭自动巡检，点击开启'"
+            :title="envToggleTitle"
+            :disabled="!envCheckAvailable"
             class="group flex items-center gap-1.5 px-1.5 py-0.5 rounded-full border border-line-soft bg-white hover:border-line-strong transition-colors btn-active-scale shrink-0"
             @click="$emit('toggle-env', !envCheckEnabled)"
           >
@@ -119,7 +120,7 @@
           <button
             type="button"
             class="flex-1 px-2 py-1 rounded-lg border border-line-soft bg-white text-ink-base hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 btn-active-scale text-[10px] font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-1"
-            :disabled="envCheckRunning"
+            :disabled="envCheckRunning || !envCheckAvailable"
             @click="manualCheck"
           >
             <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -167,6 +168,7 @@ const props = defineProps({
   envHint: { type: String, default: '暂无异常' },
   envLogs: { type: Array, default: () => [] },
   envCheckRunning: { type: Boolean, default: false },
+  envCheckAvailable: { type: Boolean, default: true },
   benchCamera: { type: Object, default: null }
 })
 
@@ -189,8 +191,14 @@ const configuredCamera = computed(() => {
 })
 
 const displayHint = computed(() => {
+  if (!props.envCheckAvailable) return 'Dify 安全监测服务不可用'
   if (!props.envCheckEnabled) return '巡检已暂停，可手动立即检查'
   return briefSummary(props.envHint) || '暂无异常'
+})
+
+const envToggleTitle = computed(() => {
+  if (!props.envCheckAvailable) return 'Dify 安全监测服务不可用，无法开启自动巡检'
+  return props.envCheckEnabled ? '已开启自动巡检（约 1 分钟 / 次），点击关闭' : '已关闭自动巡检，点击开启'
 })
 
 const envLevelLabel = computed(() => (props.envLevel === 'NA' ? '不可用' : props.envLevel))
@@ -412,6 +420,7 @@ async function ensureCameraReady() {
 }
 
 async function manualCheck() {
+  if (!props.envCheckAvailable) return
   flash.value = true
   setTimeout(() => { flash.value = false }, 320)
   const ready = await ensureCameraReady()
@@ -423,7 +432,7 @@ async function manualCheck() {
 watch(
   () => props.envCheckEnabled,
   (enabled) => {
-    if (enabled) ensureCameraReady()
+    if (enabled && props.envCheckAvailable) ensureCameraReady()
   },
   { immediate: true }
 )

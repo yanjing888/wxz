@@ -6,8 +6,10 @@ import com.wuxiaozhi.dto.AssistResponse;
 import com.wuxiaozhi.dto.EnvCheckResponse;
 import com.wuxiaozhi.dto.experiment.ExperimentConfig;
 import com.wuxiaozhi.dto.experiment.StepConfig;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetSocketAddress;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -79,6 +81,84 @@ class DifyServiceTest {
         assertThat(response.getSummary()).contains("暂时无法连接Dify服务");
         assertThat(response.getSummary()).contains("不能完成本次安全巡检");
         assertThat(response.getSummary()).doesNotContain("示意");
+    }
+
+    @Test
+    void statusIsUnavailableWhenConfiguredButBaseUrlIsBlank() {
+        DifyProperties properties = new DifyProperties();
+        properties.setBaseUrl("");
+        properties.setApiKey("app-key");
+        DifyService service = new DifyService(properties, new ObjectMapper(), mock(FileStorageService.class));
+
+        Map<String, Object> status = service.status();
+
+        assertThat(status).containsEntry("configured", true);
+        assertThat(status).containsEntry("reachable", false);
+        assertThat(status).containsEntry("available", false);
+        assertThat((String) status.get("reason")).contains("Dify base URL");
+        assertThat(workflowStatus(status, "env-check")).containsEntry("available", false);
+    }
+
+    @Test
+    void statusIsAvailableOnlyAfterDifyResponds() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/parameters", exchange -> {
+            String auth = exchange.getRequestHeaders().getFirst("Authorization");
+            byte[] body = "{}".getBytes();
+            int code = "Bearer app-key".equals(auth) ? 200 : 401;
+            exchange.sendResponseHeaders(code, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+        try {
+            DifyProperties properties = new DifyProperties();
+            properties.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
+            properties.setApiKey("app-key");
+            DifyService service = new DifyService(properties, new ObjectMapper(), mock(FileStorageService.class));
+
+            Map<String, Object> status = service.status();
+
+            assertThat(status).containsEntry("configured", true);
+            assertThat(status).containsEntry("reachable", true);
+            assertThat(status).containsEntry("available", true);
+            assertThat(workflowStatus(status, "env-check")).containsEntry("available", true);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void envCheckWorkflowStatusUsesEnvCheckApiKey() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/parameters", exchange -> {
+            String auth = exchange.getRequestHeaders().getFirst("Authorization");
+            byte[] body = "{}".getBytes();
+            int code = "Bearer env-key".equals(auth) ? 200 : 401;
+            exchange.sendResponseHeaders(code, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+        try {
+            DifyProperties properties = new DifyProperties();
+            properties.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
+            properties.setApiKey("text-key");
+            properties.setWorkflows(Map.of("env-check", "env-key"));
+            DifyService service = new DifyService(properties, new ObjectMapper(), mock(FileStorageService.class));
+
+            Map<String, Object> status = service.status();
+
+            assertThat(workflowStatus(status, "text-assist")).containsEntry("available", false);
+            assertThat(workflowStatus(status, "env-check")).containsEntry("available", true);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> workflowStatus(Map<String, Object> status, String workflowKey) {
+        return ((Map<String, Map<String, Object>>) status.get("workflowStatuses")).get(workflowKey);
     }
 
     private DifyService unavailableDifyService() {

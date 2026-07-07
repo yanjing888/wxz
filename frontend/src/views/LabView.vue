@@ -17,6 +17,8 @@
       :experiment-code="lab.experiment?.code || ''"
       :student-name="lab.session?.studentName || '学生'"
       :env-level="lab.envLevel"
+      :dify-status="lab.difyStatus"
+      :dify-status-loading="lab.difyStatusLoading"
       :switching="lab.switchingExperiment"
       @quick-stats="showQuickStats = true"
       @report="openReport"
@@ -101,6 +103,7 @@
           :env-hint="lab.envHint"
           :env-logs="lab.envLogs"
           :env-check-running="lab.envCheckRunning"
+          :env-check-available="lab.envCheckAvailable"
           :bench-camera="lab.benchCamera"
           @toggle-env="lab.toggleEnvCheck"
           @env-check="(blob) => lab.runEnvCheck(blob)"
@@ -169,7 +172,6 @@
     />
     <TabletCameraCapture
       :visible="tabletCameraOpen"
-      :target-label="tabletCameraTarget === 'zone' ? '拍摄实验台画面用于左侧视觉纠错' : '拍摄实验台画面作为问答附件'"
       @close="tabletCameraOpen = false"
       @captured="onTabletCameraCaptured"
     />
@@ -259,7 +261,10 @@ async function bootstrap() {
   booting.value = true
   bootError.value = ''
   try {
-    await lab.loadBenchCamera()
+    await Promise.all([
+      lab.loadBenchCamera(),
+      lab.loadDifyStatus()
+    ])
     if (!lab.session?.id) {
       await lab.loadExperiments()
       const code = localStorage.getItem('wxz_exp') || 'newton_rings'
@@ -272,9 +277,11 @@ async function bootstrap() {
         await lab.startSession(code, name, '')
       }
     }
+    lab.startDifyStatusTimer()
     lab.startEnvTimer()
   } catch (e) {
     bootError.value = e.response?.data?.message || e.message || '无法连接后端，请先启动 backend（mvn spring-boot:run）'
+    lab.stopDifyStatusTimer()
     lab.stopEnvTimer()
   } finally {
     booting.value = false
@@ -329,6 +336,15 @@ function onGlobalAppAlert(event) {
   showAppAlert(detail.title || '提示', detail.message || '')
 }
 
+async function onVisibilityChange() {
+  if (document.hidden) {
+    lab.stopDifyStatusTimer()
+    return
+  }
+  await lab.loadDifyStatus({ silent: true })
+  lab.startDifyStatusTimer()
+}
+
 function readStoredWorkspaceWidth() {
   const raw = Number(localStorage.getItem(WORKSPACE_WIDTH_KEY))
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_WORKSPACE_LEFT_WIDTH
@@ -366,6 +382,7 @@ function startWorkspaceResize(event) {
 }
 
 function logout() {
+  lab.stopDifyStatusTimer()
   lab.stopEnvTimer()
   lab.teardownDevice()
   lab.$reset()
@@ -375,6 +392,7 @@ function logout() {
 
 onMounted(() => {
   window.addEventListener('wxz-app-alert', onGlobalAppAlert)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   lab.setEnvCaptureFn(() => benchCam.value?.captureFrame?.())
   lab.setEnvEnsureCamFn(() => benchCam.value?.ensureCameraReady?.())
   bootstrap()
@@ -382,6 +400,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('wxz-app-alert', onGlobalAppAlert)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  lab.stopDifyStatusTimer()
   lab.stopEnvTimer()
   lab.teardownDevice()
 })

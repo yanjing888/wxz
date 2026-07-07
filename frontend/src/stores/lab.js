@@ -18,12 +18,16 @@ function briefEnvSummary(text, maxLen = 80) {
 
 const WELCOME_MESSAGE = `<div class="welcome-guide">
   <p class="welcome-guide-hello">你好，我是物小智。</p>
-  <p class="welcome-guide-title">我会这样协助你：</p>
-  <div class="welcome-guide-row"><strong>数据采集</strong><span>连接仪器自动采集，并提交纠错。</span></div>
-  <div class="welcome-guide-row"><strong>现场确认</strong><span>需要照片时，直接上传实验台照片。</span></div>
-  <div class="welcome-guide-row"><strong>操作说明</strong><span>右上角「本步骤教程」可查看当前步骤。</span></div>
-  <p class="welcome-guide-foot">有疑问随时问我，也可以点击上方推荐问题。</p>
+  <p class="welcome-guide-title">我会围绕你当前的实验步骤，帮你把问题讲清楚、把操作做稳。</p>
+  <div class="welcome-guide-row"><strong>遇到卡点</strong><span>直接描述现象，我会结合当前步骤给出排查思路。</span></div>
+  <div class="welcome-guide-row"><strong>需要判断</strong><span>可以上传照片或数据，我会一起分析。</span></div>
+  <div class="welcome-guide-row"><strong>继续推进</strong><span>想确认下一步、整理结论或生成报告，也可以直接问我。</span></div>
+  <p class="welcome-guide-foot">你也可以点击上方推荐问题开始。</p>
 </div>`
+
+const DIFY_STATUS_UNAVAILABLE_INTERVAL = 2 * 60 * 1000
+const DIFY_STATUS_AVAILABLE_INTERVAL = 5 * 60 * 1000
+const DIFY_STATUS_CRITICAL_STALE_MS = 60 * 1000
 
 function welcomeChatMessage() {
   return { role: 'ai', text: WELCOME_MESSAGE, localWelcome: true, ts: 0 }
@@ -107,6 +111,11 @@ export const useLabStore = defineStore('lab', {
     envLogs: [],
     envCheckRunning: false,
     benchCamera: null,
+    difyStatus: null,
+    difyStatusLoading: false,
+    difyStatusCheckedAt: 0,
+    difyStatusTimer: null,
+    _difyStatusPromise: null,
     envTimer: null,
     _envCaptureFn: null,
     tutViewCount: 0,
@@ -201,6 +210,12 @@ export const useLabStore = defineStore('lab', {
       const raw = state.composerImageUrl
       if (!raw || !raw.startsWith('/uploads/')) return ''
       return raw.split('?')[0]
+    },
+    envCheckDifyStatus(state) {
+      return state.difyStatus?.workflowStatuses?.['env-check'] || null
+    },
+    envCheckAvailable() {
+      return this.envCheckDifyStatus?.available === true
     }
   },
   actions: {
@@ -291,6 +306,59 @@ export const useLabStore = defineStore('lab', {
         this.benchCamera = null
       }
     },
+    async loadDifyStatus({ silent = false } = {}) {
+      if (this._difyStatusPromise) return this._difyStatusPromise
+      if (!silent) this.difyStatusLoading = true
+      this._difyStatusPromise = (async () => {
+        try {
+          const { data } = await systemApi.difyStatus()
+          this.difyStatus = data || null
+        } catch {
+          this.difyStatus = null
+        } finally {
+          this.difyStatusCheckedAt = Date.now()
+          if (!silent) this.difyStatusLoading = false
+          this._difyStatusPromise = null
+          this.applyEnvDifyStatus()
+        }
+        return this.difyStatus
+      })()
+      return this._difyStatusPromise
+    },
+    async refreshDifyStatusIfStale(maxAgeMs = DIFY_STATUS_CRITICAL_STALE_MS) {
+      if (Date.now() - this.difyStatusCheckedAt <= maxAgeMs) return this.difyStatus
+      return this.loadDifyStatus({ silent: true })
+    },
+    startDifyStatusTimer() {
+      this.stopDifyStatusTimer()
+      if (typeof document !== 'undefined' && document.hidden) return
+      const available = this.difyStatus?.available === true
+      const delay = available ? DIFY_STATUS_AVAILABLE_INTERVAL : DIFY_STATUS_UNAVAILABLE_INTERVAL
+      this.difyStatusTimer = setTimeout(async () => {
+        await this.loadDifyStatus({ silent: true })
+        this.startDifyStatusTimer()
+      }, delay)
+    },
+    stopDifyStatusTimer() {
+      if (this.difyStatusTimer) {
+        clearTimeout(this.difyStatusTimer)
+        this.difyStatusTimer = null
+      }
+    },
+    applyEnvDifyStatus() {
+      if (this.envCheckAvailable) {
+        if (this.envLevel === 'NA') {
+          this.envLevel = 'L0'
+          this.envHint = '暂无异常'
+        }
+        return
+      }
+      this.stopEnvTimer()
+      this.envCheckEnabled = false
+      this.envLevel = 'NA'
+      this.envHint = 'Dify 安全监测服务不可用'
+      this.envSuggestion = ''
+    },
     async switchExperiment(experimentCode) {
       const code = (experimentCode || '').trim()
       if (!code || code === this.experiment?.code) return false
@@ -372,6 +440,7 @@ export const useLabStore = defineStore('lab', {
       this.dataSubmitErrors = []
       this.dataPanelOverride = {}
       this.teardownDevice()
+      this.applyEnvDifyStatus()
     },
     toggleDataPanel(forceOpen) {
       if (!this.hasDataPanel) return
@@ -870,6 +939,7 @@ export const useLabStore = defineStore('lab', {
     async sendMessage(userMessage) {
       if (!this.session?.id || this.loadingAssist || this.uploadingImage) return false
       if (this.session.status === 'FINISHED') return false
+      await this.refreshDifyStatusIfStale()
 
       const text = (userMessage || '').trim()
       const imageUrl = this.readyImageUrl
@@ -989,6 +1059,11 @@ export const useLabStore = defineStore('lab', {
     },
     async runEnvCheck(snapshotUrlOrBlob = '') {
       if (!this.session?.id || this.envCheckRunning) return
+      await this.refreshDifyStatusIfStale()
+      if (!this.envCheckAvailable) {
+        this.applyEnvDifyStatus()
+        return
+      }
       this.envCheckRunning = true
       try {
         let snapshotUrl = typeof snapshotUrlOrBlob === 'string' ? snapshotUrlOrBlob : ''
@@ -1038,6 +1113,10 @@ export const useLabStore = defineStore('lab', {
     },
     startEnvTimer() {
       this.stopEnvTimer()
+      if (!this.envCheckAvailable) {
+        this.applyEnvDifyStatus()
+        return
+      }
       if (!this.envCheckEnabled) return
       this.envTimer = setInterval(() => this.runEnvCheckWithCapture(), 60000)
     },
@@ -1048,6 +1127,10 @@ export const useLabStore = defineStore('lab', {
       }
     },
     toggleEnvCheck(enabled) {
+      if (enabled && !this.envCheckAvailable) {
+        this.applyEnvDifyStatus()
+        return
+      }
       this.envCheckEnabled = enabled
       if (enabled) this.startEnvTimer()
       else this.stopEnvTimer()

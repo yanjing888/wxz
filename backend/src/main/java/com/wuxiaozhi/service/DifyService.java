@@ -35,6 +35,7 @@ import java.util.function.Consumer;
 public class DifyService {
 
     private static final Logger log = LoggerFactory.getLogger(DifyService.class);
+    private static final int STATUS_CHECK_TIMEOUT_MS = 1_500;
 
     private final DifyProperties difyProperties;
     private final ObjectMapper objectMapper;
@@ -309,6 +310,85 @@ public class DifyService {
 
     public String getAppMode() {
         return difyProperties.getAppMode();
+    }
+
+    public Map<String, Object> status() {
+        boolean configured = difyProperties.isConfigured();
+        Map<String, Boolean> workflowConfigured = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> workflowStatuses = new LinkedHashMap<>();
+        for (String key : List.of("vision-correction", "text-assist", "env-check", "report-generate")) {
+            boolean canRun = difyProperties.canRun(key);
+            workflowConfigured.put(key, canRun);
+            workflowStatuses.put(key, checkWorkflowStatus(key));
+        }
+
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("configured", configured);
+        status.put("appMode", difyProperties.getAppMode());
+        status.put("baseUrl", difyProperties.getBaseUrl());
+        status.put("configFile", "config/dify.env");
+        status.put("workflows", workflowConfigured);
+        status.put("workflowStatuses", workflowStatuses);
+        boolean anyReachable = workflowStatuses.values().stream()
+                .anyMatch(item -> Boolean.TRUE.equals(item.get("reachable")));
+        boolean anyAvailable = workflowStatuses.values().stream()
+                .anyMatch(item -> Boolean.TRUE.equals(item.get("available")));
+        status.put("reachable", anyReachable);
+        status.put("available", anyAvailable);
+        status.put("reason", anyAvailable ? "" : workflowStatuses.values().stream()
+                .map(item -> String.valueOf(item.getOrDefault("reason", "")))
+                .filter(reason -> !reason.isBlank())
+                .findFirst()
+                .orElse("Dify service is unavailable"));
+        return status;
+    }
+
+    private Map<String, Object> checkWorkflowStatus(String workflowKey) {
+        Map<String, Object> status = new LinkedHashMap<>();
+        boolean configured = difyProperties.canRun(workflowKey);
+        status.put("configured", configured);
+        String baseUrl = difyProperties.getBaseUrl() != null ? difyProperties.getBaseUrl().trim() : "";
+        if (!configured) {
+            status.put("reachable", false);
+            status.put("available", false);
+            status.put("reason", "Dify API key is not configured for " + workflowKey);
+            return status;
+        }
+        if (baseUrl.isBlank()) {
+            status.put("reachable", false);
+            status.put("available", false);
+            status.put("reason", "Dify base URL is not configured");
+            return status;
+        }
+        String apiKey = difyProperties.resolveApiKey(workflowKey);
+        if (apiKey.isBlank()) {
+            status.put("reachable", false);
+            status.put("available", false);
+            status.put("reason", "Dify API key is not configured for " + workflowKey);
+            return status;
+        }
+
+        String url = baseUrl.replaceAll("/$", "") + "/parameters";
+        try {
+            HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(STATUS_CHECK_TIMEOUT_MS);
+            conn.setReadTimeout(STATUS_CHECK_TIMEOUT_MS);
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setRequestProperty("Accept", "application/json");
+            int code = conn.getResponseCode();
+            conn.disconnect();
+            boolean ok = code >= 200 && code < 300;
+            status.put("reachable", ok);
+            status.put("available", ok);
+            status.put("reason", ok ? "" : "Dify responded with HTTP " + code);
+            return status;
+        } catch (Exception e) {
+            status.put("reachable", false);
+            status.put("available", false);
+            status.put("reason", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            return status;
+        }
     }
 
     private boolean canCall(String key) {

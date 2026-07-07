@@ -4,14 +4,19 @@
     <div class="flex items-center gap-2.5 shrink-0">
       <div class="relative">
         <div class="w-9 h-9 brand-gradient rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-brand">智</div>
-        <span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white" />
+        <span
+          class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-white"
+          :class="difyDotClass"
+          :title="difyStatusTitle"
+          :aria-label="difyStatusTitle"
+        />
       </div>
       <span class="text-[14px] font-bold text-ink-strong tracking-tight">物小智</span>
     </div>
 
     <span class="w-px h-7 bg-line-soft shrink-0" />
 
-    <!-- 实验选择 + 状态 -->
+    <!-- 实验选择 + 环境状态 -->
     <div class="flex items-center gap-3 min-w-0 flex-1">
       <ExperimentSelect
         :experiments="experiments"
@@ -20,10 +25,6 @@
         @experiment-change="(code) => $emit('experiment-change', code)"
       />
       <div class="hidden sm:flex items-center gap-2 shrink-0">
-        <span class="chip shrink-0">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          进行中
-        </span>
         <span class="chip shrink-0" :class="envChipClass">
           <span class="w-1.5 h-1.5 rounded-full" :class="envDotClass" />
           环境 {{ envLevelLabel }}
@@ -86,6 +87,8 @@ const props = defineProps({
   experimentCode: { type: String, default: '' },
   studentName: { type: String, default: '--' },
   envLevel: { type: String, default: 'L0' },
+  difyStatus: { type: Object, default: null },
+  difyStatusLoading: { type: Boolean, default: false },
   switching: { type: Boolean, default: false }
 })
 
@@ -113,5 +116,20 @@ const envChipClass = computed(() => {
 const envDotClass = computed(() => {
   const map = { NA: 'bg-slate-400', L0: 'bg-emerald-500', L1: 'bg-amber-500', L2: 'bg-red-500', L3: 'bg-red-500' }
   return map[props.envLevel] || map.L0
+})
+
+const difyAvailable = computed(() => {
+  return props.difyStatus?.available === true
+})
+
+const difyDotClass = computed(() => {
+  if (props.difyStatusLoading || !props.difyStatus) return 'bg-slate-300'
+  return difyAvailable.value ? 'bg-emerald-400' : 'bg-red-400'
+})
+
+const difyStatusTitle = computed(() => {
+  if (props.difyStatusLoading) return '正在检查 Dify 服务状态'
+  if (!props.difyStatus) return 'Dify 服务状态未知'
+  return difyAvailable.value ? 'Dify 服务可用' : 'Dify 服务不可用'
 })
 </script>

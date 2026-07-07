@@ -21,6 +21,7 @@ function assertNotContains(source, unexpected, message) {
 }
 
 const chatBox = read('src/components/chat/ChatBox.vue')
+const labHeader = read('src/components/layout/LabHeader.vue')
 const labStore = read('src/stores/lab.js')
 const markdown = read('src/utils/markdown.js')
 
@@ -79,15 +80,105 @@ assertContains(
 )
 
 assertContains(
+  labStore,
+  '我会围绕你当前的实验步骤',
+  'The welcome message should stay centered on the current experiment instead of fixed feature categories.'
+)
+
+assertContains(
+  labStore,
+  '<strong>遇到卡点</strong>',
+  'The welcome guide should invite students to describe blockers.'
+)
+
+assertContains(
+  labStore,
+  '<strong>需要判断</strong>',
+  'The welcome guide should mention analysis based on uploaded evidence.'
+)
+
+assertContains(
+  labStore,
+  '<strong>继续推进</strong>',
+  'The welcome guide should support moving through the experiment workflow.'
+)
+
+assertContains(
   read('src/styles/main.css'),
   '.welcome-guide-row',
   'Welcome guide rows should have CSS that fills the bubble width.'
+)
+
+assertContains(
+  labHeader,
+  'difyStatus',
+  'The brand status dot should be bound to Dify service status instead of staying decorative.'
+)
+
+assertContains(
+  labHeader,
+  'difyDotClass',
+  'The brand status dot should derive its color from Dify service availability.'
+)
+
+assertContains(
+  labStore,
+  'loadDifyStatus',
+  'The lab store should expose a Dify status loader for the header dot.'
+)
+
+assertContains(
+  labStore,
+  'envCheckAvailable',
+  'The environment status should be tied to the Dify env-check workflow availability.'
+)
+
+assertContains(
+  labStore,
+  "workflowStatuses?.['env-check']",
+  'The environment status should check the safety monitoring Dify workflow specifically.'
+)
+
+assertContains(
+  labStore,
+  'DIFY_STATUS_UNAVAILABLE_INTERVAL',
+  'Dify status polling should check unavailable services more frequently than available services.'
+)
+
+assertContains(
+  labStore,
+  'DIFY_STATUS_AVAILABLE_INTERVAL',
+  'Dify status polling should slow down when services are available.'
+)
+
+assertContains(
+  labStore,
+  'refreshDifyStatusIfStale',
+  'Critical Dify operations should refresh stale status before running.'
 )
 
 assertNotContains(
   labStore,
   '左侧工作区会按步骤引导你操作：',
   'The welcome message should avoid the older wide-card wording.'
+)
+
+assertNotContains(
+  labStore,
+  '<strong>数据采集</strong>',
+  'The welcome message should avoid overly specific feature categories.'
+)
+
+assertNotContains(
+  labStore,
+  '<strong>现场确认</strong>',
+  'The welcome message should avoid overly specific feature categories.'
+)
+
+assertNotContains(
+  labStore,
+  '<strong>操作说明</strong>',
+  'The welcome message should avoid overly specific feature categories.'
 )
 
 assertContains(
