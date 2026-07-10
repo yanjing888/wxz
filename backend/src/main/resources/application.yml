@@ -35,7 +35,7 @@ wuxiaozhi:
     enabled: ${BENCH_CAMERA_ENABLED:true}
     label: 实验台摄像头
     protocol: rtsp
-    rtsp-url: ${BENCH_CAMERA_RTSP_URL:rtsp://admin:admin@192.168.0.15/live/chn=0}
+    rtsp-url: ${BENCH_CAMERA_RTSP_URL:rtsp://admin:admin@${BENCH_CAMERA_IP:188.18.31.195}/live/chn=0}
     browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:/ws/hdl/hlsram/live0.flv}
   experiments:
     config-dir: classpath:experiments/

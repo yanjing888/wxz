@@ -43,7 +43,8 @@ public class SecurityConfig {
                 .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) ->
                         response.sendError(401, "Unauthorized")))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/api/experiments/**", "/api/system/**", "/uploads/**", "/h2-console/**").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/password",
+                                "/api/experiments/**", "/api/system/**", "/uploads/**", "/h2-console/**").permitAll()
                         .anyRequest().authenticated())
                 .headers(h -> h.frameOptions(f -> f.sameOrigin()))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

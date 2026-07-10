@@ -239,6 +239,7 @@ const WORKSPACE_WIDTH_KEY = 'wxz_workspace_left_width'
 const DEFAULT_WORKSPACE_LEFT_WIDTH = 400
 const MIN_WORKSPACE_LEFT_WIDTH = 320
 const workspaceLeftWidth = ref(readStoredWorkspaceWidth())
+let viewActive = true
 
 const workspaceColumns = computed(() => ({
   gridTemplateColumns: `${workspaceLeftWidth.value}px 10px minmax(0, 1fr)`
@@ -261,10 +262,12 @@ async function bootstrap() {
   booting.value = true
   bootError.value = ''
   try {
-    await Promise.all([
-      lab.loadBenchCamera(),
-      lab.loadDifyStatus()
-    ])
+    lab.loadBenchCamera().catch(() => {})
+    lab.loadDifyStatus()
+      .catch(() => null)
+      .finally(() => {
+        if (viewActive) lab.startDifyStatusTimer()
+      })
     if (!lab.session?.id) {
       await lab.loadExperiments()
       const code = localStorage.getItem('wxz_exp') || 'newton_rings'
@@ -277,7 +280,6 @@ async function bootstrap() {
         await lab.startSession(code, name, '')
       }
     }
-    lab.startDifyStatusTimer()
     lab.startEnvTimer()
   } catch (e) {
     bootError.value = e.response?.data?.message || e.message || '无法连接后端，请先启动 backend（mvn spring-boot:run）'
@@ -391,6 +393,7 @@ function logout() {
 }
 
 onMounted(() => {
+  viewActive = true
   window.addEventListener('wxz-app-alert', onGlobalAppAlert)
   document.addEventListener('visibilitychange', onVisibilityChange)
   lab.setEnvCaptureFn(() => benchCam.value?.captureFrame?.())
@@ -399,6 +402,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  viewActive = false
   window.removeEventListener('wxz-app-alert', onGlobalAppAlert)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   lab.stopDifyStatusTimer()

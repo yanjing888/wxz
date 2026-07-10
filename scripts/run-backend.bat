@@ -15,6 +15,7 @@ if defined MAVEN_HOME (
 )
 
 echo Backend port %BACKEND_PORT% (%ROOT%\config\ports.env)
+echo Bench camera IP %BENCH_CAMERA_IP% (%ROOT%\config\ports.env)
 echo Dify base %DIFY_BASE_URL% (%ROOT%\config\dify.env)
 if /I "%MYSQL_ENABLED%"=="true" (
   echo Database MySQL %MYSQL_USER%@%MYSQL_HOST%:%MYSQL_PORT%/%MYSQL_DATABASE% (%ROOT%\config\mysql.env)

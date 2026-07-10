@@ -4,6 +4,7 @@ import { postSse } from './sse'
 export const authApi = {
   register: (data) => http.post('/api/auth/register', data),
   login: (data) => http.post('/api/auth/login', data),
+  me: () => http.get('/api/auth/me'),
   resetPassword: (data) => http.patch('/api/auth/password', data)
 }
 

@@ -7,7 +7,8 @@ const PORTS_FILE = resolve(CONFIG_DIR, 'ports.env')
 
 const DEFAULTS = {
   BACKEND_PORT: 8082,
-  FRONTEND_PORT: 5174
+  FRONTEND_PORT: 5174,
+  BENCH_CAMERA_IP: '188.18.31.195'
 }
 
 export function loadPorts(filePath = PORTS_FILE) {
@@ -21,9 +22,13 @@ export function loadPorts(filePath = PORTS_FILE) {
     const idx = trimmed.indexOf('=')
     if (idx < 0) continue
     const key = trimmed.slice(0, idx).trim()
-    const value = Number(trimmed.slice(idx + 1).trim())
+    const rawValue = trimmed.slice(idx + 1).trim()
+    const value = Number(rawValue)
     if ((key === 'BACKEND_PORT' || key === 'FRONTEND_PORT') && Number.isFinite(value)) {
       ports[key] = value
+    }
+    if (key === 'BENCH_CAMERA_IP' && rawValue) {
+      ports[key] = rawValue
     }
   }
   return ports

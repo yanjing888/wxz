@@ -45,6 +45,8 @@ assertNotContains(
 )
 
 assertContains(viteConfig, 'cameraProxyTarget', 'vite should define a camera proxy target')
+assertContains(viteConfig, 'BENCH_CAMERA_IP', 'vite should read the camera IP from shared local config')
+assertContains(viteConfig, '`ws://${BENCH_CAMERA_IP}`', 'vite should build the WebSocket proxy target from the configured camera IP')
 assertContains(viteConfig, "'/ws'", 'vite should expose the camera WebSocket path at the same origin')
 assertContains(viteConfig, 'ws: true', 'camera proxy should support WebSocket streaming')
 assertNotContains(viteConfig, "rewrite: (path) => path.replace(/^\\/bench-camera-proxy/, '')", 'camera WebSocket proxy should not depend on upgrade path rewriting')
@@ -53,5 +55,10 @@ assertContains(panel, 'resolveBrowserStreamUrl', 'camera panel should normalize 
 assertContains(panel, "url.startsWith('/ws/')", 'camera panel should recognize same-origin camera WebSocket URLs')
 assertContains(panel, 'window.location.protocol === \'https:\' ? \'wss\' : \'ws\'', 'camera panel should choose ws or wss from the page protocol')
 assertContains(panel, 'window.location.host', 'camera panel should use the tablet-visible frontend host for proxied streams')
+assertContains(panel, 'stashMaxSize: 32', 'camera player should use the native page stash limit')
+assertContains(panel, 'maxBackoffMs: 2000', 'camera player should use the native page reconnect limit')
+assertContains(panel, 'deferredBlob: false', 'camera player should avoid deferred WebSocket blobs')
+assertContains(panel, 'startLiveBufferMonitor', 'camera panel should monitor and trim accumulated live buffer')
+assertContains(panel, 'video.playbackRate = 1', 'camera panel should keep normal playback speed')
 
 console.log('bench camera proxy wiring present')

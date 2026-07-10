@@ -3,6 +3,7 @@ package com.wuxiaozhi.controller;
 import com.wuxiaozhi.dto.*;
 import com.wuxiaozhi.service.AuthService;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -28,5 +29,11 @@ public class AuthController {
     @PatchMapping("/password")
     public AuthResponse resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
         return authService.resetPassword(req);
+    }
+
+    @GetMapping("/me")
+    public AuthResponse me(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return authService.currentUser(userId);
     }
 }

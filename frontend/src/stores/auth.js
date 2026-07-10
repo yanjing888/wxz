@@ -6,7 +6,8 @@ export const useAuthStore = defineStore('auth', {
     token: localStorage.getItem('wxz_token') || '',
     userId: localStorage.getItem('wxz_userId') || null,
     username: localStorage.getItem('wxz_username') || '',
-    displayName: localStorage.getItem('wxz_displayName') || ''
+    displayName: localStorage.getItem('wxz_displayName') || '',
+    authChecked: false
   }),
   actions: {
     persist(data) {
@@ -19,6 +20,31 @@ export const useAuthStore = defineStore('auth', {
       localStorage.setItem('wxz_username', data.username)
       localStorage.setItem('wxz_displayName', data.displayName)
       localStorage.removeItem('wxz_class')
+      this.authChecked = true
+    },
+    hydrateUser(data) {
+      this.userId = data.userId
+      this.username = data.username
+      this.displayName = data.displayName
+      localStorage.setItem('wxz_userId', String(data.userId))
+      localStorage.setItem('wxz_username', data.username)
+      localStorage.setItem('wxz_displayName', data.displayName)
+    },
+    async validateSession() {
+      if (!this.token) {
+        this.authChecked = true
+        return false
+      }
+      try {
+        const { data } = await authApi.me()
+        this.hydrateUser(data)
+        this.authChecked = true
+        return true
+      } catch {
+        this.logout()
+        this.authChecked = true
+        return false
+      }
     },
     async register(form) {
       const { data } = await authApi.register(form)
@@ -37,6 +63,7 @@ export const useAuthStore = defineStore('auth', {
       this.userId = null
       this.username = ''
       this.displayName = ''
+      this.authChecked = false
       ;['wxz_token', 'wxz_userId', 'wxz_username', 'wxz_displayName', 'wxz_class'].forEach((k) => localStorage.removeItem(k))
     }
   }

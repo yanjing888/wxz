@@ -182,6 +182,7 @@ const logsOpen = ref(false)
 const isExpanded = ref(false)
 let mediaStream = null
 let flvPlayer = null
+let liveBufferMonitorTimer = null
 
 const configuredCamera = computed(() => {
   const cfg = props.benchCamera || {}
@@ -241,6 +242,7 @@ function resolveBrowserStreamUrl(url) {
 }
 
 function stopMediaTracks() {
+  stopLiveBufferMonitor()
   if (flvPlayer) {
     flvPlayer.pause()
     flvPlayer.unload()
@@ -257,6 +259,28 @@ function stopMediaTracks() {
     videoRef.value.removeAttribute('src')
     videoRef.value.load()
   }
+}
+
+function stopLiveBufferMonitor() {
+  if (liveBufferMonitorTimer) {
+    clearInterval(liveBufferMonitorTimer)
+    liveBufferMonitorTimer = null
+  }
+}
+
+function startLiveBufferMonitor(video) {
+  stopLiveBufferMonitor()
+  liveBufferMonitorTimer = setInterval(() => {
+    if (!video?.buffered?.length || video.currentTime <= 0) return
+
+    const bufferedEnd = video.buffered.end(video.buffered.length - 1)
+    const bufferDuration = bufferedEnd - video.currentTime
+    if (bufferDuration > 1) {
+      // Drop accumulated MSE buffer to the live edge; playback remains at 1x.
+      video.currentTime = Math.max(video.currentTime, bufferedEnd - 0.3)
+    }
+    video.playbackRate = 1
+  }, 500)
 }
 
 async function startCamUi() {
@@ -300,12 +324,27 @@ async function startConfiguredCamera(camera) {
       enableWorker: false,
       enableStashBuffer: false,
       stashInitialSize: 32,
+      stashMaxSize: 32,
       maxBufferLength: 0.3,
-      autoCleanupSourceBuffer: true
+      maxBackoffMs: 2000,
+      backoffMultiplier: 1.5,
+      maxRetries: 3,
+      liveBufferLatencyChasing: true,
+      loadStatisticsInterval: 100,
+      autoCleanupSourceBuffer: true,
+      deferredBlob: false,
+      fixAudioTimestampGap: true,
+      acousticEchoCancellation: false,
+      noiseSuppression: false,
+      audioWorkletEnabled: false,
+      autoplay: true,
+      muted: true
     })
     flvPlayer.attachMediaElement(video)
     flvPlayer.load()
+    video.playbackRate = 1
     await video.play()
+    startLiveBufferMonitor(video)
     await waitForVideoFrame(video, 7000)
     camReady.value = true
   } catch (e) {

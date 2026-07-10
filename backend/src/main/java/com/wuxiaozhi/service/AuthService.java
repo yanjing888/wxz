@@ -80,6 +80,11 @@ public class AuthService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
     }
 
+    public AuthResponse currentUser(Long userId) {
+        User user = getUser(userId);
+        return new AuthResponse("", user.getId(), user.getUsername(), user.getDisplayName());
+    }
+
     private AuthResponse buildAuthResponse(User user) {
         String token = jwtUtil.generateToken(user.getId(), user.getUsername());
         return new AuthResponse(token, user.getId(), user.getUsername(), user.getDisplayName());

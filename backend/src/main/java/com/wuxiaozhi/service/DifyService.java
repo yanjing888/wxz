@@ -28,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -36,11 +38,14 @@ public class DifyService {
 
     private static final Logger log = LoggerFactory.getLogger(DifyService.class);
     private static final int STATUS_CHECK_TIMEOUT_MS = 1_500;
+    private static final long STATUS_CACHE_TTL_MS = 30_000;
 
     private final DifyProperties difyProperties;
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
     private final RestTemplate restTemplate = new RestTemplate();
+    private volatile Map<String, Object> cachedStatus;
+    private volatile long cachedStatusAt;
 
     public DifyService(DifyProperties difyProperties, ObjectMapper objectMapper,
                        FileStorageService fileStorageService) {
@@ -313,13 +318,32 @@ public class DifyService {
     }
 
     public Map<String, Object> status() {
+        Map<String, Object> cached = cachedStatus;
+        if (cached != null && System.currentTimeMillis() - cachedStatusAt < STATUS_CACHE_TTL_MS) {
+            return cached;
+        }
+
         boolean configured = difyProperties.isConfigured();
         Map<String, Boolean> workflowConfigured = new LinkedHashMap<>();
         Map<String, Map<String, Object>> workflowStatuses = new LinkedHashMap<>();
-        for (String key : List.of("vision-correction", "text-assist", "env-check", "report-generate")) {
+        List<String> workflowKeys = List.of("text-assist", "env-check");
+        Map<String, CompletableFuture<Map<String, Object>>> statusFutures = new LinkedHashMap<>();
+        for (String key : workflowKeys) {
             boolean canRun = difyProperties.canRun(key);
             workflowConfigured.put(key, canRun);
-            workflowStatuses.put(key, checkWorkflowStatus(key));
+            statusFutures.put(key, CompletableFuture.supplyAsync(() -> checkWorkflowStatus(key)));
+        }
+        for (String key : workflowKeys) {
+            try {
+                workflowStatuses.put(key, statusFutures.get(key).get(STATUS_CHECK_TIMEOUT_MS + 300L, TimeUnit.MILLISECONDS));
+            } catch (Exception e) {
+                Map<String, Object> unavailable = new LinkedHashMap<>();
+                unavailable.put("configured", workflowConfigured.get(key));
+                unavailable.put("reachable", false);
+                unavailable.put("available", false);
+                unavailable.put("reason", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                workflowStatuses.put(key, unavailable);
+            }
         }
 
         Map<String, Object> status = new LinkedHashMap<>();
@@ -340,6 +364,8 @@ public class DifyService {
                 .filter(reason -> !reason.isBlank())
                 .findFirst()
                 .orElse("Dify service is unavailable"));
+        cachedStatus = status;
+        cachedStatusAt = System.currentTimeMillis();
         return status;
     }
 

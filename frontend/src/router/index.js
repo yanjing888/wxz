@@ -12,8 +12,11 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
+  if (auth.token && !auth.authChecked) {
+    await auth.validateSession()
+  }
   if (to.meta.requiresAuth && !auth.token) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
