@@ -76,7 +76,7 @@
             注册新账号
           </button>
           <button v-if="mode !== 'reset'" type="button" class="h-9" @click="setMode('reset')">
-            忘记密码？重置密码
+            忘记密码？
           </button>
           <button v-if="mode !== 'login'" type="button" class="h-9" @click="setMode('login')">
             返回登录
