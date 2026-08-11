@@ -20,12 +20,13 @@ public class JwtUtil {
         this.expirationMs = appProperties.getJwt().getExpirationMs();
     }
 
-    public String generateToken(Long userId, String username) {
+    public String generateToken(Long userId, String username, String role) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + expirationMs);
         return Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim("username", username)
+                .claim("role", role != null && !role.isBlank() ? role : "STUDENT")
                 .issuedAt(now)
                 .expiration(exp)
                 .signWith(key)
@@ -42,5 +43,11 @@ public class JwtUtil {
 
     public Long getUserId(String token) {
         return Long.parseLong(parseClaims(token).getSubject());
+    }
+
+    public String getRole(String token) {
+        Claims claims = parseClaims(token);
+        String role = claims.get("role", String.class);
+        return role != null && !role.isBlank() ? role : "STUDENT";
     }
 }

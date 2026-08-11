@@ -61,6 +61,14 @@ public class SessionController {
         return labSessionService.getMessages(sessionId, currentUserId(authentication));
     }
 
+    @PatchMapping("/{sessionId}/messages/latest-ai-image")
+    public ChatMessage attachLatestAiImage(@PathVariable Long sessionId,
+                                           @RequestBody AttachMessageImageRequest req,
+                                           Authentication authentication) {
+        return labSessionService.attachLatestAiMessageImage(
+                sessionId, currentUserId(authentication), req != null ? req.getImageUrl() : null);
+    }
+
     @PatchMapping("/{sessionId}/step")
     public LabSession updateStep(@PathVariable Long sessionId, @RequestParam int stepId, Authentication authentication) {
         return labSessionService.updateStep(sessionId, currentUserId(authentication), stepId);
@@ -157,6 +165,24 @@ public class SessionController {
         Map<String, Object> data = labSessionService.buildReportData(sessionId, currentUserId(authentication));
         byte[] bytes = reportService.generateDocx(data);
         String filename = URLEncoder.encode("实验总结报告-" + data.get("experimentName") + ".docx", StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .body(bytes);
+    }
+
+    @PostMapping("/{sessionId}/report/student-docx")
+    public ResponseEntity<byte[]> studentReportDocx(@PathVariable Long sessionId,
+                                                    @RequestBody StudentReportDocxRequest request,
+                                                    Authentication authentication) throws Exception {
+        Map<String, Object> data = labSessionService.buildReportData(sessionId, currentUserId(authentication));
+        Map<String, Object> meta = Map.of(
+                "experimentName", String.valueOf(data.getOrDefault("experimentName", "实验")),
+                "studentName", String.valueOf(data.getOrDefault("studentName", "")),
+                "studentClass", String.valueOf(data.getOrDefault("studentClass", ""))
+        );
+        byte[] bytes = reportService.generateStudentReportDocx(meta, request.getSections());
+        String filename = URLEncoder.encode(meta.get("experimentName") + "-实验报告.docx", StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
                 .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))

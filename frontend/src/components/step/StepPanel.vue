@@ -4,22 +4,34 @@
       <div class="flex items-center gap-2 min-w-0">
         <span class="workzone-eyebrow">STEP {{ String(activeStep).padStart(2, '0') }} / {{ String(menuLabels.length).padStart(2, '0') }}</span>
       </div>
-      <button
-        type="button"
-        class="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-ink-muted hover:text-brand-600 hover:bg-brand-50 transition-colors btn-active-scale"
-        title="查看本步骤操作教程"
-        @click="$emit('tutorial')"
-      >
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-        </svg>
-        本步骤教程
-      </button>
+      <div class="flex items-center gap-1 shrink-0">
+        <button
+          type="button"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-ink-muted hover:text-brand-600 hover:bg-brand-50 transition-colors btn-active-scale"
+          title="查看本步骤仪器操作要点"
+          @click="$emit('instrument-guide')"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          仪器速查
+        </button>
+        <button
+          type="button"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-ink-muted hover:text-brand-600 hover:bg-brand-50 transition-colors btn-active-scale"
+          title="查看本步骤操作教程"
+          @click="$emit('tutorial')"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+          本步骤教程
+        </button>
+      </div>
     </div>
 
     <div class="fade-in-up" :key="activeStep">
-      <h3 class="text-[18px] font-bold text-ink-strong leading-snug mb-1.5 tracking-tight">{{ step?.title || '—' }}</h3>
-      <p class="text-[12px] text-ink-muted leading-relaxed line-clamp-3">{{ step?.desc || '请选择当前进行的实验环节。' }}</p>
+      <h3 class="text-[18px] font-bold text-ink-strong leading-snug tracking-tight">{{ step?.title || '—' }}</h3>
     </div>
 
     <div class="mt-3 flex items-center justify-between">
@@ -52,5 +64,5 @@ defineProps({
   step: { type: Object, default: null }
 })
 
-defineEmits(['select', 'tutorial'])
+defineEmits(['select', 'tutorial', 'instrument-guide'])
 </script>

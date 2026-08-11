@@ -59,14 +59,14 @@
     />
 
     <div class="order-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden">
-      <header class="shrink-0 flex items-center gap-2.5 px-5 pt-3 pb-2">
+      <header v-if="showHeader" class="shrink-0 flex items-center gap-2.5 px-5 pt-3 pb-2">
         <div class="w-8 h-8 rounded-xl brand-gradient flex items-center justify-center text-white text-[13px] font-bold shadow-brand">智</div>
         <div class="flex flex-col leading-tight min-w-0">
           <span class="text-[13px] font-bold text-ink-strong">智能助手 · AI Tutor</span>
           <span class="text-[10px] text-ink-faint truncate" :title="subtitle">{{ subtitle }}</span>
         </div>
       </header>
-      <div class="workzone-divider" />
+      <div v-if="showHeader" class="workzone-divider" />
 
       <ChatBox
         :messages="messages"
@@ -77,9 +77,11 @@
 
       <Composer
         :loading-assist="loadingAssist"
+        :submitting-data="submittingData"
         :uploading-image="uploadingImage"
         :image-preview="imagePreview"
         :image-ready="imageReady"
+        :data-attachment="dataAttachment"
         :suggestions="readOnly ? [] : suggestions"
         :read-only="readOnly"
         @send="onComposerSend"
@@ -87,6 +89,7 @@
         @upload-image="(file) => $emit('upload-image', file)"
         @capture-image="(file) => $emit('capture-image', file)"
         @clear-image="$emit('clear-image')"
+        @clear-data="$emit('clear-data')"
       />
     </div>
   </section>
@@ -112,9 +115,11 @@ const historyWidth = ref(
 const props = defineProps({
   messages: { type: Array, default: () => [] },
   loadingAssist: { type: Boolean, default: false },
+  submittingData: { type: Boolean, default: false },
   uploadingImage: { type: Boolean, default: false },
   imagePreview: { type: String, default: '' },
   imageReady: { type: Boolean, default: false },
+  dataAttachment: { type: Object, default: null },
   experimentName: { type: String, default: '' },
   stepTitle: { type: String, default: '' },
   studentName: { type: String, default: '' },
@@ -122,10 +127,11 @@ const props = defineProps({
   readOnly: { type: Boolean, default: false },
   sessionHistory: { type: Array, default: () => [] },
   currentSessionId: { type: Number, default: 0 },
-  sessionHistoryLoading: { type: Boolean, default: false }
+  sessionHistoryLoading: { type: Boolean, default: false },
+  showHeader: { type: Boolean, default: true }
 })
 
-const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clear-image', 'new-session', 'select-session'])
+const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clear-image', 'clear-data', 'new-session', 'select-session'])
 
 const subtitle = computed(() => {
   const exp = props.experimentName

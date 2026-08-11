@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
-import { experimentApi, sessionApi, systemApi, uploadApi } from '../api'
+import { experimentApi, feedbackApi, sessionApi, studentFileApi, systemApi, uploadApi } from '../api'
 import { sniffImageMime, readFileAsDataUrl } from '../utils/imageFile'
+import { blobToFile, composeMarkedImage } from '../utils/markedImage'
+import { buildComposerDataAttachment, formatDataValuesSummary } from '../utils/composerData'
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -35,12 +37,16 @@ function welcomeChatMessage() {
 
 function mapChatMessage(message) {
   const imageUrl = message?.imageUrl || ''
+  const isAi = message?.role !== 'user'
   return {
-    role: message?.role === 'user' ? 'user' : 'ai',
+    id: message?.id || null,
+    role: isAi ? 'ai' : 'user',
     text: message?.text || '',
     image: imageUrl,
     imageFallback: imageUrl,
+    annotated: isAi && !!imageUrl,
     stepId: message?.stepId,
+    feedbackRating: message?.feedbackRating || '',
     ts: message?.createdAt ? Date.parse(message.createdAt) || Date.now() : Date.now()
   }
 }
@@ -98,11 +104,10 @@ export const useLabStore = defineStore('lab', {
     sessionHistory: [],
     sessionHistoryLoading: false,
     activeStep: 1,
-    imageUrl: '',
-    imagePreview: '',
     composerImageUrl: '',
     composerImagePreview: '',
-    marks: [],
+    composerDataAttachment: null,
+    composerDataLoading: false,
     messages: [],
     envCheckEnabled: false,
     envLevel: 'L0',
@@ -189,9 +194,22 @@ export const useLabStore = defineStore('lab', {
         return v != null && String(v).trim() !== ''
       })
     },
-    /** 图片上传区：始终可用，所有步骤都允许拍照求助 */
-    useVisionCorrection() {
-      return true
+    /** 当前步骤是否支持从仪器读取数据到对话框 */
+    canReadDeviceData(state) {
+      if (!state.experiment?.dataCollection?.enabled) return false
+      const step = state.experiment?.steps?.[String(state.activeStep)]
+      return step?.dataSource === 'device'
+    },
+    composerDataReady(state) {
+      return !!state.composerDataAttachment?.values
+        && Object.keys(state.composerDataAttachment.values).length > 0
+    },
+    /** 仪器读数按钮是否处于忙碌态 */
+    deviceReadBusy(state) {
+      return state.composerDataLoading
+        || state.deviceConnecting
+        || state.deviceReading
+        || state.deviceState === 'acquiring'
     },
     currentDataFields(state) {
       return state.experiment?.steps?.[String(state.activeStep)]?.dataFields || []
@@ -213,6 +231,10 @@ export const useLabStore = defineStore('lab', {
     },
     envCheckDifyStatus(state) {
       return state.difyStatus?.workflowStatuses?.['env-check'] || null
+    },
+    /** 图片上传区：始终可用，所有步骤都允许拍照求助 */
+    useVisionCorrection() {
+      return true
     },
     envCheckAvailable() {
       return this.envCheckDifyStatus?.available === true
@@ -424,11 +446,10 @@ export const useLabStore = defineStore('lab', {
       }
     },
     resetLabUi() {
-      this.imageUrl = ''
-      this.imagePreview = ''
       this.composerImageUrl = ''
       this.composerImagePreview = ''
-      this.marks = []
+      this.composerDataAttachment = null
+      this.composerDataLoading = false
       this.messages = []
       this.envLogs = []
       this.envCheckEnabled = false
@@ -543,6 +564,7 @@ export const useLabStore = defineStore('lab', {
     },
     async selectStep(stepId) {
       this.teardownDevice()
+      this.clearComposerDataAttachment()
       this.activeStep = stepId
       this.dataSubmitErrors = []
       if (this.session?.id) {
@@ -557,14 +579,6 @@ export const useLabStore = defineStore('lab', {
       if (!this.session?.id) return
       this.deviceType = this.stepConfig?.deviceType || ''
       await this.connectDevice()
-      if (this.deviceType === 'dimension_measure'
-          || this.deviceType === 'reading_microscope'
-          || this.deviceType === 'newton_analyzer') {
-        await this.readDeviceOnce(true)
-      } else if (this.deviceType === 'post_measure') {
-        const hasTensile = this.sessionDataByStep['4']?.values
-        if (hasTensile) await this.readDeviceOnce(true)
-      }
     },
     async connectDevice() {
       if (!this.session?.id) return
@@ -788,18 +802,20 @@ export const useLabStore = defineStore('lab', {
       }
       return this.submitStepData(values, true)
     },
-    async submitStepData(values, fromDevice = false) {
+    async submitStepData(values, fromDevice = false, extraMessage = '') {
       if (!this.session?.id || this.submittingData) return false
       this.submittingData = true
       this.dataSubmitErrors = []
 
       const stepId = this.activeStep
       const stepTitle = this.stepConfig?.title || ''
-      const summary = Object.entries(values || {})
-        .map(([k, v]) => `${k}: ${v}`)
-        .join('，')
+      const lines = formatDataValuesSummary(this.currentDataFields, values || {})
+      const summary = lines.join('，')
       const prefix = fromDevice ? '【仪器采集】' : '【数据提交】'
-      this.pushUser(`${prefix}${stepTitle}\n${summary || '(空)'}`)
+      let text = `${prefix}${stepTitle}\n${summary || '(空)'}`
+      const note = (extraMessage || '').trim()
+      if (note) text += `\n\n${note}`
+      this.pushUser(text)
       this.updateCurrentSessionHistoryTitle()
 
       const aiIndex = this.messages.length
@@ -837,11 +853,9 @@ export const useLabStore = defineStore('lab', {
       }
     },
     /**
-     * 上传图片。
-     * 上传后同时写入对话框附件状态和左栏「实验台拍摄」状态，两侧保持一致；
-     * `target` 仅用于记录入口（保留参数以兼容调用方）。
+     * 上传图片到对话框附件区。
      */
-    async uploadImage(file, { target = 'composer' } = {}) { // eslint-disable-line no-unused-vars
+    async uploadImage(file) {
       if (!file || !file.size) {
         throw new Error('请选择有效的图片文件')
       }
@@ -860,23 +874,20 @@ export const useLabStore = defineStore('lab', {
       const seq = ++this.uploadSeq
       this.uploadingImage = true
       this.uploadError = ''
-      this.marks = []
+      this.clearComposerDataAttachment()
 
       const dataUrl = await readFileAsDataUrl(originalFile)
       this.composerImagePreview = dataUrl
-      this.imagePreview = dataUrl
 
       try {
         const { data } = await uploadApi.image(originalFile)
         if (seq !== this.uploadSeq) return
 
         this.composerImageUrl = data.url
-        this.imageUrl = data.url
       } catch (e) {
         if (seq !== this.uploadSeq) return
 
         this.composerImageUrl = ''
-        this.imageUrl = ''
         this.uploadError = e.response?.data?.message || e.message || '图片上传失败'
         throw e
       } finally {
@@ -888,7 +899,7 @@ export const useLabStore = defineStore('lab', {
     revokeBlobIfUnused(url) {
       if (!url?.startsWith('blob:')) return
       const usedInChat = this.messages.some((m) => m.image === url)
-      if (!usedInChat && this.imagePreview !== url && this.composerImagePreview !== url) {
+      if (!usedInChat && this.composerImagePreview !== url) {
         URL.revokeObjectURL(url)
       }
     },
@@ -896,16 +907,61 @@ export const useLabStore = defineStore('lab', {
       this.revokeBlobIfUnused(this.composerImagePreview)
       this.composerImageUrl = ''
       this.composerImagePreview = ''
-    },
-    clearImage() {
-      this.revokeBlobIfUnused(this.composerImagePreview)
-      this.revokeBlobIfUnused(this.imagePreview)
-      this.imageUrl = ''
-      this.imagePreview = ''
-      this.composerImageUrl = ''
-      this.composerImagePreview = ''
-      this.marks = []
       this.uploadError = ''
+    },
+    clearComposerDataAttachment() {
+      this.composerDataAttachment = null
+    },
+    async loadDeviceDataIntoComposer() {
+      if (!this.session?.id || this.composerDataLoading || this.deviceReadBusy) return false
+
+      if (!this.canReadDeviceData) {
+        emitAppAlert(
+          '当前步骤无需仪器读数',
+          '请切换到需要采集数据的实验步骤（如暗环直径测量）后再读取；也可直接在右侧对话框提问。'
+        )
+        return false
+      }
+
+      this.composerDataLoading = true
+      this.dataSubmitErrors = []
+
+      try {
+        if (!this.deviceConnected) {
+          await this.connectDevice()
+        }
+
+        if (this.deviceType === 'universal_tester') {
+          if (!this.deviceHasSubmitData) {
+            await this.startDeviceAcquisition()
+          }
+        } else {
+          await this.readDeviceOnce(false)
+        }
+
+        const values = { ...(this.deviceSnapshot || {}) }
+        if (!Object.keys(values).length) {
+          this.dataSubmitErrors = ['未读取到有效数据，请确认仪器已连接并重试']
+          return false
+        }
+
+        this.composerDataAttachment = buildComposerDataAttachment({
+          stepId: this.activeStep,
+          stepTitle: this.stepConfig?.title || '',
+          fields: this.currentDataFields,
+          values,
+          fromDevice: true
+        })
+        this.clearComposerImage()
+        return true
+      } catch (e) {
+        const msg = e.response?.data?.message || e.message || '读取仪器数据失败'
+        this.dataSubmitErrors = [msg]
+        emitAppAlert('读取失败', msg)
+        return false
+      } finally {
+        this.composerDataLoading = false
+      }
     },
     pushUser(text, image, imageFallback = '') {
       this.messages.push({
@@ -936,21 +992,78 @@ export const useLabStore = defineStore('lab', {
       }
       this.loadingAssist = false
     },
+    async archiveSessionFile({ url, category = 'photo', fileName = '', note = '' }) {
+      const code = this.experiment?.code
+      if (!code || !url?.startsWith('/uploads/')) return
+      try {
+        await studentFileApi.save({
+          experimentCode: code,
+          category,
+          stage: 'lab',
+          url,
+          sessionId: this.session?.id,
+          fileName: fileName || url.substring(url.lastIndexOf('/') + 1),
+          note: note || `步骤「${this.stepConfig?.title || ''}」`
+        })
+      } catch {
+        // 资料归档失败不阻断实验流程
+      }
+    },
+    async attachAnnotatedImageToAiMessage(aiIndex, imageSrc, marks) {
+      if (!marks?.length || !imageSrc || !this.messages[aiIndex]) return
+
+      try {
+        const blob = await composeMarkedImage(imageSrc, marks)
+        if (!blob) return
+
+        const file = blobToFile(blob)
+        const { data } = await uploadApi.image(file)
+        const url = data.url?.split('?')[0] || ''
+        if (!url) return
+
+        this.messages[aiIndex].image = url
+        this.messages[aiIndex].imageFallback = url
+        this.messages[aiIndex].annotated = true
+
+        if (this.session?.id) {
+          await sessionApi.attachLatestAiImage(this.session.id, { imageUrl: url })
+        }
+        this.archiveSessionFile({
+          url,
+          category: 'photo',
+          fileName: `步骤${this.activeStep}-标注.jpg`,
+          note: `步骤「${this.stepConfig?.title || ''}」AI 标注图`
+        })
+      } catch {
+        // 标注图生成或保存失败时不阻断主流程
+      }
+    },
     async sendMessage(userMessage) {
-      if (!this.session?.id || this.loadingAssist || this.uploadingImage) return false
+      if (!this.session?.id || this.loadingAssist || this.uploadingImage || this.submittingData) return false
       if (this.session.status === 'FINISHED') return false
+
+      if (this.composerDataAttachment) {
+        const attachment = this.composerDataAttachment
+        this.clearComposerDataAttachment()
+        return this.submitStepData(
+          attachment.values,
+          attachment.fromDevice !== false,
+          (userMessage || '').trim()
+        )
+      }
+
       await this.refreshDifyStatusIfStale()
 
       const text = (userMessage || '').trim()
       const imageUrl = this.readyImageUrl
-      const hasPreview = !!(this.composerImagePreview || this.imagePreview)
+      const hasPreview = !!this.composerImagePreview
 
       if (!text && !imageUrl) {
         if (hasPreview) {
           emitAppAlert(
             this.uploadError ? '图片上传失败' : '图片仍在上传',
             this.uploadError
-              ? `图片上传失败：${this.uploadError}\n请点击“更换图片”重新上传。`
+              ? `图片上传失败：${this.uploadError}\n请重新选择图片后再发送。`
               : '图片尚未上传完成，请等待上传结束后再发送。'
           )
         }
@@ -962,23 +1075,27 @@ export const useLabStore = defineStore('lab', {
       const abortCtrl = new AbortController()
       this.assistStreamAbort = abortCtrl
       const hadImage = !!imageUrl
-      const displayImage = this.composerImagePreview || this.imagePreview || imageUrl
-      if (hadImage) this.marks = []
+      const displayImage = this.composerImagePreview || imageUrl
       const prompt = text || (hadImage ? '请分析上传的实验图片。' : '')
 
       this.pushUser(prompt, hadImage ? displayImage : '', hadImage ? imageUrl : '')
       this.updateCurrentSessionHistoryTitle()
+      if (hadImage) {
+        this.archiveSessionFile({
+          url: imageUrl,
+          category: 'photo',
+          fileName: `步骤${this.activeStep}-照片.jpg`,
+          note: `步骤「${this.stepConfig?.title || ''}」实验照片`
+        })
+      }
       this.clearComposerImage()
 
       const aiIndex = this.messages.length
       this.messages.push({ role: 'ai', text: '', streaming: true, ts: Date.now() })
 
       let pendingMarks = null
-      const applyMarksIfReady = () => {
-        if (pendingMarks?.length) {
-          this.marks = pendingMarks
-          pendingMarks = null
-        }
+      const resolveMarks = (marks) => {
+        if (hadImage && marks?.length) pendingMarks = marks
       }
 
       try {
@@ -986,11 +1103,8 @@ export const useLabStore = defineStore('lab', {
           this.session.id,
           { userMessage: prompt, imageUrl: imageUrl || undefined },
           {
-            onMarks: (marks) => {
-              if (hadImage && marks?.length) pendingMarks = marks
-            },
+            onMarks: resolveMarks,
             onChunk: (chunk) => {
-              applyMarksIfReady()
               this.messages[aiIndex].text += chunk
             },
             onAnswerEnd: () => {
@@ -999,13 +1113,18 @@ export const useLabStore = defineStore('lab', {
               }
               this.loadingAssist = false
             },
-            onDone: (data) => {
+            onDone: async (data) => {
               this.messages[aiIndex].streaming = false
               if (data.feedback) {
                 this.messages[aiIndex].text = data.feedback
               }
+              if (data.aiMessageId) {
+                this.messages[aiIndex].id = data.aiMessageId
+              }
               if (hadImage && data.marks?.length) pendingMarks = data.marks
-              if (hadImage) applyMarksIfReady()
+              if (hadImage && pendingMarks?.length) {
+                await this.attachAnnotatedImageToAiMessage(aiIndex, displayImage, pendingMarks)
+              }
             },
             onError: (msg) => {
               if (abortCtrl.signal.aborted) return
@@ -1171,6 +1290,12 @@ export const useLabStore = defineStore('lab', {
       a.download = `实验总结报告-${this.experiment?.name || '实验'}.docx`
       a.click()
       URL.revokeObjectURL(url)
+    },
+    async submitMessageFeedback(messageId, rating) {
+      if (!this.session?.id || !messageId) return
+      await feedbackApi.submit(this.session.id, messageId, rating)
+      const msg = this.messages.find((m) => m.id === messageId)
+      if (msg) msg.feedbackRating = rating
     }
   }
 })

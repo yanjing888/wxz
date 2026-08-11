@@ -28,6 +28,10 @@ public class User {
     @Column(length = 64)
     private String studentClass;
 
+    /** STUDENT | TEACHER；教师可查看 studentClass 对应班级（留空则查看全部学生） */
+    @Column(nullable = false, length = 16)
+    private String role = UserRole.STUDENT;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

@@ -17,7 +17,7 @@ function assertNotContains(text, message) {
 }
 
 assertContains(
-  'placeholder="问物小智：实验中遇到的问题，都可以在这里说…（Enter 发送，Shift+Enter 换行）"',
+  "'问物小智：实验中遇到的问题，都可以在这里说…（Enter 发送，Shift+Enter 换行）'",
   'composer placeholder should invite broad experiment help without enumerating fixed capabilities'
 )
 

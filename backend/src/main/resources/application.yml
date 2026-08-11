@@ -22,8 +22,8 @@ spring:
       path: /h2-console
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: 20MB
+      max-request-size: 20MB
 
 wuxiaozhi:
   jwt:
@@ -39,6 +39,125 @@ wuxiaozhi:
     browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:/ws/hdl/hlsram/live0.flv}
   experiments:
     config-dir: classpath:experiments/
+  ai-tools:
+    items:
+      - code: pre-lab
+        name: 预习要点
+        description: 进实验室前梳理目标、必带物品、核心公式与易错点
+        page-type: pre-lab
+        group: 课前预习
+        workflow-key: pre-lab
+        category: pre-lab
+      - code: equipment-check
+        name: 器材清单核对
+        description: 列出本实验需要的仪器与耗材，逐项核对并说明检查要点
+        page-type: chat
+        group: 课前预习
+        workflow-key: equipment-check
+        category: pre-lab
+      - code: practice-quiz
+        name: 预习自测
+        description: 围绕本实验生成选择与判断题，做完即时判分并给出解析
+        page-type: quiz
+        group: 课前预习
+        workflow-key: practice-quiz
+        category: quiz
+      - code: prep-report
+        name: 预习报告
+        description: 依据实验目的、原理与步骤生成预习报告初稿，可编辑导出
+        page-type: chat
+        group: 课前预习
+        workflow-key: prep-report
+        category: pre-lab
+      - code: instrument-reading
+        name: 读数助手
+        description: 拍摄游标卡尺、螺旋测微器、读数显微镜，识别读数并讲解读数过程
+        page-type: instrument-reading
+        group: 实验操作
+        workflow-key: instrument-reading
+        category: instrument
+      - code: data-entry
+        name: 数据表识别
+        description: 拍摄手写原始数据表，识别成可编辑的电子表格
+        page-type: chat
+        group: 数据处理
+        workflow-key: data-entry
+        category: data-lab
+      - code: data-doctor
+        name: 数据体检
+        description: 对一组测量值做量级、离群与有效位数体检，并判断物理合理性
+        page-type: data-doctor
+        group: 数据处理
+        workflow-key: data-doctor
+        category: data-lab
+      - code: error-trace
+        name: 误差溯源
+        description: 结合全过程操作与数据记录，反推结果偏差最可能来自哪一步
+        page-type: error-trace
+        group: 数据处理
+        workflow-key: error-trace
+        category: error-trace
+      - code: data-lab
+        name: 数据处理
+        description: 不确定度、逐差法、线性拟合与有效数字，本地精确计算
+        page-type: data-lab
+        group: 数据处理
+        workflow-key: data-lab
+        category: data-lab
+      - code: report-assist
+        name: 报告助手
+        description: 根据实验记录与测量数据，辅助撰写与润色实验报告（非批改）
+        page-type: report-assist
+        group: 实验报告
+        workflow-key: report-assist
+        category: report
+      - code: think-questions
+        name: 思考题助手
+        description: 针对报告末尾的思考题，给出解题思路与作答要点（不直接代写）
+        page-type: chat
+        group: 实验报告
+        workflow-key: think-questions
+        category: report
+      - code: report-review
+        name: 报告批改
+        description: 教师端批改学生实验报告（学生端不开放）
+        page-type: report-review
+        group: 教师端
+        workflow-key: report-review
+        category: report
+        student-visible: false
+      - code: lab-recap
+        name: 实验复盘
+        description: 基于实验记录回顾操作过程，总结薄弱点与改进方向
+        page-type: recap
+        group: 实验报告
+        workflow-key: lab-recap
+        category: recap
+      - code: lab-brief
+        name: 课前要点
+        description: 进实验室前的目标、准备事项与核心公式（仅实验工作台内使用）
+        page-type: chat
+        group: 实验辅助
+        workflow-key: pre-lab
+        category: pre-lab
+      - code: instrument-guide
+        name: 仪器操作要点
+        description: 当前步骤仪器读数与操作注意事项（仅实验工作台内使用）
+        page-type: chat
+        group: 实验辅助
+        workflow-key: text-assist
+        category: instrument
+      - code: explore
+        name: 原理答疑
+        description: 围绕实验原理、公式推导与仪器结构的多轮问答
+        page-type: chat
+        group: 拓展学习
+        workflow-key: explore
+        category: explore
+        suggestions:
+          - 这个实验的核心公式是怎么推导出来的？
+          - 如果增大波长，条纹间距会怎样变化？
+          - 这台仪器的读数原理是什么？
   dify:
     base-url: ${DIFY_BASE_URL:}
     api-key: ${DIFY_API_KEY:}
@@ -48,6 +167,22 @@ wuxiaozhi:
       text-assist: ${DIFY_WF_TEXT_ASSIST:}
       env-check: ${DIFY_WF_ENV_CHECK:}
       report-generate: ${DIFY_WF_REPORT_GENERATE:}
+      pre-lab: ${DIFY_WF_PRE_LAB:}
+      data-lab: ${DIFY_WF_DATA_LAB:}
+      report-assist: ${DIFY_WF_REPORT_ASSIST:${DIFY_WF_REPORT_GENERATE:}}
+      report-review: ${DIFY_WF_REPORT_REVIEW:}
+      lab-recap: ${DIFY_WF_LAB_RECAP:}
+      lab-brief: ${DIFY_WF_PRE_LAB:${DIFY_WF_TEXT_ASSIST:}}
+      instrument-guide: ${DIFY_WF_INSTRUMENT_READING:${DIFY_WF_TEXT_ASSIST:}}
+      instrument-reading: ${DIFY_WF_INSTRUMENT_READING:}
+      data-doctor: ${DIFY_WF_DATA_DOCTOR:${DIFY_WF_DATA_LAB:}}
+      error-trace: ${DIFY_WF_ERROR_TRACE:}
+      practice-quiz: ${DIFY_WF_PRACTICE_QUIZ:}
+      explore: ${DIFY_WF_EXPLORE:}
+      equipment-check: ${DIFY_WF_EQUIPMENT_CHECK:${DIFY_WF_PRE_LAB:}}
+      prep-report: ${DIFY_WF_PREP_REPORT:${DIFY_WF_PRE_LAB:}}
+      data-entry: ${DIFY_WF_DATA_ENTRY:${DIFY_WF_INSTRUMENT_READING:}}
+      think-questions: ${DIFY_WF_THINK_QUESTIONS:${DIFY_WF_REPORT_ASSIST:}}
     workflow-modes:
       env-check: ${DIFY_WF_ENV_CHECK_MODE:${DIFY_APP_MODE:chat}}
     knowledge:

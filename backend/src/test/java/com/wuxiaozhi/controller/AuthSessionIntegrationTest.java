@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wuxiaozhi.entity.ChatMessage;
 import com.wuxiaozhi.entity.LabSession;
+import com.wuxiaozhi.entity.StudentExperimentAssignment;
 import com.wuxiaozhi.entity.User;
 import com.wuxiaozhi.repository.ChatMessageRepository;
 import com.wuxiaozhi.repository.LabSessionRepository;
+import com.wuxiaozhi.repository.StudentExperimentAssignmentRepository;
 import com.wuxiaozhi.repository.UserRepository;
 import com.wuxiaozhi.service.AuthService;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,12 +60,16 @@ class AuthSessionIntegrationTest {
     @Autowired
     AuthService authService;
 
+    @Autowired
+    StudentExperimentAssignmentRepository assignmentRepository;
+
     @BeforeEach
     void cleanDb() {
         chatMessageRepository.deleteAll();
         labSessionRepository.deleteAll();
+        assignmentRepository.deleteAll();
         userRepository.deleteAll();
-        authService.ensureDefaultUser();
+        authService.ensureDefaultUsers();
     }
 
     @Test
@@ -80,7 +86,7 @@ class AuthSessionIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("student001"))
                 .andExpect(jsonPath("$.displayName").value("Student Wang"))
-                .andExpect(jsonPath("$.studentClass").doesNotExist());
+                .andExpect(jsonPath("$.studentClass").value(""));
 
         User user = userRepository.findByUsername("student001").orElseThrow();
         assertThat(user.getDisplayName()).isEqualTo("Student Wang");
@@ -277,6 +283,17 @@ class AuthSessionIntegrationTest {
         user.setDisplayName(displayName);
         user.setStudentClass(studentClass);
         userRepository.save(user);
+        assignExperiments(user.getId(), "newton_rings", "tensile_steel");
+    }
+
+    private void assignExperiments(Long userId, String... experimentCodes) {
+        for (String code : experimentCodes) {
+            StudentExperimentAssignment assignment = new StudentExperimentAssignment();
+            assignment.setUserId(userId);
+            assignment.setExperimentCode(code);
+            assignment.setAssignedByUserId(userId);
+            assignmentRepository.save(assignment);
+        }
     }
 
     private JsonNode startSession(JsonNode auth, String experimentCode, String studentName) throws Exception {

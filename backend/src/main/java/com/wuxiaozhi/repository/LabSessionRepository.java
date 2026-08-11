@@ -37,4 +37,12 @@ public interface LabSessionRepository extends JpaRepository<LabSession, Long> {
 
     Optional<LabSession> findFirstByUserIdAndExperimentCodeAndStatusOrderByStartTimeDesc(Long userId, String experimentCode, String status);
     Optional<LabSession> findByIdAndUserId(Long id, Long userId);
+
+    List<LabSession> findByStatusOrderByStartTimeDesc(String status);
+
+    List<LabSession> findByStatusAndStudentClassOrderByStartTimeDesc(String status, String studentClass);
+
+    long countByStatus(String status);
+
+    long countByStatusAndStudentClass(String status, String studentClass);
 }

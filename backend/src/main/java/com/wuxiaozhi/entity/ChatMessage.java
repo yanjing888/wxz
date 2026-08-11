@@ -33,4 +33,7 @@ public class ChatMessage {
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Transient
+    private String feedbackRating;
 }

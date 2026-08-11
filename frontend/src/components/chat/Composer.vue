@@ -14,6 +14,32 @@
       </button>
     </div>
     <div class="rounded-2xl bg-white border border-line-soft shadow-card focus-within:border-brand-300 focus-within:shadow-soft transition-all p-2.5">
+      <div v-if="dataAttachment" class="mb-2">
+        <div class="relative rounded-xl border border-line-soft bg-[#f7f7f8] px-3 py-2.5 pr-9 max-w-[320px]">
+          <div class="flex items-start gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center shrink-0 shadow-sm">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2a4 4 0 014-4h2M9 7h6M9 11h6M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
+              </svg>
+            </div>
+            <div class="min-w-0 pt-0.5">
+              <p class="text-[13px] font-semibold text-ink-strong truncate leading-snug">{{ dataAttachment.title }}</p>
+              <p class="text-[11px] text-ink-faint mt-0.5 truncate">
+                {{ dataAttachment.label }} · {{ dataAttachment.stepTitle || '当前步骤' }}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="absolute top-2 right-2 w-6 h-6 rounded-full bg-ink-strong/90 text-white text-[13px] leading-none flex items-center justify-center hover:bg-ink-strong transition-colors"
+            title="移除读数"
+            @click="$emit('clear-data')"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
       <div v-if="imagePreview" class="mb-2 flex items-center gap-2 p-1.5 bg-surface-soft rounded-lg border border-line-soft">
         <img :src="imagePreview" alt="附件" class="w-10 h-10 object-cover rounded-md border border-line-soft" />
         <span class="text-[11px] text-ink-muted flex-1 leading-tight">{{ attachHint }}</span>
@@ -25,17 +51,18 @@
           移除
         </button>
       </div>
+
       <textarea
         ref="textareaRef"
         v-model="input"
         rows="2"
-        placeholder="问物小智：实验中遇到的问题，都可以在这里说…（Enter 发送，Shift+Enter 换行）"
+        :placeholder="inputPlaceholder"
         class="w-full bg-transparent border-none text-[13px] text-ink-base outline-none resize-none placeholder:text-ink-faint leading-relaxed"
         :disabled="readOnly"
         @keydown="onKeydown"
       />
       <div class="flex justify-between items-center mt-1.5 gap-2">
-        <div class="flex items-center gap-1.5 min-w-0">
+        <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
           <button
             type="button"
             class="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-ink-muted hover:text-brand-600 rounded-md hover:bg-brand-50 transition-all btn-active-scale shrink-0"
@@ -61,7 +88,7 @@
           </button>
         </div>
         <button
-          v-if="loadingAssist"
+          v-if="loadingAssist || submittingData"
           type="button"
           class="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors btn-active-scale"
           title="停止生成"
@@ -91,21 +118,25 @@ import { computed, nextTick, ref } from 'vue'
 
 const props = defineProps({
   loadingAssist: { type: Boolean, default: false },
+  submittingData: { type: Boolean, default: false },
   uploadingImage: { type: Boolean, default: false },
   imagePreview: { type: String, default: '' },
   imageReady: { type: Boolean, default: false },
+  dataAttachment: { type: Object, default: null },
   suggestions: { type: Array, default: () => [] },
   readOnly: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clear-image'])
+const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clear-image', 'clear-data'])
 
 const input = ref('')
 const fileInput = ref(null)
 const textareaRef = ref(null)
 
 const canSend = computed(() =>
-  !props.readOnly && !props.uploadingImage && (input.value.trim().length > 0 || props.imageReady)
+  !props.readOnly
+  && !props.uploadingImage
+  && (input.value.trim().length > 0 || props.imageReady || !!props.dataAttachment)
 )
 
 const attachHint = computed(() => {
@@ -115,8 +146,15 @@ const attachHint = computed(() => {
   return ''
 })
 
+const inputPlaceholder = computed(() => {
+  if (props.dataAttachment) {
+    return '可补充说明或提问，Enter 发送读数并纠错…（Shift+Enter 换行）'
+  }
+  return '问物小智：实验中遇到的问题，都可以在这里说…（Enter 发送，Shift+Enter 换行）'
+})
+
 async function send() {
-  if (!canSend.value || props.loadingAssist) return
+  if (!canSend.value || props.loadingAssist || props.submittingData) return
   const text = input.value.trim()
   const sent = await emit('send', text)
   if (sent !== false) input.value = ''

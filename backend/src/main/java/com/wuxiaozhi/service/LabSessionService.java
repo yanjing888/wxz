@@ -16,6 +16,7 @@ import com.wuxiaozhi.repository.ChatMessageRepository;
 import com.wuxiaozhi.repository.CorrectionLogRepository;
 import com.wuxiaozhi.repository.EnvCheckLogRepository;
 import com.wuxiaozhi.repository.LabSessionRepository;
+import com.wuxiaozhi.repository.MessageFeedbackRepository;
 import com.wuxiaozhi.repository.SessionDataLogRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +54,8 @@ public class LabSessionService {
     private final DataValidationService dataValidationService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private final MessageFeedbackRepository messageFeedbackRepository;
+    private final StudentExperimentAccessService accessService;
 
     public LabSessionService(LabSessionRepository sessionRepository,
                              ChatMessageRepository chatMessageRepository,
@@ -65,7 +68,9 @@ public class LabSessionService {
                              KnowledgeMapService knowledgeMapService,
                              DataValidationService dataValidationService,
                              ObjectMapper objectMapper,
-                             PlatformTransactionManager transactionManager) {
+                             PlatformTransactionManager transactionManager,
+                             MessageFeedbackRepository messageFeedbackRepository,
+                             StudentExperimentAccessService accessService) {
         this.sessionRepository = sessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.correctionLogRepository = correctionLogRepository;
@@ -78,6 +83,8 @@ public class LabSessionService {
         this.dataValidationService = dataValidationService;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.messageFeedbackRepository = messageFeedbackRepository;
+        this.accessService = accessService;
     }
 
     @Transactional
@@ -87,6 +94,9 @@ public class LabSessionService {
 
     @Transactional
     public LabSession startSession(StartSessionRequest req, Long userId) {
+        if (userId != null && userId > GUEST_USER_ID) {
+            accessService.requireAssignedIfStudent(userId, req.getExperimentCode());
+        }
         ExperimentConfig exp = experimentConfigService.getByCode(req.getExperimentCode());
         LabSession session = new LabSession();
         session.setUserId(userId != null ? userId : GUEST_USER_ID);
@@ -155,7 +165,30 @@ public class LabSessionService {
 
     public List<ChatMessage> getMessages(Long sessionId, Long userId) {
         getSession(sessionId, userId);
-        return chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        List<ChatMessage> messages = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        Map<Long, String> ratings = messageFeedbackRepository.findByUserIdAndSessionIdOrderByCreatedAtDesc(userId, sessionId)
+                .stream()
+                .collect(Collectors.toMap(com.wuxiaozhi.entity.MessageFeedback::getMessageId,
+                        com.wuxiaozhi.entity.MessageFeedback::getRating, (a, b) -> b));
+        for (ChatMessage message : messages) {
+            if ("ai".equalsIgnoreCase(message.getRole())) {
+                message.setFeedbackRating(ratings.get(message.getId()));
+            }
+        }
+        return messages;
+    }
+
+    @Transactional
+    public ChatMessage attachLatestAiMessageImage(Long sessionId, Long userId, String imageUrl) {
+        getSession(sessionId, userId);
+        if (imageUrl == null || imageUrl.isBlank() || !imageUrl.startsWith("/uploads/")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的图片地址");
+        }
+        ChatMessage message = chatMessageRepository
+                .findFirstBySessionIdAndRoleOrderByCreatedAtDesc(sessionId, "ai")
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "未找到 AI 回复"));
+        message.setImageUrl(imageUrl.split("\\?")[0]);
+        return chatMessageRepository.save(message);
     }
 
     private void attachHistoryTitle(LabSession session) {
@@ -617,18 +650,20 @@ public class LabSessionService {
             correctionLogRepository.save(log);
         }
 
-        saveChatMessage(sessionId, "user", prepare.session().getActiveStep(), prepare.userMessage(), req.getImageUrl());
-        saveChatMessage(sessionId, "ai", prepare.session().getActiveStep(), resp.getFeedback(), null);
+        ChatMessage userMessage = saveChatMessage(sessionId, "user", prepare.session().getActiveStep(), prepare.userMessage(), req.getImageUrl());
+        ChatMessage aiMessage = saveChatMessage(sessionId, "ai", prepare.session().getActiveStep(), resp.getFeedback(), null);
+        resp.setUserMessageId(userMessage.getId());
+        resp.setAiMessageId(aiMessage.getId());
     }
 
-    private void saveChatMessage(Long sessionId, String role, int stepId, String text, String imageUrl) {
+    private ChatMessage saveChatMessage(Long sessionId, String role, int stepId, String text, String imageUrl) {
         ChatMessage message = new ChatMessage();
         message.setSessionId(sessionId);
         message.setRole(role);
         message.setStepId(stepId);
         message.setText(text != null ? text : "");
         message.setImageUrl(imageUrl != null ? imageUrl : "");
-        chatMessageRepository.save(message);
+        return chatMessageRepository.save(message);
     }
 
     private record AssistPrepare(LabSession session, ExperimentConfig experiment, String userMessage,

@@ -2,10 +2,11 @@
   <main class="login-page fixed inset-0 w-screen h-screen flex items-center px-6 py-10">
     <section class="login-card w-full max-w-[440px] rounded-2xl p-8">
       <div class="flex items-center gap-3 mb-6">
-        <div class="w-12 h-12 brand-gradient rounded-2xl flex items-center justify-center text-white font-black shadow-brand">
-          智
+        <img src="/images/jyd-logo.png" alt="竞业达 JYD" class="h-10 w-auto object-contain" />
+        <div>
+          <h1 class="text-xl font-black text-brand-700 tracking-tight">大学物理实验智能体</h1>
+          <p class="text-[13px] text-ink-muted mt-0.5">物小智</p>
         </div>
-        <h1 class="text-2xl font-black text-ink-strong tracking-tight">物小智</h1>
       </div>
 
       <h2 class="text-lg font-black text-ink-strong mb-5">{{ pageTitle }}</h2>
@@ -34,6 +35,19 @@
             class="login-input"
             autocomplete="name"
             placeholder="请输入姓名"
+          />
+        </div>
+
+        <div v-if="mode === 'register'" class="login-field">
+          <svg class="login-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+          </svg>
+          <input
+            v-model.trim="form.studentClass"
+            class="login-input"
+            autocomplete="organization"
+            placeholder="请输入班级（选填，如 物理2401）"
           />
         </div>
 
@@ -104,7 +118,8 @@ const showPassword = ref(false)
 const form = reactive({
   username: '',
   password: '',
-  displayName: ''
+  displayName: '',
+  studentClass: ''
 })
 
 const pageTitle = computed(() => {
@@ -157,7 +172,8 @@ async function submit() {
       await auth.register({
         username: form.username,
         password: form.password,
-        displayName: form.displayName
+        displayName: form.displayName,
+        studentClass: form.studentClass
       })
     } else {
       await auth.resetPassword({
@@ -166,7 +182,9 @@ async function submit() {
       })
     }
     lab.$reset()
-    router.replace(route.query.redirect || '/')
+    const redirect = route.query.redirect
+    const target = !redirect || redirect === '/home' ? auth.homeRoute() : redirect
+    router.replace(target)
   } catch (e) {
     if (mode.value === 'register') {
       showTip(e.response?.status === 409 ? '账号已存在' : '注册失败，请稍后重试')

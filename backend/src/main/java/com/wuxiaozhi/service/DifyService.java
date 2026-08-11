@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wuxiaozhi.config.DifyProperties;
 import com.wuxiaozhi.dto.AssistResponse;
+import com.wuxiaozhi.dto.AiToolInvokeResponse;
 import com.wuxiaozhi.dto.EnvCheckResponse;
 import com.wuxiaozhi.dto.experiment.ExperimentConfig;
 import com.wuxiaozhi.dto.experiment.MarkDto;
@@ -118,6 +119,78 @@ public class DifyService {
             onAnswerComplete.run();
         }
         return unavailable;
+    }
+
+    public AiToolInvokeResponse invokeTool(String workflowKey, Map<String, Object> inputs, String userId) {
+        return invokeTool(workflowKey, inputs, userId, null);
+    }
+
+    public AiToolInvokeResponse invokeTool(String workflowKey, Map<String, Object> inputs, String userId,
+                                           String imageUrl) {
+        boolean hasImage = imageUrl != null && !imageUrl.isBlank();
+        if (!canCall(workflowKey)) {
+            AiToolInvokeResponse resp = new AiToolInvokeResponse();
+            resp.setFromDify(false);
+            resp.setText(unavailableAssist(hasImage, false).getFeedback());
+            return resp;
+        }
+        try {
+            if (difyProperties.isChatMode(workflowKey)) {
+                AssistResponse assist = assist(workflowKey, inputs, userId, null, 0, hasImage, imageUrl);
+                return toInvokeResponse(assist.getFeedback(), assist.isFromDify());
+            }
+            JsonNode outputs = runWorkflow(workflowKey, buildToolWorkflowInputs(workflowKey, inputs, imageUrl, userId), userId);
+            AssistResponse parsed = parseAssistResponse(outputs, true);
+            String text = parsed.getFeedback() != null && !parsed.getFeedback().isBlank()
+                    ? parsed.getFeedback()
+                    : outputs.toString();
+            AiToolInvokeResponse resp = toInvokeResponse(text, true);
+            mergeStructuredData(resp, text);
+            return resp;
+        } catch (Throwable e) {
+            log.warn("Dify invoke failed, workflowKey={}: {}", workflowKey, e.getMessage());
+            AiToolInvokeResponse resp = new AiToolInvokeResponse();
+            resp.setFromDify(false);
+            resp.setText(unavailableAssist(false, false).getFeedback());
+            return resp;
+        }
+    }
+
+    private Map<String, Object> buildToolWorkflowInputs(String workflowKey, Map<String, Object> inputs,
+                                                        String imageUrl, String userId) {
+        Map<String, Object> workflowInputs = new LinkedHashMap<>(inputs);
+        if (imageUrl != null && !imageUrl.isBlank()) {
+            String apiKey = difyProperties.resolveApiKey(workflowKey);
+            Map<String, Object> fileRef = difyFileRef(uploadImageToDify(imageUrl, userId, apiKey));
+            workflowInputs.put("image", fileRef);
+            workflowInputs.putIfAbsent("image_url", imageUrl);
+        }
+        return workflowInputs;
+    }
+
+    private AiToolInvokeResponse toInvokeResponse(String text, boolean fromDify) {
+        AiToolInvokeResponse resp = new AiToolInvokeResponse();
+        resp.setText(text != null ? text : "");
+        resp.setFromDify(fromDify);
+        mergeStructuredData(resp, resp.getText());
+        return resp;
+    }
+
+    private void mergeStructuredData(AiToolInvokeResponse resp, String text) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        String trimmed = text.trim();
+        if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+            return;
+        }
+        try {
+            JsonNode json = objectMapper.readTree(trimmed);
+            if (json.isObject()) {
+                resp.setData(objectMapper.convertValue(json, new TypeReference<Map<String, Object>>() {}));
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     /** Dify 正文流结束后仍会跑知识库等节点；在 message_end 时通知前端收起光标。 */

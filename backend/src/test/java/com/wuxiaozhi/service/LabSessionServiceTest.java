@@ -6,6 +6,7 @@ import com.wuxiaozhi.dto.AssistResponse;
 import com.wuxiaozhi.dto.EnvCheckResponse;
 import com.wuxiaozhi.dto.experiment.ExperimentConfig;
 import com.wuxiaozhi.dto.experiment.StepConfig;
+import com.wuxiaozhi.entity.ChatMessage;
 import com.wuxiaozhi.entity.EnvCheckLog;
 import com.wuxiaozhi.entity.LabSession;
 import com.wuxiaozhi.repository.CorrectionLogRepository;
@@ -68,7 +69,9 @@ class LabSessionServiceTest {
                 mock(KnowledgeMapService.class),
                 mock(DataValidationService.class),
                 new ObjectMapper(),
-                mock(PlatformTransactionManager.class)
+                mock(PlatformTransactionManager.class),
+                mock(com.wuxiaozhi.repository.MessageFeedbackRepository.class),
+                mock(StudentExperimentAccessService.class)
         );
 
         service.envCheck(12L, null);
@@ -112,7 +115,9 @@ class LabSessionServiceTest {
                 mock(KnowledgeMapService.class),
                 mock(DataValidationService.class),
                 new ObjectMapper(),
-                mock(PlatformTransactionManager.class)
+                mock(PlatformTransactionManager.class),
+                mock(com.wuxiaozhi.repository.MessageFeedbackRepository.class),
+                mock(StudentExperimentAccessService.class)
         );
 
         service.envCheck(12L, null);
@@ -155,13 +160,22 @@ class LabSessionServiceTest {
 
         when(sessionRepository.findById(33L)).thenReturn(Optional.of(session));
         when(sessionRepository.save(any(LabSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        com.wuxiaozhi.repository.ChatMessageRepository chatMessageRepository =
+                mock(com.wuxiaozhi.repository.ChatMessageRepository.class);
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
+            ChatMessage message = invocation.getArgument(0);
+            if (message.getId() == null) {
+                message.setId(message.getRole().equals("user") ? 101L : 102L);
+            }
+            return message;
+        });
         when(experimentConfigService.getByCode("newton_rings")).thenReturn(experiment);
         when(difyService.assist(eq("text-assist"), any(Map.class), eq("guest-33"), eq(experiment), eq(1), eq(false), eq(null)))
                 .thenReturn(response);
 
         LabSessionService service = new LabSessionService(
                 sessionRepository,
-                mock(com.wuxiaozhi.repository.ChatMessageRepository.class),
+                chatMessageRepository,
                 mock(CorrectionLogRepository.class),
                 mock(EnvCheckLogRepository.class),
                 mock(SessionDataLogRepository.class),
@@ -171,7 +185,9 @@ class LabSessionServiceTest {
                 knowledgeMapService,
                 mock(DataValidationService.class),
                 new ObjectMapper(),
-                mock(PlatformTransactionManager.class)
+                mock(PlatformTransactionManager.class),
+                mock(com.wuxiaozhi.repository.MessageFeedbackRepository.class),
+                mock(StudentExperimentAccessService.class)
         );
 
         AssistRequest request = new AssistRequest();

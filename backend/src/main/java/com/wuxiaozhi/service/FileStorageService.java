@@ -26,11 +26,56 @@ public class FileStorageService {
             "image/bmp", ".bmp"
     );
 
+    private static final Set<String> ALLOWED_DOC_EXT = Set.of(
+            ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".md", ".json");
+
+    private static final long MAX_ATTACHMENT_BYTES = 20L * 1024 * 1024;
+
     private final Path uploadRoot;
 
     public FileStorageService(AppProperties appProperties) throws IOException {
         this.uploadRoot = Paths.get(appProperties.getUpload().getDir()).toAbsolutePath().normalize();
         Files.createDirectories(uploadRoot);
+    }
+
+    /** 资料库附件：在图片之外额外放行常见的数据/文档格式 */
+    public String storeAttachment(MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("请选择要上传的文件");
+        }
+        byte[] bytes = file.getBytes();
+        if (bytes.length == 0) {
+            throw new IllegalArgumentException("文件内容为空");
+        }
+        if (bytes.length > MAX_ATTACHMENT_BYTES) {
+            throw new IllegalArgumentException("文件超过 20MB 限制");
+        }
+
+        String ext = extensionFromMagic(bytes);
+        if (ext.isEmpty()) {
+            ext = attachmentExtensionFromFilename(file.getOriginalFilename());
+        }
+        if (ext.isEmpty()) {
+            throw new IllegalArgumentException("暂不支持该文件格式，请上传图片、PDF、Word、Excel、CSV 或文本文件");
+        }
+
+        String filename = UUID.randomUUID() + ext;
+        Files.write(uploadRoot.resolve(filename), bytes);
+        return "/uploads/" + filename;
+    }
+
+    private static String attachmentExtensionFromFilename(String originalFilename) {
+        if (originalFilename == null || !originalFilename.contains(".")) {
+            return "";
+        }
+        String ext = originalFilename.substring(originalFilename.lastIndexOf('.')).toLowerCase(Locale.ROOT);
+        if (".jpeg".equals(ext)) {
+            return ".jpg";
+        }
+        if (ALLOWED_EXT.contains(ext) || ALLOWED_DOC_EXT.contains(ext)) {
+            return ext;
+        }
+        return "";
     }
 
     public String store(MultipartFile file) throws IOException {

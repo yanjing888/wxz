@@ -23,13 +23,21 @@
           msg.role === 'ai' ? aiBubbleClass : userBubbleClass
         ]"
       >
-        <img
-          v-if="msg.image"
-          :src="msg.image"
-          alt="用户上传图片"
-          class="max-w-full max-h-48 rounded-xl border border-line-soft mb-2 object-contain bg-white"
-          @error="onImageError($event, msg)"
-        />
+        <div v-if="msg.image" class="mb-2">
+          <p
+            v-if="msg.role === 'ai' && msg.annotated"
+            class="text-[10px] font-semibold text-red-600 mb-1.5 flex items-center gap-1"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+            纠错标注图
+          </p>
+          <img
+            :src="msg.image"
+            :alt="msg.role === 'ai' && msg.annotated ? '纠错标注图' : '用户上传图片'"
+            class="max-w-full max-h-48 rounded-xl border border-line-soft object-contain bg-white"
+            @error="onImageError($event, msg)"
+          />
+        </div>
         <div v-if="msg.streaming && !msg.text" class="flex items-center gap-2 text-ink-muted">
           <span>正在分析</span>
           <span class="chat-loading-dots" aria-hidden="true">
@@ -39,6 +47,30 @@
         <div v-else-if="msg.text || msg.streaming" class="min-w-0 w-full">
           <div v-html="renderMd(msg.text, msg.role)" />
           <span v-if="msg.streaming" class="chat-stream-cursor" aria-hidden="true" />
+        </div>
+        <div
+          v-if="canRate(msg)"
+          class="mt-2 pt-2 border-t border-line-soft flex items-center gap-2 flex-wrap"
+        >
+          <span class="text-[10px] text-ink-faint">这条回复</span>
+          <button
+            type="button"
+            class="feedback-btn"
+            :class="msg.feedbackRating === 'HELPFUL' ? 'feedback-btn--active' : ''"
+            :disabled="feedbackLoadingId === msg.id"
+            @click="submitFeedback(msg, 'HELPFUL')"
+          >
+            有帮助
+          </button>
+          <button
+            type="button"
+            class="feedback-btn"
+            :class="msg.feedbackRating === 'NOT_HELPFUL' ? 'feedback-btn--active-danger' : ''"
+            :disabled="feedbackLoadingId === msg.id"
+            @click="submitFeedback(msg, 'NOT_HELPFUL')"
+          >
+            无帮助
+          </button>
         </div>
       </div>
     </div>
@@ -63,8 +95,11 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { renderChatMarkdown } from '../../utils/markdown'
+import { useLabStore } from '../../stores/lab'
 
 const scrollEl = ref(null)
+const feedbackLoadingId = ref(null)
+const lab = useLabStore()
 
 function scrollToBottom(smooth = false) {
   nextTick(() => {
@@ -83,7 +118,8 @@ const props = defineProps({
   messages: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   welcomeSubtitle: { type: String, default: '' },
-  studentName: { type: String, default: '' }
+  studentName: { type: String, default: '' },
+  enableFeedback: { type: Boolean, default: true }
 })
 
 const bubbleBaseClass = 'px-3 py-2.5 rounded-2xl leading-relaxed border chat-md shadow-card'
@@ -130,4 +166,37 @@ function onImageError(event, msg) {
   }
   el.alt = '图片无法预览'
 }
+
+function canRate(msg) {
+  return props.enableFeedback && msg?.role === 'ai' && msg?.id && !msg?.streaming && !msg?.localWelcome && !!lab.session?.id
+}
+
+async function submitFeedback(msg, rating) {
+  if (!msg?.id || feedbackLoadingId.value) return
+  feedbackLoadingId.value = msg.id
+  try {
+    await lab.submitMessageFeedback(msg.id, rating)
+  } catch {
+    window.dispatchEvent(new CustomEvent('wxz-app-alert', {
+      detail: { title: '评价失败', message: '请稍后重试' }
+    }))
+  } finally {
+    feedbackLoadingId.value = null
+  }
+}
 </script>
+
+<style scoped>
+.feedback-btn {
+  @apply px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-line-soft text-ink-muted bg-white hover:bg-surface-soft transition-colors;
+}
+.feedback-btn--active {
+  @apply border-brand-200 bg-brand-50 text-brand-700;
+}
+.feedback-btn--active-danger {
+  @apply border-red-200 bg-red-50 text-red-600;
+}
+.feedback-btn:disabled {
+  @apply opacity-60 cursor-not-allowed;
+}
+</style>

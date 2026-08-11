@@ -65,14 +65,27 @@ public class ExperimentConfigService {
                 continue;
             }
             MarkdownSections guide = readMarkdown(manifestResource.createRelative(step.getGuidePath()));
+            if (step.getTut() == null) {
+                step.setTut(new com.wuxiaozhi.dto.experiment.TutorialConfig());
+            }
+            var tut = step.getTut();
+            if (tut.getSteps() == null || tut.getSteps().isEmpty()) {
+                tut.setSteps(guide.list("Steps"));
+            }
+            if (tut.getWarnings() == null || tut.getWarnings().isEmpty()) {
+                tut.setWarnings(guide.list("Warnings"));
+            }
+            if (tut.getImages() == null || tut.getImages().isEmpty()) {
+                tut.setImages(guide.list("Images"));
+            }
+            if (tut.getVideoUrl() == null || tut.getVideoUrl().isBlank()) {
+                String videoUrl = guide.text("Video");
+                if (videoUrl != null && !videoUrl.isBlank()) {
+                    tut.setVideoUrl(videoUrl.lines().findFirst().orElse("").trim());
+                }
+            }
             if (step.getDesc() == null || step.getDesc().isBlank()) {
                 step.setDesc(guide.text("Description"));
-            }
-            if (step.getTut() == null) {
-                var tut = new com.wuxiaozhi.dto.experiment.TutorialConfig();
-                tut.setSteps(guide.list("Steps"));
-                tut.setWarnings(guide.list("Warnings"));
-                step.setTut(tut);
             }
         }
     }

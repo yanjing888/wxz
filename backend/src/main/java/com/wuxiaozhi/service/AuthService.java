@@ -1,11 +1,11 @@
 package com.wuxiaozhi.service;
 
-import com.wuxiaozhi.config.AppProperties;
 import com.wuxiaozhi.dto.AuthResponse;
 import com.wuxiaozhi.dto.LoginRequest;
 import com.wuxiaozhi.dto.RegisterRequest;
 import com.wuxiaozhi.dto.ResetPasswordRequest;
 import com.wuxiaozhi.entity.User;
+import com.wuxiaozhi.entity.UserRole;
 import com.wuxiaozhi.repository.UserRepository;
 import com.wuxiaozhi.security.JwtUtil;
 import jakarta.annotation.PostConstruct;
@@ -19,6 +19,8 @@ public class AuthService {
 
     private static final String DEFAULT_USERNAME = "test01";
     private static final String DEFAULT_PASSWORD = "test01";
+    private static final String DEFAULT_TEACHER_USERNAME = "teacher01";
+    private static final String DEFAULT_TEACHER_PASSWORD = "teacher01";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -31,16 +33,31 @@ public class AuthService {
     }
 
     @PostConstruct
-    public void ensureDefaultUser() {
-        if (userRepository.existsByUsername(DEFAULT_USERNAME)) {
-            return;
+    public void ensureDefaultUsers() {
+        userRepository.findAll().forEach(user -> {
+            if (user.getRole() == null || user.getRole().isBlank()) {
+                user.setRole(UserRole.STUDENT);
+                userRepository.save(user);
+            }
+        });
+        if (!userRepository.existsByUsername(DEFAULT_USERNAME)) {
+            User user = new User();
+            user.setUsername(DEFAULT_USERNAME);
+            user.setPasswordHash(passwordEncoder.encode(DEFAULT_PASSWORD));
+            user.setDisplayName("测试用户");
+            user.setStudentClass("物理2401");
+            user.setRole(UserRole.STUDENT);
+            userRepository.save(user);
         }
-        User user = new User();
-        user.setUsername(DEFAULT_USERNAME);
-        user.setPasswordHash(passwordEncoder.encode(DEFAULT_PASSWORD));
-        user.setDisplayName("测试用户");
-        user.setStudentClass("");
-        userRepository.save(user);
+        if (!userRepository.existsByUsername(DEFAULT_TEACHER_USERNAME)) {
+            User teacher = new User();
+            teacher.setUsername(DEFAULT_TEACHER_USERNAME);
+            teacher.setPasswordHash(passwordEncoder.encode(DEFAULT_TEACHER_PASSWORD));
+            teacher.setDisplayName("测试教师");
+            teacher.setStudentClass("");
+            teacher.setRole(UserRole.TEACHER);
+            userRepository.save(teacher);
+        }
     }
 
     public AuthResponse register(RegisterRequest req) {
@@ -51,7 +68,8 @@ public class AuthService {
         user.setUsername(req.getUsername());
         user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
         user.setDisplayName(req.getDisplayName().trim());
-        user.setStudentClass("");
+        user.setStudentClass(normalizeClass(req.getStudentClass()));
+        user.setRole(UserRole.STUDENT);
         userRepository.save(user);
         return buildAuthResponse(user);
     }
@@ -82,11 +100,26 @@ public class AuthService {
 
     public AuthResponse currentUser(Long userId) {
         User user = getUser(userId);
-        return new AuthResponse("", user.getId(), user.getUsername(), user.getDisplayName());
+        return new AuthResponse("", user.getId(), user.getUsername(), user.getDisplayName(),
+                normalizeRole(user.getRole()), safeClass(user.getStudentClass()));
     }
 
     private AuthResponse buildAuthResponse(User user) {
-        String token = jwtUtil.generateToken(user.getId(), user.getUsername());
-        return new AuthResponse(token, user.getId(), user.getUsername(), user.getDisplayName());
+        String role = normalizeRole(user.getRole());
+        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), role);
+        return new AuthResponse(token, user.getId(), user.getUsername(), user.getDisplayName(),
+                role, safeClass(user.getStudentClass()));
+    }
+
+    private String normalizeRole(String role) {
+        return UserRole.TEACHER.equalsIgnoreCase(role) ? UserRole.TEACHER : UserRole.STUDENT;
+    }
+
+    private String normalizeClass(String studentClass) {
+        return studentClass != null ? studentClass.trim() : "";
+    }
+
+    private String safeClass(String studentClass) {
+        return studentClass != null ? studentClass : "";
     }
 }

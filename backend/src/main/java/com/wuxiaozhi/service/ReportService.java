@@ -43,6 +43,43 @@ public class ReportService {
         }
     }
 
+    /** 学生在报告助手里编辑的正文，按七段结构导出为 Word */
+    public byte[] generateStudentReportDocx(Map<String, Object> meta, List<Map<String, String>> sections)
+            throws Exception {
+        try (XWPFDocument doc = new XWPFDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            addCenterTitle(doc, str(meta.get("experimentName")) + " 实验报告");
+
+            XWPFTable table = doc.createTable(3, 2);
+            setTableWidth(table, 9000);
+            fillRow(table, 0, "学生姓名", str(meta.get("studentName")));
+            fillRow(table, 1, "班级", str(meta.get("studentClass")));
+            fillRow(table, 2, "撰写时间", LocalDateTime.now().format(REPORT_TIME));
+            styleLabelValueTable(table);
+            doc.createParagraph();
+
+            int index = 1;
+            for (Map<String, String> section : sections) {
+                String label = section.getOrDefault("label", "");
+                String content = section.getOrDefault("content", "");
+                addHeading(doc, label.isBlank() ? (index + ".") : label);
+                if (content.isBlank()) {
+                    addBody(doc, "（待补充）");
+                } else {
+                    for (String line : content.split("\\r?\\n")) {
+                        addBody(doc, line);
+                    }
+                }
+                index += 1;
+            }
+
+            doc.createParagraph();
+            addCenterNote(doc, "本报告正文由学生撰写，物小智智能实验平台负责排版导出。");
+
+            doc.write(out);
+            return out.toByteArray();
+        }
+    }
+
     private void addCoverTable(XWPFDocument doc, Map<String, Object> report) {
         XWPFTable table = doc.createTable(5, 2);
         setTableWidth(table, 9000);

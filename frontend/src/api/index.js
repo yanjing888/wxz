@@ -19,6 +19,7 @@ export const sessionApi = {
   latest: (experimentCode) => http.get('/api/sessions/latest', { params: { experimentCode } }),
   get: (id) => http.get(`/api/sessions/${id}`),
   messages: (id) => http.get(`/api/sessions/${id}/messages`),
+  attachLatestAiImage: (id, data) => http.patch(`/api/sessions/${id}/messages/latest-ai-image`, data),
   updateStep: (id, stepId) => http.patch(`/api/sessions/${id}/step?stepId=${stepId}`),
   assist: (id, data) => http.post(`/api/sessions/${id}/assist`, data),
   assistStream: (id, data, handlers, signal) =>
@@ -35,7 +36,9 @@ export const sessionApi = {
   deviceSnapshot: (id, stepId) => http.get(`/api/sessions/${id}/device/snapshot?stepId=${stepId}`),
   finish: (id) => http.post(`/api/sessions/${id}/finish`),
   report: (id) => http.get(`/api/sessions/${id}/report`),
-  reportDocx: (id) => http.get(`/api/sessions/${id}/report/docx`, { responseType: 'blob' })
+  reportDocx: (id) => http.get(`/api/sessions/${id}/report/docx`, { responseType: 'blob' }),
+  studentReportDocx: (id, data) =>
+    http.post(`/api/sessions/${id}/report/student-docx`, data, { responseType: 'blob' })
 }
 
 export const uploadApi = {
@@ -74,4 +77,75 @@ export const uploadApi = {
 export const systemApi = {
   difyStatus: () => http.get('/api/system/dify-status'),
   benchCamera: () => http.get('/api/system/bench-camera')
+}
+
+export const feedbackApi = {
+  submit: (sessionId, messageId, rating) =>
+    http.post(`/api/sessions/${sessionId}/messages/${messageId}/feedback`, { rating })
+}
+
+export const studentExperimentApi = {
+  profileSummary: () => http.get('/api/student/experiments/profile-summary'),
+  listProgress: () => http.get('/api/student/experiments/progress'),
+  getProgress: (code) => http.get(`/api/student/experiments/${code}/progress`),
+  completePreLab: (code) => http.post(`/api/student/experiments/${code}/progress/pre-lab`),
+  completeRecap: (code) => http.post(`/api/student/experiments/${code}/progress/recap`)
+}
+
+export const studentFileApi = {
+  list: (experimentCode) => http.get('/api/student/files', { params: { experimentCode } }),
+  save: (data) => http.post('/api/student/files', data),
+  rename: (id, data) => http.patch(`/api/student/files/${id}`, data),
+  remove: (id) => http.delete(`/api/student/files/${id}`),
+  async upload(file, meta = {}) {
+    const fd = new FormData()
+    fd.append('file', file, file.name || 'file')
+    Object.entries(meta).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') fd.append(key, value)
+    })
+    const token = localStorage.getItem('wxz_token')
+
+    let res
+    try {
+      res = await fetch('/api/student/files/upload', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd
+      })
+    } catch {
+      throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/ports.env）')
+    }
+
+    const text = await res.text()
+    let payload
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      throw new Error(text || `上传失败 (${res.status})`)
+    }
+    if (!res.ok) throw new Error(payload.message || `上传失败 (${res.status})`)
+    return { data: payload }
+  }
+}
+
+export const aiToolApi = {
+  tools: () => http.get('/api/ai/tools'),
+  invoke: (toolCode, data) => http.post(`/api/ai/tools/${toolCode}/invoke`, data),
+  recapSessions: () => http.get('/api/ai/recap/sessions'),
+  conversations: (toolCode) => http.get(`/api/ai/tools/${toolCode}/conversations`),
+  createConversation: (toolCode) => http.post(`/api/ai/tools/${toolCode}/conversations`),
+  messages: (conversationId) => http.get(`/api/ai/conversations/${conversationId}/messages`)
+}
+
+export const teacherApi = {
+  overview: () => http.get('/api/teacher/overview'),
+  reports: (params = {}) => http.get('/api/teacher/reports', { params }),
+  report: (sessionId) => http.get(`/api/teacher/reports/${sessionId}`),
+  reportDocx: (sessionId) => http.get(`/api/teacher/reports/${sessionId}/docx`, { responseType: 'blob' }),
+  feedback: (params = {}) => http.get('/api/teacher/feedback', { params }),
+  markFeedbackProcessed: (feedbackId) => http.patch(`/api/teacher/feedback/${feedbackId}/processed`),
+  students: () => http.get('/api/teacher/students'),
+  importStudents: (data) => http.post('/api/teacher/students/import', data),
+  assignExperiments: (userId, data) => http.put(`/api/teacher/students/${userId}/experiments`, data),
+  bulkAssignExperiments: (data) => http.post('/api/teacher/students/assignments/bulk', data)
 }

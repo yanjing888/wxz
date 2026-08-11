@@ -177,6 +177,20 @@ body, html, #app {
   flex-shrink: 0;
 }
 
+.workzone-bottom-dock {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.65) 0%, var(--bg-surface) 28%);
+}
+
+.workzone-middle {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .env-hint-brief {
   display: -webkit-box;
   -webkit-line-clamp: 2;

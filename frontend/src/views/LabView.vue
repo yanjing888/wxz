@@ -1,21 +1,21 @@
 <template>
-  <div v-if="booting" class="w-full h-full flex flex-col items-center justify-center text-ink-muted text-sm gap-4">
-    <div class="w-12 h-12 rounded-2xl brand-gradient flex items-center justify-center text-white font-bold shadow-brand chat-loading-avatar">智</div>
-    <p>正在进入实验室<span class="chat-loading-dots ml-1"><span /><span /><span /></span></p>
-  </div>
+  <div class="page-root flex flex-col flex-1 min-h-0 w-full overflow-hidden">
+    <div v-if="booting" class="flex flex-col flex-1 items-center justify-center text-ink-muted text-sm gap-4">
+      <div class="w-12 h-12 rounded-2xl brand-gradient flex items-center justify-center text-white font-bold shadow-brand chat-loading-avatar">智</div>
+      <p>正在进入实验室<span class="chat-loading-dots ml-1"><span /><span /><span /></span></p>
+    </div>
 
-  <div v-else-if="bootError" class="w-full h-full flex flex-col items-center justify-center px-6 text-center gap-4">
-    <div class="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-red-500 text-2xl">!</div>
-    <p class="text-red-600 text-sm max-w-md leading-relaxed">{{ bootError }}</p>
-    <button type="button" class="btn-brand px-7 py-2.5 rounded-xl text-sm font-bold" @click="retryBoot">重新连接</button>
-  </div>
+    <div v-else-if="bootError" class="flex flex-col flex-1 items-center justify-center px-6 text-center gap-4">
+      <div class="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-red-500 text-2xl">!</div>
+      <p class="text-red-600 text-sm max-w-md leading-relaxed">{{ bootError }}</p>
+      <button type="button" class="btn-brand px-7 py-2.5 rounded-xl text-sm font-bold" @click="retryBoot">重新连接</button>
+    </div>
 
-  <div v-else class="lab-page flex flex-col w-full overflow-hidden">
+    <div v-else class="lab-page flex flex-col flex-1 min-h-0 w-full overflow-hidden">
     <!-- 顶栏 -->
     <LabHeader
       :experiments="lab.experiments"
       :experiment-code="lab.experiment?.code || ''"
-      :student-name="lab.session?.studentName || '学生'"
       :env-level="lab.envLevel"
       :dify-status="lab.difyStatus"
       :dify-status-loading="lab.difyStatusLoading"
@@ -23,7 +23,6 @@
       @quick-stats="showQuickStats = true"
       @report="openReport"
       @experiment-change="onExperimentChange"
-      @logout="logout"
     />
 
     <!-- 主体：嵌入式工作台 — 贴顶栏底、贴左右边、贴底，仅保留顶部圆角 -->
@@ -41,73 +40,33 @@
           :step="lab.stepConfig"
           @select="lab.selectStep"
           @tutorial="openTutorial"
-        />
-        <template v-if="lab.hasDataPanel">
-          <div class="workzone-divider" />
-          <DataCollectionSection
-            :open="lab.dataPanelOpen"
-            :mode="lab.useDeviceData ? 'device' : 'manual'"
-            @toggle="lab.toggleDataPanel()"
-          >
-            <InstrumentDataPanel
-              v-if="lab.useDeviceData"
-              :step-title="lab.stepConfig?.title"
-              :device-type="lab.deviceType"
-              :device-name="lab.deviceName"
-              :device-state="lab.deviceState"
-              :device-connected="lab.deviceConnected"
-              :device-busy="lab.deviceBusy"
-              :sampling-hz="lab.deviceSamplingHz"
-              :fields="lab.currentDataFields"
-              :snapshot="lab.deviceSnapshot"
-              :live="lab.deviceLive"
-              :curve-points="lab.deviceCurve"
-              :reading="lab.deviceReading"
-              :submitting="lab.submittingData"
-              :validation-errors="lab.dataSubmitErrors"
-              :can-submit-data="lab.deviceHasSubmitData"
-              :acquire-progress="lab.deviceAcquireProgress"
-              @start-acquire="lab.startDeviceAcquisition()"
-              @stop-acquire="lab.stopDeviceAcquisition()"
-              @read-once="lab.readDeviceOnce()"
-              @submit="lab.submitDeviceData()"
-            />
-            <DataCollectionPanel
-              v-else
-              :fields="lab.currentDataFields"
-              :step-title="lab.stepConfig?.title"
-              :values="lab.currentStepDataValues"
-              :last-saved="lab.currentStepDataSaved"
-              :submitting="lab.submittingData"
-              :validation-errors="lab.dataSubmitErrors"
-              @submit="onSubmitData"
-            />
-          </DataCollectionSection>
-        </template>
-        <div class="workzone-divider" />
-        <ImageUploadZone
-          ref="uploadZone"
-          :image-preview="lab.imagePreview"
-          :uploading-image="lab.uploadingImage"
-          :upload-error="lab.uploadError"
-          :marks="lab.marks"
-          @upload="onZoneUpload"
-          @capture="onZoneCapture"
-          @clear="lab.clearImage()"
+          @instrument-guide="showInstrumentGuide = true"
         />
         <div class="workzone-divider" />
-        <BenchCameraPanel
-          ref="benchCam"
-          :env-check-enabled="lab.envCheckEnabled"
-          :env-level="lab.envLevel"
-          :env-hint="lab.envHint"
-          :env-logs="lab.envLogs"
-          :env-check-running="lab.envCheckRunning"
-          :env-check-available="lab.envCheckAvailable"
-          :bench-camera="lab.benchCamera"
-          @toggle-env="lab.toggleEnvCheck"
-          @env-check="(blob) => lab.runEnvCheck(blob)"
+        <DeviceReadBar
+          :busy="lab.deviceReadBusy"
+          :disabled="currentSessionReadOnly"
+          :data-ready="lab.composerDataReady"
+          @read="onReadDevice"
+          @photo-read="showReadingAssist = true"
         />
+        <div class="workzone-middle">
+          <StepWorkPanel :step="lab.stepConfig" />
+        </div>
+        <div class="workzone-bottom-dock">
+          <BenchCameraPanel
+            ref="benchCam"
+            :env-check-enabled="lab.envCheckEnabled"
+            :env-level="lab.envLevel"
+            :env-hint="lab.envHint"
+            :env-logs="lab.envLogs"
+            :env-check-running="lab.envCheckRunning"
+            :env-check-available="lab.envCheckAvailable"
+            :bench-camera="lab.benchCamera"
+            @toggle-env="lab.toggleEnvCheck"
+            @env-check="(blob) => lab.runEnvCheck(blob)"
+          />
+        </div>
       </aside>
 
       <div
@@ -119,17 +78,24 @@
         @pointerdown="startWorkspaceResize"
       />
 
-      <!-- 右：AI 智能助手主舞台 -->
+      <!-- 右：实验台工作台（指导 / 数据 / 资料 / 课后） -->
       <section class="flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden">
-        <RightPanel
-          :messages="lab.messages"
-          :loading-assist="lab.loadingAssist"
-          :uploading-image="lab.uploadingImage"
-          :image-preview="lab.composerImagePreview"
-          :image-ready="!!lab.readyImageUrl"
+        <LabWorkbench
+          v-model="workbenchTab"
+          :data-count="sessionDataCount"
+          :file-count="fileCount"
+          :experiment-code="lab.experiment?.code || ''"
           :experiment-name="lab.experiment?.name || ''"
           :step-title="lab.stepConfig?.title || ''"
           :student-name="lab.session?.studentName || ''"
+          :session-finished="lab.session?.status === 'FINISHED'"
+          :messages="lab.messages"
+          :loading-assist="lab.loadingAssist"
+          :submitting-data="lab.submittingData"
+          :uploading-image="lab.uploadingImage"
+          :image-preview="lab.composerImagePreview"
+          :image-ready="!!lab.readyImageUrl"
+          :data-attachment="lab.composerDataAttachment"
           :suggestions="quickSuggestions"
           :read-only="currentSessionReadOnly"
           :session-history="lab.sessionHistory"
@@ -142,6 +108,8 @@
           @upload-image="onComposerUpload"
           @capture-image="onComposerCapture"
           @clear-image="lab.clearComposerImage()"
+          @clear-data="lab.clearComposerDataAttachment()"
+          @open-summary="openReport"
         />
       </section>
       </div>
@@ -170,60 +138,111 @@
       :lab-l3-count="lab.session?.labL3Count ?? 0"
       @close="showQuickStats = false"
     />
+    <PreLabBriefModal
+      :visible="showPreLabBrief"
+      :experiment-code="lab.experiment?.code || ''"
+      :experiment-name="lab.experiment?.name || ''"
+      @close="showPreLabBrief = false"
+    />
+    <InstrumentGuideModal
+      :visible="showInstrumentGuide"
+      :experiment-code="lab.experiment?.code || ''"
+      :experiment-name="lab.experiment?.name || ''"
+      :step-no="lab.activeStep"
+      :step-title="lab.stepConfig?.title || ''"
+      :step-desc="lab.stepConfig?.desc || ''"
+      :device-type="lab.stepConfig?.deviceType || lab.deviceType || ''"
+      :data-fields="lab.stepConfig?.dataFields || []"
+      @close="showInstrumentGuide = false"
+    />
+    <ReadingAssistModal
+      :visible="showReadingAssist"
+      :experiment-code="lab.experiment?.code || ''"
+      :experiment-name="lab.experiment?.name || ''"
+      :step-no="lab.activeStep"
+      @close="showReadingAssist = false"
+    />
     <TabletCameraCapture
       :visible="tabletCameraOpen"
       @close="tabletCameraOpen = false"
       @captured="onTabletCameraCaptured"
     />
-  </div>
+    </div>
 
-  <AppConfirmDialog
-    :visible="appDialog.visible"
-    :mode="appDialog.mode"
-    :title="appDialog.title"
-    :message="appDialog.message"
-    :detail="appDialog.detail"
-    :confirm-text="appDialog.confirmText"
-    :cancel-text="appDialog.cancelText"
-    @confirm="resolveAppDialog(true)"
-    @cancel="resolveAppDialog(false)"
-  />
+    <AppConfirmDialog
+      :visible="appDialog.visible"
+      :mode="appDialog.mode"
+      :title="appDialog.title"
+      :message="appDialog.message"
+      :detail="appDialog.detail"
+      :confirm-text="appDialog.confirmText"
+      :cancel-text="appDialog.cancelText"
+      @confirm="resolveAppDialog(true)"
+      @cancel="resolveAppDialog(false)"
+    />
+  </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useLabStore } from '../stores/lab'
 import { useAuthStore } from '../stores/auth'
 import LabHeader from '../components/layout/LabHeader.vue'
+import LabWorkbench from '../components/layout/LabWorkbench.vue'
 import StepPanel from '../components/step/StepPanel.vue'
-import InstrumentDataPanel from '../components/data/InstrumentDataPanel.vue'
-import DataCollectionPanel from '../components/data/DataCollectionPanel.vue'
-import DataCollectionSection from '../components/data/DataCollectionSection.vue'
-import ImageUploadZone from '../components/upload/ImageUploadZone.vue'
+import StepWorkPanel from '../components/step/StepWorkPanel.vue'
+import DeviceReadBar from '../components/data/DeviceReadBar.vue'
 import BenchCameraPanel from '../components/monitor/BenchCameraPanel.vue'
-import RightPanel from '../components/layout/RightPanel.vue'
 import TabletCameraCapture from '../components/camera/TabletCameraCapture.vue'
 import TutorialModal from '../components/modals/TutorialModal.vue'
 import ReportModal from '../components/modals/ReportModal.vue'
 import QuickStatsModal from '../components/modals/QuickStatsModal.vue'
+import PreLabBriefModal from '../components/modals/PreLabBriefModal.vue'
+import InstrumentGuideModal from '../components/modals/InstrumentGuideModal.vue'
+import ReadingAssistModal from '../components/modals/ReadingAssistModal.vue'
 import AppConfirmDialog from '../components/modals/AppConfirmDialog.vue'
+import { rememberVisit } from '../utils/experimentFlow'
+import { studentFileApi } from '../api'
 
 const lab = useLabStore()
 const auth = useAuthStore()
-const router = useRouter()
+const route = useRoute()
 
-const uploadZone = ref(null)
+const queryExperimentCode = computed(() => String(route.query.exp || '').trim())
+
+const currentExperimentCode = computed(() => lab.experiment?.code || queryExperimentCode.value)
+
+watch(currentExperimentCode, (code) => {
+  if (code) rememberVisit(code, 'lab')
+  refreshFileCount()
+}, { immediate: true })
+
+watch(() => lab.session?.id, () => {
+  refreshFileCount()
+})
+
+watch(
+  () => lab.submittingData,
+  (busy, wasBusy) => {
+    if (wasBusy && !busy && sessionDataCount.value > 0) {
+      workbenchTab.value = 'data'
+    }
+  }
+)
+
 const benchCam = ref(null)
 const showTutorial = ref(false)
 const showReport = ref(false)
 const showQuickStats = ref(false)
+const showPreLabBrief = ref(false)
+const showInstrumentGuide = ref(false)
+const showReadingAssist = ref(false)
 const reportData = ref(null)
 const downloadingDocx = ref(false)
 const booting = ref(true)
 const bootError = ref('')
 const tabletCameraOpen = ref(false)
-const tabletCameraTarget = ref('composer')
 const appDialog = ref({
   visible: false,
   mode: 'confirm',
@@ -239,7 +258,11 @@ const WORKSPACE_WIDTH_KEY = 'wxz_workspace_left_width'
 const DEFAULT_WORKSPACE_LEFT_WIDTH = 400
 const MIN_WORKSPACE_LEFT_WIDTH = 320
 const workspaceLeftWidth = ref(readStoredWorkspaceWidth())
+const workbenchTab = ref('guide')
+const fileCount = ref(0)
 let viewActive = true
+
+const sessionDataCount = computed(() => Object.keys(lab.sessionDataByStep || {}).length)
 
 const workspaceColumns = computed(() => ({
   gridTemplateColumns: `${workspaceLeftWidth.value}px 10px minmax(0, 1fr)`
@@ -258,6 +281,20 @@ const quickSuggestions = computed(() => {
   ]
 })
 
+async function refreshFileCount() {
+  const code = lab.experiment?.code || queryExperimentCode.value
+  if (!code) {
+    fileCount.value = 0
+    return
+  }
+  try {
+    const { data } = await studentFileApi.list(code)
+    fileCount.value = (data || []).length
+  } catch {
+    fileCount.value = 0
+  }
+}
+
 async function bootstrap() {
   booting.value = true
   bootError.value = ''
@@ -270,17 +307,28 @@ async function bootstrap() {
       })
     if (!lab.session?.id) {
       await lab.loadExperiments()
-      const code = localStorage.getItem('wxz_exp') || 'newton_rings'
+      if (!lab.experiments.length) {
+        bootError.value = '暂无分配的实验，请联系教师为您分配后再进入。'
+        return
+      }
+      const queryExp = queryExperimentCode.value
+      const saved = queryExp || localStorage.getItem('wxz_exp')
+      const code = lab.experiments.some((e) => e.code === saved)
+        ? saved
+        : lab.experiments[0].code
       const name = auth.displayName || localStorage.getItem('wxz_displayName') || '学生'
       await lab.loadExperiment(code)
-      const latest = await lab.getLatestActiveSession(code)
+      const restart = route.query.restart === '1'
+      const latest = restart ? null : await lab.getLatestActiveSession(code)
       if (latest) {
         await lab.resumeSession(latest)
       } else {
-        await lab.startSession(code, name, '')
+        await lab.startSession(code, name, auth.studentClass || '')
       }
     }
     lab.startEnvTimer()
+    maybeShowPreLabBrief(lab.experiment?.code || queryExperimentCode.value)
+    await refreshFileCount()
   } catch (e) {
     bootError.value = e.response?.data?.message || e.message || '无法连接后端，请先启动 backend（mvn spring-boot:run）'
     lab.stopDifyStatusTimer()
@@ -292,6 +340,14 @@ async function bootstrap() {
 
 function retryBoot() {
   bootstrap()
+}
+
+function maybeShowPreLabBrief(code) {
+  if (!code || bootError.value) return
+  const key = `wxz_brief_${code}`
+  if (!localStorage.getItem(key)) {
+    showPreLabBrief.value = true
+  }
 }
 
 function openAppDialog(options = {}) {
@@ -383,15 +439,6 @@ function startWorkspaceResize(event) {
   window.addEventListener('pointercancel', onPointerUp, { once: true })
 }
 
-function logout() {
-  lab.stopDifyStatusTimer()
-  lab.stopEnvTimer()
-  lab.teardownDevice()
-  lab.$reset()
-  auth.logout()
-  router.replace('/login')
-}
-
 onMounted(() => {
   viewActive = true
   window.addEventListener('wxz-app-alert', onGlobalAppAlert)
@@ -410,9 +457,9 @@ onUnmounted(() => {
   lab.teardownDevice()
 })
 
-async function uploadTo(file, target) {
+async function uploadTo(file) {
   try {
-    await lab.uploadImage(file, { target })
+    await lab.uploadImage(file)
   } catch (e) {
     const msg = lab.uploadError || e.response?.data?.message || e.message || '图片上传失败'
     await showAppAlert('上传失败', msg)
@@ -420,34 +467,32 @@ async function uploadTo(file, target) {
 }
 
 function onComposerUpload(file) {
-  return uploadTo(file, 'composer')
+  return uploadTo(file)
 }
 
 function onComposerCapture() {
-  return openTabletCamera('composer')
-}
-
-function onZoneUpload(file) {
-  return uploadTo(file, 'zone')
-}
-
-function onZoneCapture() {
-  return openTabletCamera('zone')
-}
-
-function openTabletCamera(target) {
-  tabletCameraTarget.value = target
   tabletCameraOpen.value = true
 }
 
 async function onTabletCameraCaptured(file) {
   tabletCameraOpen.value = false
-  return uploadTo(file, tabletCameraTarget.value)
+  return uploadTo(file)
 }
 
 async function onSendMessage(text) {
-  return lab.sendMessage(text)
+  const ok = await lab.sendMessage(text)
+  refreshFileCount()
+  return ok
 }
+
+async function onReadDevice() {
+  if (currentSessionReadOnly.value) {
+    await showAppAlert('历史会话仅供查看', '已完成的历史会话不能读取仪器数据，请新建会话后再操作。')
+    return
+  }
+  await lab.loadDeviceDataIntoComposer()
+}
+
 
 async function onSelectSession(item) {
   await lab.resumeSession(item)
@@ -459,7 +504,7 @@ async function onSelectSession(item) {
 }
 
 async function startNewSession() {
-  const code = lab.experiment?.code || localStorage.getItem('wxz_exp') || 'newton_rings'
+  const code = lab.experiment?.code || lab.experiments[0]?.code || localStorage.getItem('wxz_exp') || ''
   const name = auth.displayName || localStorage.getItem('wxz_displayName') || lab.session?.studentName || '学生'
   if (lab.session?.status === 'ACTIVE') {
     const ok = await openAppDialog({
@@ -471,7 +516,7 @@ async function startNewSession() {
     })
     if (!ok) return
   }
-  await lab.startSession(code, name, '')
+  await lab.startSession(code, name, auth.studentClass || '')
   lab.startEnvTimer()
 }
 
@@ -491,17 +536,10 @@ async function onExperimentChange(code) {
   }
   try {
     await lab.switchExperiment(code)
+    maybeShowPreLabBrief(code)
   } catch (e) {
     await showAppAlert('切换失败', e.response?.data?.message || e.message || '切换实验失败')
   }
-}
-
-async function onSubmitData(values) {
-  if (currentSessionReadOnly.value) {
-    await showAppAlert('历史会话仅供查看', '已完成的历史会话不能继续提交数据，请新建会话后再操作。')
-    return
-  }
-  await lab.submitStepData(values)
 }
 
 async function openTutorial() {

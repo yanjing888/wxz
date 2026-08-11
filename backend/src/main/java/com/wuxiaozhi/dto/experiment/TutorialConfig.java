@@ -10,4 +10,8 @@ import java.util.List;
 public class TutorialConfig {
     private List<String> steps;
     private List<String> warnings;
+    /** 教程示意图 URL 列表（可多图切换） */
+    private List<String> images;
+    /** 教程演示视频 URL，可选 */
+    private String videoUrl;
 }

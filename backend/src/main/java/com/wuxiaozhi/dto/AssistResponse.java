@@ -13,4 +13,6 @@ public class AssistResponse {
     private String detail;
     private List<MarkDto> marks;
     private boolean fromDify;
+    private Long userMessageId;
+    private Long aiMessageId;
 }

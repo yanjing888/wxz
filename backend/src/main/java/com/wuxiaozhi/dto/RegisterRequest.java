@@ -16,4 +16,7 @@ public class RegisterRequest {
     @NotBlank
     @Size(max = 64)
     private String displayName;
+
+    @Size(max = 64)
+    private String studentClass;
 }
