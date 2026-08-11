@@ -1,5 +1,5 @@
 <template>
-  <StagePanel layout="chat" title="撰写报告" desc="自动带入实验记录与测量数据，你只需补充结果与讨论。">
+  <StagePanel layout="chat" title="报告教练" desc="基于真实实验记录起稿、润色与查缺漏；思考题结论请自己完成。">
     <template #actions>
       <button
         type="button"

@@ -11,4 +11,6 @@ public interface StudentExperimentProgressRepository extends JpaRepository<Stude
     Optional<StudentExperimentProgress> findByUserIdAndExperimentCode(Long userId, String experimentCode);
 
     List<StudentExperimentProgress> findByUserIdAndExperimentCodeIn(Long userId, Collection<String> experimentCodes);
+
+    List<StudentExperimentProgress> findByExperimentCodeAndUserIdIn(String experimentCode, Collection<Long> userIds);
 }

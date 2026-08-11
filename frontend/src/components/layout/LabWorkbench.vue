@@ -1,6 +1,6 @@
 <template>
   <section class="workbench flex-1 min-h-0 flex flex-col overflow-hidden">
-    <nav class="wb-tabs shrink-0" aria-label="实验台功能">
+    <nav class="wb-tabs shrink-0" aria-label="实验台">
       <button
         v-for="tab in tabs"
         :key="tab.key"
@@ -11,13 +11,12 @@
       >
         {{ tab.label }}
         <span v-if="tab.key === 'data' && dataCount" class="wb-badge">{{ dataCount }}</span>
-        <span v-if="tab.key === 'files' && fileCount" class="wb-badge">{{ fileCount }}</span>
       </button>
     </nav>
 
     <div class="wb-body flex-1 min-h-0 flex flex-col overflow-hidden">
       <RightPanel
-        v-show="modelValue === 'guide'"
+        v-if="modelValue === 'guide'"
         class="flex-1 min-h-0"
         :show-header="false"
         :messages="messages"
@@ -46,16 +45,14 @@
       />
 
       <LabSessionDataPanel
-        v-if="modelValue === 'data'"
+        v-else-if="modelValue === 'data'"
         :key="`${currentSessionId}-${dataCount}`"
         :session-id="currentSessionId"
         :step-title="stepTitle"
+        :experiment-code="experimentCode"
+        :experiment-name="experimentName"
         :read-only="readOnly"
       />
-
-      <div v-else-if="modelValue === 'files'" class="wb-pane custom-scroll">
-        <ExperimentMaterialsPanel :experiment-code="experimentCode" compact />
-      </div>
 
       <LabAfterPanel
         v-else-if="modelValue === 'after'"
@@ -71,12 +68,10 @@
 import RightPanel from './RightPanel.vue'
 import LabSessionDataPanel from '../lab/LabSessionDataPanel.vue'
 import LabAfterPanel from '../lab/LabAfterPanel.vue'
-import ExperimentMaterialsPanel from '../stage/ExperimentMaterialsPanel.vue'
 
 defineProps({
   modelValue: { type: String, default: 'guide' },
   dataCount: { type: Number, default: 0 },
-  fileCount: { type: Number, default: 0 },
   experimentCode: { type: String, default: '' },
   experimentName: { type: String, default: '' },
   stepTitle: { type: String, default: '' },
@@ -110,25 +105,29 @@ defineEmits([
 ])
 
 const tabs = [
-  { key: 'guide', label: '指导纠错' },
-  { key: 'data', label: '实验数据' },
-  { key: 'files', label: '本实验资料' },
-  { key: 'after', label: '课后整理' }
+  { key: 'guide', label: '实验助教' },
+  { key: 'data', label: '我的数据' },
+  { key: 'after', label: '课后' }
 ]
 </script>
 
 <style scoped>
+.workbench { @apply bg-white; }
 .wb-tabs {
-  @apply flex items-center gap-1 px-3 py-2 bg-white border-b border-line-soft overflow-x-auto shrink-0;
+  @apply flex items-center gap-1 px-3 pt-2 pb-0 border-b border-line-soft bg-white;
 }
 .wb-tab {
-  @apply relative px-3.5 py-1.5 rounded-lg text-[13px] font-semibold text-ink-muted whitespace-nowrap
-    transition-colors hover:bg-surface-soft hover:text-ink-strong;
+  @apply relative px-3.5 py-2.5 text-[13px] font-semibold text-ink-muted
+    hover:text-ink-strong transition-colors;
 }
-.wb-tab--active { @apply bg-brand-50 text-brand-700; }
+.wb-tab--active { @apply text-brand-700; }
+.wb-tab--active::after {
+  content: '';
+  @apply absolute left-3 right-3 bottom-0 h-0.5 bg-brand-600 rounded-full;
+}
 .wb-badge {
-  @apply ml-1 inline-flex min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-brand-600 text-white
-    text-[10px] font-bold items-center justify-center;
+  @apply ml-1 inline-flex min-w-[1.1rem] h-[1.1rem] px-1 items-center justify-center
+    rounded-full bg-brand-600 text-white text-[10px] tabular-nums;
 }
-.wb-pane { @apply flex-1 min-h-0 overflow-y-auto p-4; }
+.wb-body { @apply flex flex-col; }
 </style>

@@ -11,7 +11,7 @@
           <div class="min-w-0">
             <p class="text-[11px] font-semibold text-brand-600 uppercase tracking-wide mb-1">课前要点</p>
             <h3 class="text-lg font-bold text-ink-strong leading-snug">{{ experimentName || '本次实验' }}</h3>
-            <p class="text-[13px] text-ink-muted mt-1">进实验室前快速了解目标、准备事项与易错点（约 1 屏）</p>
+          <p class="text-[13px] text-ink-muted mt-1">进实验室前快速了解目标与易错点；课上直接回实验台问助教即可。</p>
           </div>
           <button
             type="button"
@@ -35,7 +35,7 @@
         <div v-else class="chat-md brief-content" v-html="renderMd(content)" />
       </div>
 
-      <div class="p-4 border-t border-line-soft bg-surface-soft flex justify-between items-center gap-3 shrink-0">
+      <div class="p-4 border-t border-line-soft bg-surface-soft flex flex-wrap justify-between items-center gap-3 shrink-0">
         <button
           type="button"
           class="text-[13px] text-ink-muted hover:text-brand-600 font-medium"
@@ -44,9 +44,19 @@
         >
           重新生成
         </button>
-        <button type="button" class="btn-brand px-8 py-2.5 rounded-xl font-bold text-sm" @click="dismiss">
-          已了解，开始实验
-        </button>
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-if="experimentCode"
+            type="button"
+            class="btn-ghost px-4 py-2.5 rounded-xl font-semibold text-sm border border-line-soft"
+            @click="goFullPrep"
+          >
+            去做预习自测
+          </button>
+          <button type="button" class="btn-brand px-6 py-2.5 rounded-xl font-bold text-sm" @click="dismiss">
+            已了解，开始实验
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -54,6 +64,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { aiToolApi } from '../../api'
 import { renderChatMarkdown } from '../../utils/markdown'
 
@@ -64,6 +75,13 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close'])
+const router = useRouter()
+
+function goFullPrep() {
+  if (!props.experimentCode) return
+  emit('close')
+  router.push({ name: 'prep-ready', params: { code: props.experimentCode } })
+}
 
 const loading = ref(false)
 const error = ref('')

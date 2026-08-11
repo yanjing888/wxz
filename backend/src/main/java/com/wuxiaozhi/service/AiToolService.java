@@ -185,6 +185,9 @@ public class AiToolService {
         if ("report-assist".equals(tool.getCode())) {
             enrichReportAssistInputs(userId, inputs);
         }
+        if ("report-review".equals(tool.getCode())) {
+            enrichReportAssistInputs(userId, inputs);
+        }
         if ("error-trace".equals(tool.getCode())) {
             enrichErrorTraceInputs(userId, inputs);
         }
@@ -214,11 +217,27 @@ public class AiToolService {
     private void enrichRecapInputs(Long userId, Map<String, Object> inputs) {
         Long sessionId = parseLong(inputs.get("sessionId"));
         if (sessionId != null) {
-            sessionRepository.findByIdAndUserId(sessionId, userId).ifPresent(session -> {
-                inputs.put("session_summary", formatSessionSummary(session));
-                inputs.put("experiment_code", session.getExperimentCode());
-                inputs.put("experiment_name", session.getExperimentName());
-            });
+            try {
+                Map<String, Object> report = labSessionService.buildReportData(sessionId, userId);
+                inputs.put("report_context", report);
+                inputs.put("experiment_name", stringValue(report.get("experimentName")));
+                inputs.put("step_summaries_json", writeJson(report.get("stepSummaries")));
+                inputs.put("data_logs_json", writeJson(report.get("dataLogEntries")));
+                inputs.put("corrections_json", writeJson(report.get("corrections")));
+                inputs.put("env_logs_json", writeJson(report.get("envLogs")));
+                inputs.put("help_count", report.get("helpCount"));
+                inputs.put("error_point_count", report.get("errorPointCount"));
+                sessionRepository.findByIdAndUserId(sessionId, userId).ifPresent(session -> {
+                    inputs.put("experiment_code", session.getExperimentCode());
+                    inputs.put("session_summary", formatSessionSummary(session));
+                });
+            } catch (ResponseStatusException ignored) {
+                sessionRepository.findByIdAndUserId(sessionId, userId).ifPresent(session -> {
+                    inputs.put("session_summary", formatSessionSummary(session));
+                    inputs.put("experiment_code", session.getExperimentCode());
+                    inputs.put("experiment_name", session.getExperimentName());
+                });
+            }
             return;
         }
         String experimentCode = stringValue(inputs.get("experimentCode"));
@@ -389,7 +408,9 @@ public class AiToolService {
                     + (experimentName.isBlank() ? "" : "，实验：" + experimentName);
             case "grade" -> "请批改学生作答";
             case "analyze" -> buildAnalyzeQuery(inputs);
-            case "review" -> "请逐段批改实验报告";
+            case "review" -> "请作为大学物理实验教师对学生实验报告做预评（非终裁）："
+                    + "按完整性、数据可信度、误差分析、结论、思考题质量给出建议分档/分数区间与可编辑批注，"
+                    + "并标记疑似空套模板或数据异常风险。不要直接给出最终成绩。";
             case "draft" -> "请根据实验记录与数据，生成实验报告初稿";
             case "polish" -> "请润色以下报告段落，保持学生表述风格";
             case "check" -> "请检查实验报告是否完整规范，列出缺失项与修改建议（不要打分）";
@@ -416,7 +437,9 @@ public class AiToolService {
             case "quiz" -> "请围绕本实验出 5 道预习自测题（3 道单选 + 2 道判断），"
                     + "严格返回 JSON：{\"questions\":[{\"type\":\"single|judge\",\"question\":\"\","
                     + "\"options\":[\"\"],\"answer\":0,\"explain\":\"\"}]}，不要输出 JSON 以外的任何文字。";
-            case "recap" -> "请根据实验记录生成复盘";
+            case "recap" -> "请基于本次实验的真实纠错、数据与过程记录做个性化复盘。必须输出："
+                    + "1) 三条个人薄弱点（有过程依据）；2) 一条最可能的误差来源假设（说明依据）；"
+                    + "3) 一条下次实验可执行的行动建议。不要空泛说教，不要编造未出现的问题。";
             default -> "请处理「" + tool.getName() + "」请求";
         };
     }

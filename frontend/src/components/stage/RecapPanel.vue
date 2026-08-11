@@ -67,12 +67,14 @@
 
       <section class="panel panel-ai">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h3 class="panel-title mb-0">AI 深度复盘</h3>
+          <h3 class="panel-title mb-0">个性复盘</h3>
           <button type="button" class="btn-brand px-4 py-2 rounded-xl text-sm font-semibold" :disabled="aiLoading" @click="runAiRecap">
-            {{ aiLoading ? '生成中…' : '生成改进计划' }}
+            {{ aiLoading ? '生成中…' : '生成个性复盘' }}
           </button>
         </div>
-        <p class="text-[13px] text-ink-muted mb-3">在上方问题清单基础上，AI 帮你整理学习要点与练习建议。</p>
+        <p class="text-[13px] text-ink-muted mb-3">
+          基于本次纠错与数据记录，输出：3 条薄弱点、1 条误差来源假设、1 条下次行动建议。
+        </p>
         <div v-if="aiText" class="chat-md" v-html="renderMd(aiText)" />
       </section>
     </template>
@@ -151,7 +153,12 @@ async function runAiRecap() {
         experimentCode: props.experimentCode,
         experimentName: props.experimentName,
         issueSummary,
-        improvementTips: improvementTips.value.join('\n')
+        improvementTips: improvementTips.value.join('\n'),
+        query:
+          '请基于本次实验真实过程做个性化复盘，输出：'
+          + '1) 三条个人薄弱点（引用纠错/数据证据）；'
+          + '2) 一条最可能的误差来源假设及依据；'
+          + '3) 一条下次可执行的行动建议。不要空泛说教。'
       }
     })
     aiText.value = data.text || ''

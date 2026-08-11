@@ -19,12 +19,12 @@ function briefEnvSummary(text, maxLen = 80) {
 }
 
 const WELCOME_MESSAGE = `<div class="welcome-guide">
-  <p class="welcome-guide-hello">你好，我是物小智。</p>
-  <p class="welcome-guide-title">我会围绕你当前的实验步骤，帮你把问题讲清楚、把操作做稳。</p>
-  <div class="welcome-guide-row"><strong>遇到卡点</strong><span>直接描述现象，我会结合当前步骤给出排查思路。</span></div>
-  <div class="welcome-guide-row"><strong>需要判断</strong><span>可以上传照片或数据，我会一起分析。</span></div>
-  <div class="welcome-guide-row"><strong>继续推进</strong><span>想确认下一步、整理结论或生成报告，也可以直接问我。</span></div>
-  <p class="welcome-guide-foot">你也可以点击上方推荐问题开始。</p>
+  <p class="welcome-guide-hello">你好，我是你的实验台助教。</p>
+  <p class="welcome-guide-title">卡住就直接问我，或拍一张现场照片——不用先选工具。</p>
+  <div class="welcome-guide-row"><strong>操作</strong><span>描述现象或拍照，我告诉你下一步怎么做。</span></div>
+  <div class="welcome-guide-row"><strong>读数</strong><span>左侧可「拍照读数」，确认后再记入。</span></div>
+  <div class="welcome-guide-row"><strong>数据</strong><span>在「我的数据」里体检；下课再写报告、复盘。</span></div>
+  <p class="welcome-guide-foot">你也可以点上方推荐问题开始。</p>
 </div>`
 
 const DIFY_STATUS_UNAVAILABLE_INTERVAL = 2 * 60 * 1000
@@ -912,6 +912,31 @@ export const useLabStore = defineStore('lab', {
     clearComposerDataAttachment() {
       this.composerDataAttachment = null
     },
+    /** 读数助手确认后的读数：放入对话附件，由学生发送后才入库 */
+    applyPhotoReadingToComposer({ value, instrumentLabel, instrumentKey } = {}) {
+      const reading = String(value || '').trim()
+      if (!reading) return false
+      const fields = this.currentDataFields || []
+      const primary = fields.find((f) => f.required !== false) || fields[0]
+      const values = primary
+        ? { [primary.key]: reading }
+        : { reading }
+      this.composerDataAttachment = buildComposerDataAttachment({
+        stepId: this.activeStep,
+        stepTitle: this.stepConfig?.title || instrumentLabel || '拍照读数',
+        fields: primary
+          ? fields
+          : [{ key: 'reading', label: instrumentLabel || '读数', unit: '' }],
+        values,
+        fromDevice: false
+      })
+      if (this.composerDataAttachment) {
+        this.composerDataAttachment.label = '拍照读数'
+        this.composerDataAttachment.title = `${instrumentLabel || instrumentKey || '仪器'}：${reading}`
+      }
+      this.clearComposerImage()
+      return true
+    },
     async loadDeviceDataIntoComposer() {
       if (!this.session?.id || this.composerDataLoading || this.deviceReadBusy) return false
 
@@ -1101,7 +1126,11 @@ export const useLabStore = defineStore('lab', {
       try {
         await sessionApi.assistStream(
           this.session.id,
-          { userMessage: prompt, imageUrl: imageUrl || undefined },
+          {
+            userMessage: prompt,
+            imageUrl: imageUrl || undefined,
+            stepId: this.activeStep
+          },
           {
             onMarks: resolveMarks,
             onChunk: (chunk) => {

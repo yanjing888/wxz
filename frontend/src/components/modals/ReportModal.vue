@@ -175,8 +175,29 @@
             </div>
           </div>
         </section>
+
+        <section v-if="reviewText || reviewError || reviewing" class="mt-10">
+          <h3 class="text-lg font-bold text-ink-strong flex items-center gap-3 mb-4">
+            <span class="w-1.5 h-6 bg-indigo-500 rounded-full" />8. AI 预评（待教师确认）
+          </h3>
+          <p class="text-[12.5px] text-ink-muted mb-3">
+            以下为建议分档与批注草稿，不直接作为最终成绩。
+            <span v-if="reviewText && !reviewFromDify" class="text-amber-700">（当前回退本地提示，专用批改工作流未接入）</span>
+          </p>
+          <p v-if="reviewError" class="text-sm text-rose-600 mb-2">{{ reviewError }}</p>
+          <p v-else-if="reviewing" class="text-sm text-ink-muted">正在生成预评…</p>
+          <div v-else-if="reviewText" class="chat-md surface-card rounded-2xl p-5" v-html="renderMd(reviewText)" />
+        </section>
       </div>
       <div class="p-4 border-t border-line-soft bg-surface-soft flex justify-end gap-3 shrink-0">
+        <button
+          type="button"
+          class="btn-ghost px-6 py-2.5 rounded-xl text-sm font-bold btn-active-scale disabled:opacity-50"
+          @click="$emit('ai-review')"
+          :disabled="reviewing"
+        >
+          {{ reviewing ? '预评中…' : 'AI 预评' }}
+        </button>
         <button
           type="button"
           class="btn-ghost px-6 py-2.5 rounded-xl text-sm font-bold btn-active-scale disabled:opacity-50"
@@ -192,12 +213,22 @@
 </template>
 
 <script setup>
+import { renderChatMarkdown } from '../../utils/markdown'
+
 defineProps({
   visible: Boolean,
   report: Object,
-  downloading: Boolean
+  downloading: Boolean,
+  reviewing: Boolean,
+  reviewText: { type: String, default: '' },
+  reviewFromDify: { type: Boolean, default: true },
+  reviewError: { type: String, default: '' }
 })
-defineEmits(['close', 'download-docx'])
+defineEmits(['close', 'download-docx', 'ai-review'])
+
+function renderMd(text) {
+  return renderChatMarkdown(text, { normalize: true })
+}
 
 function formatLogTime(v) {
   if (!v) return '--'

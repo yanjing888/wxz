@@ -220,10 +220,10 @@ flowchart TB
 - 上线 S4 报告教练
 - 上线 T3 报告批阅
 
-**第二期：闭环学习**
-- S1 进门就绪（自测 + 就绪状态）
-- S5 个性复盘
-- T2 课堂态势看板（基于第一期过程数据）
+**第二期：闭环学习**（已接线）
+- S1 进门就绪：`/prep/:code` 预习要点 + 自测（≥80% 写 `preLabCompleted`）；入口未就绪先进预习
+- S5 个性复盘：`lab-recap` 注入完整过程证据；复盘页文案对齐 3+1+1
+- T2 课堂态势：`GET /api/teacher/classroom` + 教师端「课堂态势」Tab（约 45s 刷新）
 
 **第三期：教学改进飞轮**
 - T1 课前学情
@@ -241,3 +241,20 @@ flowchart TB
 ---
 
 确认本规划后，下一步再拆第一期的产品交互与实现任务（届时再映射到现有代码与 Dify 工作流）。
+
+---
+
+## 回退说明（已冻结）
+
+本文件对应 git 检查点：
+
+- 分支：`checkpoint/ai-plan-teaching-v1`
+- 提交：`a36c797`（实现第一期接线前的 WIP 快照，含本规划）
+
+若后续实现不满意，可回退到该分支：
+
+```bash
+git checkout checkpoint/ai-plan-teaching-v1
+# 或从该提交新建分支继续
+git checkout -b recover/ai-plan-teaching-v1 a36c797
+```

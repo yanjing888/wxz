@@ -57,6 +57,19 @@ public class TeacherController {
                 .body(bytes);
     }
 
+    @PostMapping("/reports/{sessionId}/ai-review")
+    public AiToolInvokeResponse reviewReport(@PathVariable Long sessionId, Authentication authentication) {
+        User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
+        return teacherService.reviewReport(teacher, sessionId);
+    }
+
+    @GetMapping("/classroom")
+    public TeacherClassroomDto classroom(@RequestParam(required = false) String experimentCode,
+                                         Authentication authentication) {
+        User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
+        return teacherService.classroom(teacher, experimentCode);
+    }
+
     @GetMapping("/feedback")
     public List<TeacherFeedbackItemDto> feedback(@RequestParam(required = false) String rating,
                                                 @RequestParam(required = false) Boolean processed,

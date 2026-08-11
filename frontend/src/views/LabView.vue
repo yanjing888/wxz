@@ -83,7 +83,6 @@
         <LabWorkbench
           v-model="workbenchTab"
           :data-count="sessionDataCount"
-          :file-count="fileCount"
           :experiment-code="lab.experiment?.code || ''"
           :experiment-name="lab.experiment?.name || ''"
           :step-title="lab.stepConfig?.title || ''"
@@ -161,6 +160,7 @@
       :experiment-name="lab.experiment?.name || ''"
       :step-no="lab.activeStep"
       @close="showReadingAssist = false"
+      @apply="onApplyReading"
     />
     <TabletCameraCapture
       :visible="tabletCameraOpen"
@@ -261,6 +261,20 @@ const workspaceLeftWidth = ref(readStoredWorkspaceWidth())
 const workbenchTab = ref('guide')
 const fileCount = ref(0)
 let viewActive = true
+
+watch(
+  () => [route.query.tab, route.query.agent],
+  ([tab, agent]) => {
+    const allowed = ['guide', 'data', 'files', 'after']
+    if (typeof tab === 'string' && allowed.includes(tab)) {
+      workbenchTab.value = tab
+    }
+    if (agent === 'reading') {
+      showReadingAssist.value = true
+    }
+  },
+  { immediate: true }
+)
 
 const sessionDataCount = computed(() => Object.keys(lab.sessionDataByStep || {}).length)
 
@@ -493,6 +507,16 @@ async function onReadDevice() {
   await lab.loadDeviceDataIntoComposer()
 }
 
+function onApplyReading(payload) {
+  if (currentSessionReadOnly.value) {
+    showAppAlert('历史会话仅供查看', '已完成的历史会话不能填入读数，请新建会话后再操作。')
+    return
+  }
+  const ok = lab.applyPhotoReadingToComposer(payload)
+  if (ok) {
+    workbenchTab.value = 'guide'
+  }
+}
 
 async function onSelectSession(item) {
   await lab.resumeSession(item)

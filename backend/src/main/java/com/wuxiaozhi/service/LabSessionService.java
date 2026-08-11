@@ -560,9 +560,15 @@ public class LabSessionService {
         inputs.put("query", userMessage);
         putExperimentInputs(inputs, exp.getName(), exp.getCode());
 
-        StepConfig step = resolveStep(exp, session.getActiveStep());
+        int stepId = resolveAssistStepId(session, req);
+        if (session.getActiveStep() != stepId) {
+            session.setActiveStep(stepId);
+            sessionRepository.save(session);
+        }
+
+        StepConfig step = resolveStep(exp, stepId);
         if (step != null) {
-            inputs.put("step_id", String.valueOf(session.getActiveStep()));
+            inputs.put("step_id", String.valueOf(stepId));
             if (step.getTitle() != null) {
                 inputs.put("step_title", step.getTitle());
             }
@@ -571,11 +577,34 @@ public class LabSessionService {
             }
         }
         putDifyRoutingInputs(inputs, step, hasImage, false);
-        attachKnowledgeMapInputs(inputs, exp, session.getActiveStep(), hasImage);
+        attachKnowledgeMapInputs(inputs, exp, stepId, hasImage);
+        attachRepeatAssistHint(inputs, session.getId(), stepId);
 
         attachKnowledgeContext(inputs, exp, session, step, userMessage, hasImage);
 
-        return new AssistPrepare(session, exp, userMessage, hasImage, inputs);
+        return new AssistPrepare(session, exp, userMessage, hasImage, inputs, stepId);
+    }
+
+    private int resolveAssistStepId(LabSession session, AssistRequest req) {
+        if (req.getStepId() != null && req.getStepId() > 0) {
+            return req.getStepId();
+        }
+        return Math.max(1, session.getActiveStep());
+    }
+
+    /** 同一步骤多次纠错时，提示模型给更短、可执行的下一步 */
+    private void attachRepeatAssistHint(Map<String, Object> inputs, Long sessionId, int stepId) {
+        List<CorrectionLog> logs = correctionLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        if (logs == null || logs.isEmpty()) {
+            return;
+        }
+        long recentOnStep = logs.stream()
+                .filter(log -> log.getStepId() == stepId)
+                .count();
+        if (recentOnStep >= 2) {
+            inputs.put("repeat_hint",
+                    "学生在本步骤已多次求助/纠错。请只给一条最短可执行指令，并明确要先完成什么再继续提问。");
+        }
     }
 
     /** 纯文字与带图均检索当前实验知识库（若已配置 datasetId） */
@@ -634,13 +663,19 @@ public class LabSessionService {
         }
         sessionRepository.save(session);
 
+        int stepId = prepare.stepId() > 0 ? prepare.stepId() : Math.max(1, session.getActiveStep());
+        StepConfig step = resolveStep(prepare.experiment(), stepId);
+        String stepTitle = step != null && step.getTitle() != null && !step.getTitle().isBlank()
+                ? step.getTitle()
+                : ("步骤 " + stepId);
+
         if ("vision_correction".equals(resp.getType()) || (prepare.hasImage() && resp.getMarks() != null && !resp.getMarks().isEmpty())) {
             CorrectionLog log = new CorrectionLog();
             log.setSessionId(sessionId);
-            log.setStepId(0);
-            log.setStepTitle("对话");
-            log.setErrorType(resp.getErrorType());
-            log.setDetail(resp.getDetail());
+            log.setStepId(stepId);
+            log.setStepTitle(stepTitle);
+            log.setErrorType(resp.getErrorType() != null ? resp.getErrorType() : "vision");
+            log.setDetail(resp.getDetail() != null ? resp.getDetail() : resp.getFeedback());
             log.setFeedback(resp.getFeedback());
             log.setImageUrl(req.getImageUrl());
             try {
@@ -650,8 +685,8 @@ public class LabSessionService {
             correctionLogRepository.save(log);
         }
 
-        ChatMessage userMessage = saveChatMessage(sessionId, "user", prepare.session().getActiveStep(), prepare.userMessage(), req.getImageUrl());
-        ChatMessage aiMessage = saveChatMessage(sessionId, "ai", prepare.session().getActiveStep(), resp.getFeedback(), null);
+        ChatMessage userMessage = saveChatMessage(sessionId, "user", stepId, prepare.userMessage(), req.getImageUrl());
+        ChatMessage aiMessage = saveChatMessage(sessionId, "ai", stepId, resp.getFeedback(), null);
         resp.setUserMessageId(userMessage.getId());
         resp.setAiMessageId(aiMessage.getId());
     }
@@ -667,7 +702,7 @@ public class LabSessionService {
     }
 
     private record AssistPrepare(LabSession session, ExperimentConfig experiment, String userMessage,
-                                 boolean hasImage, Map<String, Object> inputs) {
+                                 boolean hasImage, Map<String, Object> inputs, int stepId) {
     }
 
     @Transactional

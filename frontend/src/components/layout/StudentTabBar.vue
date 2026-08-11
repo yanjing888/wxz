@@ -13,20 +13,31 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { lastExperiment } from '../../utils/experimentFlow'
 
 const route = useRoute()
 
-const tabs = [
-  { key: 'experiments', label: '实验台', to: '/experiments' },
-  { key: 'files', label: '实验资料', to: '/files' }
-]
+const lastCode = computed(() => lastExperiment() || '')
 
-const EXPERIMENT_ROUTES = ['experiments', 'lab', 'after-report', 'after-review']
+const tabs = computed(() => {
+  const afterTo = lastCode.value
+    ? { name: 'after-report', params: { code: lastCode.value } }
+    : { name: 'experiments' }
+  return [
+    { key: 'lab', label: '实验台', to: '/experiments' },
+    { key: 'after', label: '课后', to: afterTo }
+  ]
+})
+
+const LAB_ROUTES = ['experiments', 'prep-ready', 'lab']
+const AFTER_ROUTES = ['after-report', 'after-review', 'agents', 'agent-workspace']
 
 function isActive(tab) {
-  if (tab.key === 'experiments') return EXPERIMENT_ROUTES.includes(route.name)
-  return route.name === tab.key
+  if (tab.key === 'lab') return LAB_ROUTES.includes(route.name)
+  if (tab.key === 'after') return AFTER_ROUTES.includes(route.name)
+  return false
 }
 </script>
 

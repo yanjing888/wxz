@@ -27,17 +27,26 @@ const error = ref('')
 
 onMounted(resolveEntry)
 
-/** 我的实验 = 直接进入实验台，不再经过任务/闭环页 */
+/**
+ * 默认进实验台助教。
+ * 仅当：从未就绪、且还没有进行中会话 → 先过进门预习（可跳过）。
+ */
 async function resolveEntry() {
   loading.value = true
   error.value = ''
   try {
     const { data } = await studentExperimentApi.listProgress()
-    const codes = (data || []).map((row) => row.experimentCode).filter(Boolean)
-    if (!codes.length) return
+    const rows = data || []
+    if (!rows.length) return
 
     const remembered = lastExperiment()
-    const code = codes.includes(remembered) ? remembered : codes[0]
+    const row = rows.find((r) => r.experimentCode === remembered) || rows[0]
+    const code = row.experimentCode
+
+    if (!row.preLabCompleted && !row.activeSessionId) {
+      await router.replace({ name: 'prep-ready', params: { code } })
+      return
+    }
     await router.replace({ name: 'lab', query: { exp: code } })
   } catch (e) {
     error.value = e.response?.data?.message || '实验列表加载失败，请确认后端已启动'

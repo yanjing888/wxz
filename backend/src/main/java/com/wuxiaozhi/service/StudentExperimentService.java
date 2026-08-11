@@ -147,6 +147,8 @@ public class StudentExperimentService {
         dto.setFinishedSessionId(finished != null ? finished.getId() : null);
         dto.setDataCollectionEnabled(dataEnabled);
         dto.setDataSubmitted(dataSubmitted);
+        dto.setPreLabCompleted(progress != null && progress.isPreLabCompleted());
+        dto.setRecapCompleted(recapDone);
         dto.setSteps(buildSteps(statuses));
         return dto;
     }

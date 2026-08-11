@@ -84,18 +84,26 @@
             </div>
             <div class="chat-md" v-html="renderMd(answer)" />
             <div class="save-row">
-              <input v-model="manualReading" class="field-input flex-1" placeholder="确认后填入最终读数，如 12.34" />
+              <input v-model="manualReading" class="field-input flex-1" placeholder="确认后的最终读数，如 12.34" />
               <button
                 type="button"
                 class="btn-brand px-4 py-2 rounded-lg text-sm shrink-0"
                 :disabled="!manualReading.trim()"
+                @click="applyReading"
+              >
+                确认填入对话
+              </button>
+              <button
+                type="button"
+                class="btn-ghost px-3 py-2 rounded-lg text-sm shrink-0 border border-line-soft"
+                :disabled="!manualReading.trim()"
                 @click="copyReading"
               >
-                {{ copied ? '已复制' : '复制读数' }}
+                {{ copied ? '已复制' : '复制' }}
               </button>
             </div>
             <p class="text-[12px] text-ink-faint mt-2">
-              读数以你自己的判断为准，AI 识别仅作参考。复制后可粘贴到下方数据记录框。
+              AI 识别仅作参考。确认后会把读数放入右侧对话附件，由你发送入库，不会自动改原始数据。
             </p>
           </template>
           <div v-else class="result-empty">
@@ -130,7 +138,7 @@ const props = defineProps({
   experimentName: { type: String, default: '' },
   stepNo: { type: Number, default: 0 }
 })
-defineEmits(['close'])
+const emit = defineEmits(['close', 'apply'])
 
 const instrumentKey = ref('vernier')
 const precision = ref('0.02 mm')
@@ -211,6 +219,20 @@ async function recognize() {
   } finally {
     loading.value = false
   }
+}
+
+function applyReading() {
+  const value = manualReading.value.trim()
+  if (!value) return
+  const label = INSTRUMENTS.find((i) => i.key === instrumentKey.value)?.label || '测量仪器'
+  emit('apply', {
+    value,
+    instrumentKey: instrumentKey.value,
+    instrumentLabel: label,
+    precision: precision.value,
+    stepNo: props.stepNo
+  })
+  emit('close')
 }
 
 function copyReading() {

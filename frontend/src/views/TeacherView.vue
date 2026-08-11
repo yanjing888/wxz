@@ -112,6 +112,88 @@
           </section>
         </template>
 
+        <!-- 课堂态势 -->
+        <section v-else-if="activeTab === 'classroom'" class="space-y-5">
+          <div class="section-head-row">
+            <h2 class="section-head">课堂态势</h2>
+            <div class="flex flex-wrap items-center gap-2">
+              <select v-model="classroomExpCode" class="field-select" @change="loadClassroom">
+                <option value="">全部进行中实验</option>
+                <option v-for="exp in allExperiments" :key="exp.code" :value="exp.code">{{ exp.name }}</option>
+              </select>
+              <button type="button" class="link-btn" :disabled="classroomLoading" @click="loadClassroom">
+                {{ classroomLoading ? '刷新中…' : '刷新' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="stat-grid">
+            <div class="stat-item">
+              <p class="stat-label">进行中</p>
+              <p class="stat-value tabular-nums">{{ classroom?.activeCount ?? 0 }}</p>
+            </div>
+            <div class="stat-item">
+              <p class="stat-label">优先介入</p>
+              <p class="stat-value tabular-nums" :class="(classroom?.highPriorityCount ?? 0) > 0 ? 'text-red-500' : ''">
+                {{ classroom?.highPriorityCount ?? 0 }}
+              </p>
+            </div>
+            <div class="stat-item">
+              <p class="stat-label">未就绪</p>
+              <p class="stat-value tabular-nums" :class="(classroom?.notReadyCount ?? 0) > 0 ? 'text-amber-600' : ''">
+                {{ classroom?.notReadyCount ?? 0 }}
+              </p>
+            </div>
+            <div class="stat-item">
+              <p class="stat-label">数据异常</p>
+              <p class="stat-value tabular-nums" :class="(classroom?.dataIssueCount ?? 0) > 0 ? 'text-red-500' : ''">
+                {{ classroom?.dataIssueCount ?? 0 }}
+              </p>
+            </div>
+          </div>
+
+          <div v-if="!(classroom?.students || []).length" class="empty-block">
+            当前没有进行中的会话。学生进入实验台后会出现在这里；指定实验后还会列出未就绪学生。
+          </div>
+          <table v-else class="teacher-table">
+            <thead>
+              <tr>
+                <th class="w-20">优先级</th>
+                <th>学生</th>
+                <th>班级</th>
+                <th>实验</th>
+                <th>状态</th>
+                <th>当前步骤</th>
+                <th class="w-16 text-center">时长</th>
+                <th class="w-16 text-center">问答</th>
+                <th class="w-16 text-center">纠错</th>
+                <th>建议</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in classroom.students" :key="`${item.userId}-${item.sessionId || 'idle'}`">
+                <td>
+                  <span class="prio-tag" :class="`prio-tag--${item.priority || 'normal'}`">
+                    {{ priorityLabel(item.priority) }}
+                  </span>
+                </td>
+                <td class="font-semibold text-ink-strong">{{ item.studentName || '—' }}</td>
+                <td>{{ item.studentClass || '—' }}</td>
+                <td>{{ item.experimentName || item.experimentCode }}</td>
+                <td>{{ statusLabel(item.status) }}</td>
+                <td>
+                  <span v-if="item.status === 'ACTIVE'">步骤 {{ item.activeStep }}{{ item.stepTitle ? ` · ${item.stepTitle}` : '' }}</span>
+                  <span v-else class="text-ink-faint">—</span>
+                </td>
+                <td class="text-center tabular-nums">{{ item.minutesOnSession ? `${item.minutesOnSession}m` : '—' }}</td>
+                <td class="text-center tabular-nums">{{ item.helpCount ?? 0 }}</td>
+                <td class="text-center tabular-nums">{{ item.errorPointCount ?? 0 }}</td>
+                <td class="text-[13px] text-ink-muted">{{ item.priorityReason || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
         <!-- 实验报告 -->
         <section v-else-if="activeTab === 'reports'" class="space-y-5">
           <p v-if="reports.length" class="text-[13px] text-ink-faint">共 {{ reports.length }} 份</p>
@@ -297,8 +379,13 @@
       :visible="reportVisible"
       :report="selectedReport"
       :downloading="downloadingReport"
-      @close="reportVisible = false"
+      :reviewing="reviewingReport"
+      :review-text="reviewText"
+      :review-from-dify="reviewFromDify"
+      :review-error="reviewError"
+      @close="closeReport"
       @download-docx="downloadSelectedReport"
+      @ai-review="runAiReview"
     />
 
     <div v-if="assignVisible" class="assign-overlay" @click.self="closeAssign">
@@ -323,7 +410,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { teacherApi, experimentApi } from '../api'
 import { useAuthStore } from '../stores/auth'
@@ -355,9 +442,18 @@ const reportVisible = ref(false)
 const selectedReport = ref(null)
 const selectedReportSessionId = ref(null)
 const downloadingReport = ref(false)
+const reviewingReport = ref(false)
+const reviewText = ref('')
+const reviewFromDify = ref(true)
+const reviewError = ref('')
+const classroom = ref(null)
+const classroomExpCode = ref('')
+const classroomLoading = ref(false)
+let classroomTimer = null
 
 const navItems = [
   { key: 'overview', label: '概览' },
+  { key: 'classroom', label: '课堂态势' },
   { key: 'reports', label: '实验报告' },
   { key: 'feedback', label: '问答反馈' },
   { key: 'students', label: '班级管理' }
@@ -396,14 +492,67 @@ onMounted(() => {
   loadOverview()
 })
 
+onUnmounted(() => {
+  stopClassroomPoll()
+})
+
 async function switchTab(key) {
   if (activeTab.value === key) return
   activeTab.value = key
   expandedFeedbackId.value = null
+  stopClassroomPoll()
   if (key === 'overview') await loadOverview()
+  if (key === 'classroom') {
+    if (!allExperiments.value.length) {
+      const { data } = await experimentApi.list()
+      allExperiments.value = data || []
+    }
+    await loadClassroom()
+    startClassroomPoll()
+  }
   if (key === 'reports') await loadReports()
   if (key === 'feedback') await loadFeedback()
   if (key === 'students') await loadStudents()
+}
+
+async function loadClassroom() {
+  classroomLoading.value = true
+  try {
+    const params = {}
+    if (classroomExpCode.value) params.experimentCode = classroomExpCode.value
+    const { data } = await teacherApi.classroom(params)
+    classroom.value = data
+  } catch {
+    classroom.value = { students: [], activeCount: 0, highPriorityCount: 0, notReadyCount: 0, dataIssueCount: 0 }
+  } finally {
+    classroomLoading.value = false
+  }
+}
+
+function startClassroomPoll() {
+  stopClassroomPoll()
+  classroomTimer = setInterval(() => {
+    if (activeTab.value === 'classroom') loadClassroom()
+  }, 45000)
+}
+
+function stopClassroomPoll() {
+  if (classroomTimer) {
+    clearInterval(classroomTimer)
+    classroomTimer = null
+  }
+}
+
+function priorityLabel(priority) {
+  if (priority === 'high') return '优先'
+  if (priority === 'medium') return '关注'
+  return '正常'
+}
+
+function statusLabel(status) {
+  if (status === 'ACTIVE') return '进行中'
+  if (status === 'NOT_STARTED') return '未开始'
+  return status || '—'
 }
 
 async function loadOverview() {
@@ -556,7 +705,30 @@ async function openReport(sessionId) {
   const { data } = await teacherApi.report(sessionId)
   selectedReport.value = data
   selectedReportSessionId.value = sessionId
+  reviewText.value = ''
+  reviewError.value = ''
+  reviewFromDify.value = true
   reportVisible.value = true
+}
+
+function closeReport() {
+  reportVisible.value = false
+  reviewingReport.value = false
+}
+
+async function runAiReview() {
+  if (!selectedReportSessionId.value || reviewingReport.value) return
+  reviewingReport.value = true
+  reviewError.value = ''
+  try {
+    const { data } = await teacherApi.reviewReport(selectedReportSessionId.value)
+    reviewText.value = data?.text || '未返回预评内容'
+    reviewFromDify.value = data?.fromDify !== false
+  } catch (e) {
+    reviewError.value = e.response?.data?.message || e.message || 'AI 预评失败'
+  } finally {
+    reviewingReport.value = false
+  }
 }
 
 async function downloadReport(sessionId, experimentName) {
@@ -707,6 +879,21 @@ function logout() {
 }
 .rating-tag--bad {
   @apply text-red-600;
+}
+.field-select {
+  @apply rounded-lg border border-line-soft bg-white px-3 py-1.5 text-[13px] text-ink-base;
+}
+.prio-tag {
+  @apply inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border;
+}
+.prio-tag--high {
+  @apply bg-rose-50 text-rose-700 border-rose-100;
+}
+.prio-tag--medium {
+  @apply bg-amber-50 text-amber-700 border-amber-100;
+}
+.prio-tag--normal {
+  @apply bg-surface-soft text-ink-muted border-line-soft;
 }
 .empty-block {
   @apply text-[14px] text-ink-faint py-10 pl-4;

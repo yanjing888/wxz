@@ -17,6 +17,24 @@ const routes = [
         meta: studentMeta
       },
       {
+        path: 'agents',
+        name: 'agents',
+        component: () => import('../views/AgentHubView.vue'),
+        meta: studentMeta
+      },
+      {
+        path: 'agents/:code/:agent',
+        name: 'agent-workspace',
+        component: () => import('../views/AgentWorkspaceView.vue'),
+        meta: studentMeta
+      },
+      {
+        path: 'prep/:code',
+        name: 'prep-ready',
+        component: () => import('../views/experiment/PrepareReadyView.vue'),
+        meta: studentMeta
+      },
+      {
         path: 'lab',
         name: 'lab',
         component: () => import('../views/LabView.vue'),
@@ -43,7 +61,7 @@ const routes = [
       { path: 'profile', redirect: { name: 'experiments' } },
       {
         path: 'experiments/:code',
-        redirect: (to) => ({ name: 'lab', query: { exp: to.params.code } })
+        redirect: (to) => ({ name: 'prep-ready', params: { code: to.params.code } })
       },
       {
         path: 'experiments/:code/:rest(.*)',
@@ -52,8 +70,8 @@ const routes = [
     ]
   },
   { path: '/home', redirect: { name: 'experiments' } },
-  { path: '/ai', redirect: { name: 'experiments' } },
-  { path: '/ai/:code', redirect: { name: 'experiments' } },
+  { path: '/ai', redirect: { name: 'agents' } },
+  { path: '/ai/:code', redirect: { name: 'agents' } },
   { path: '/experiment/:code', redirect: (to) => ({ name: 'lab', query: { exp: to.params.code } }) },
   {
     path: '/teacher',

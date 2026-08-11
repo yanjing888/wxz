@@ -72,12 +72,14 @@
         <button
           type="button"
           class="btn-brand px-6 py-2.5 rounded-xl text-sm font-semibold"
-          :disabled="answeredCount === 0"
-          @click="submitted = true"
+          :disabled="answeredCount === 0 || marking"
+          @click="submitQuiz"
         >
           提交判分
         </button>
       </div>
+      <p v-if="submitted && readyMarked" class="ready-tip">已写入进门就绪，可以进入实验台。</p>
+      <p v-else-if="submitted && readyFailed" class="ready-warn">{{ readyFailed }}</p>
     </template>
   </StagePanel>
 </template>
@@ -85,6 +87,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import StagePanel from './StagePanel.vue'
+import { studentExperimentApi } from '../../api'
 import { useAgentTool } from '../../composables/useAgentTool'
 import { extractQuestions, parseStructuredData } from '../../utils/aiTool'
 import { renderChatMarkdown } from '../../utils/markdown'
@@ -93,6 +96,7 @@ const props = defineProps({
   experimentCode: { type: String, default: '' },
   experimentName: { type: String, default: '' }
 })
+const emit = defineEmits(['ready'])
 
 const { loading, error, invoke } = useAgentTool('practice-quiz', () => props.experimentCode)
 
@@ -100,24 +104,28 @@ const questions = ref([])
 const answers = ref([])
 const submitted = ref(false)
 const fallbackText = ref('')
+const marking = ref(false)
+const readyMarked = ref(false)
+const readyFailed = ref('')
 
 const answeredCount = computed(() => answers.value.filter((a) => a != null).length)
 const gradableCount = computed(() => questions.value.filter((q) => q.answerIndex >= 0).length)
 const correctCount = computed(
   () => questions.value.filter((q, i) => q.answerIndex >= 0 && answers.value[i] === q.answerIndex).length
 )
+const passRate = computed(() =>
+  gradableCount.value ? correctCount.value / gradableCount.value : 0
+)
 const scoreTone = computed(() => {
   if (!gradableCount.value) return 'score-card--warn'
-  const rate = correctCount.value / gradableCount.value
-  if (rate >= 0.8) return 'score-card--ok'
-  if (rate >= 0.6) return 'score-card--warn'
+  if (passRate.value >= 0.8) return 'score-card--ok'
+  if (passRate.value >= 0.6) return 'score-card--warn'
   return 'score-card--bad'
 })
 const scoreLabel = computed(() => {
   if (!gradableCount.value) return '本套题未返回标准答案'
-  const rate = correctCount.value / gradableCount.value
-  if (rate >= 0.8) return '准备充分，可以进实验室了'
-  if (rate >= 0.6) return '基本掌握，错题对应的要点再看一遍'
+  if (passRate.value >= 0.8) return '准备充分，可以进实验室了'
+  if (passRate.value >= 0.6) return '基本掌握，错题对应的要点再看一遍'
   return '建议先回到「预习要点」把内容过一遍'
 })
 
@@ -128,6 +136,27 @@ function reset() {
   answers.value = []
   submitted.value = false
   fallbackText.value = ''
+  readyMarked.value = false
+  readyFailed.value = ''
+}
+
+async function submitQuiz() {
+  submitted.value = true
+  readyMarked.value = false
+  readyFailed.value = ''
+  if (!props.experimentCode || !gradableCount.value || passRate.value < 0.8) {
+    return
+  }
+  marking.value = true
+  try {
+    await studentExperimentApi.completePreLab(props.experimentCode)
+    readyMarked.value = true
+    emit('ready')
+  } catch (e) {
+    readyFailed.value = e.response?.data?.message || e.message || '就绪状态写入失败'
+  } finally {
+    marking.value = false
+  }
 }
 
 async function generate() {
@@ -210,4 +239,6 @@ function renderMd(text) {
 
 .submit-row { @apply flex items-center justify-between gap-4 rounded-2xl border border-line-soft bg-white p-4; }
 .submit-hint { @apply text-[13px] text-ink-muted; }
+.ready-tip { @apply mt-3 text-[13px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3; }
+.ready-warn { @apply mt-3 text-[13px] text-rose-600; }
 </style>

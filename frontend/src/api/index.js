@@ -142,6 +142,8 @@ export const teacherApi = {
   reports: (params = {}) => http.get('/api/teacher/reports', { params }),
   report: (sessionId) => http.get(`/api/teacher/reports/${sessionId}`),
   reportDocx: (sessionId) => http.get(`/api/teacher/reports/${sessionId}/docx`, { responseType: 'blob' }),
+  reviewReport: (sessionId) => http.post(`/api/teacher/reports/${sessionId}/ai-review`),
+  classroom: (params = {}) => http.get('/api/teacher/classroom', { params }),
   feedback: (params = {}) => http.get('/api/teacher/feedback', { params }),
   markFeedbackProcessed: (feedbackId) => http.patch(`/api/teacher/feedback/${feedbackId}/processed`),
   students: () => http.get('/api/teacher/students'),

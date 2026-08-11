@@ -85,7 +85,7 @@
         <div v-if="aiText" class="chat-md" v-html="renderMd(aiText)" />
       </div>
 
-      <div class="next-row">
+      <div v-if="showNextActions" class="next-row">
         <button type="button" class="btn-ghost px-4 py-2 rounded-lg text-[13px]" @click="$emit('go', 'calc')">
           去算不确定度
         </button>
@@ -108,7 +108,8 @@ import { renderChatMarkdown } from '../../utils/markdown'
 const props = defineProps({
   experimentCode: { type: String, default: '' },
   experimentName: { type: String, default: '' },
-  table: { type: Object, default: null }
+  table: { type: Object, default: null },
+  showNextActions: { type: Boolean, default: true }
 })
 defineEmits(['go'])
 
