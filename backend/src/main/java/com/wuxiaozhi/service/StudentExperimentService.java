@@ -99,12 +99,24 @@ public class StudentExperimentService {
         return getProgress(userId, experimentCode);
     }
 
+    @Transactional
+    public ExperimentProgressDto completeReport(Long userId, String experimentCode) {
+        requireAssigned(userId, experimentCode);
+        StudentExperimentProgress progress = progressRepository.findByUserIdAndExperimentCode(userId, experimentCode)
+                .orElseGet(() -> newProgress(userId, experimentCode));
+        progress.setReportCompleted(true);
+        progress.setUpdatedAt(LocalDateTime.now());
+        progressRepository.save(progress);
+        return getProgress(userId, experimentCode);
+    }
+
     public void markRecapCompleted(Long userId, String experimentCode) {
         completeRecap(userId, experimentCode);
     }
 
     private ExperimentProgressDto buildProgress(Long userId, ExperimentConfig config, StudentExperimentProgress progress) {
         String code = config.getCode();
+        boolean reportDone = progress != null && progress.isReportCompleted();
         boolean recapDone = progress != null && progress.isRecapCompleted();
         boolean dataEnabled = config.getDataCollection() != null && config.getDataCollection().isEnabled();
 
@@ -114,13 +126,13 @@ public class StudentExperimentService {
         LabSession finished = sessionRepository
                 .findFirstByUserIdAndExperimentCodeAndStatusOrderByStartTimeDesc(userId, code, "FINISHED")
                 .orElse(null);
-        boolean reportDone = finished != null;
+        boolean labDone = finished != null;
         Long dataSessionId = finished != null ? finished.getId() : (active != null ? active.getId() : null);
         boolean dataSubmitted = dataSessionId != null
                 && !sessionDataLogRepository.findBySessionIdOrderByCreatedAtAsc(dataSessionId).isEmpty();
 
         Map<String, String> statuses = new LinkedHashMap<>();
-        if (reportDone) {
+        if (labDone) {
             statuses.put("lab", "done");
         } else if (active != null) {
             statuses.put("lab", "in_progress");
@@ -129,7 +141,7 @@ public class StudentExperimentService {
         }
         if (!dataEnabled) {
             statuses.put("data", "done");
-        } else if (dataSubmitted || reportDone) {
+        } else if (dataSubmitted) {
             statuses.put("data", "done");
         } else {
             statuses.put("data", "available");
@@ -137,7 +149,7 @@ public class StudentExperimentService {
         statuses.put("report", reportDone ? "done" : "available");
         statuses.put("recap", recapDone ? "done" : "available");
 
-        String currentStep = "lab";
+        String currentStep = resolveCurrentStep(labDone, dataEnabled, dataSubmitted, reportDone, recapDone);
 
         ExperimentProgressDto dto = new ExperimentProgressDto();
         dto.setExperimentCode(code);
@@ -148,9 +160,19 @@ public class StudentExperimentService {
         dto.setDataCollectionEnabled(dataEnabled);
         dto.setDataSubmitted(dataSubmitted);
         dto.setPreLabCompleted(progress != null && progress.isPreLabCompleted());
+        dto.setReportCompleted(reportDone);
         dto.setRecapCompleted(recapDone);
         dto.setSteps(buildSteps(statuses));
         return dto;
+    }
+
+    private String resolveCurrentStep(boolean labDone, boolean dataEnabled, boolean dataSubmitted,
+                                      boolean reportDone, boolean recapDone) {
+        if (!labDone) return "lab";
+        if (dataEnabled && !dataSubmitted) return "data";
+        if (!reportDone) return "report";
+        if (!recapDone) return "recap";
+        return "done";
     }
 
     private List<ExperimentStepProgressDto> buildSteps(Map<String, String> statuses) {
@@ -173,6 +195,7 @@ public class StudentExperimentService {
         progress.setUserId(userId);
         progress.setExperimentCode(experimentCode);
         progress.setPreLabCompleted(false);
+        progress.setReportCompleted(false);
         progress.setRecapCompleted(false);
         return progress;
     }

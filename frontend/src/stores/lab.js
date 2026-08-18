@@ -22,8 +22,8 @@ const WELCOME_MESSAGE = `<div class="welcome-guide">
   <p class="welcome-guide-hello">你好，我是你的实验台助教。</p>
   <p class="welcome-guide-title">卡住就直接问我，或拍一张现场照片——不用先选工具。</p>
   <div class="welcome-guide-row"><strong>操作</strong><span>描述现象或拍照，我告诉你下一步怎么做。</span></div>
-  <div class="welcome-guide-row"><strong>读数</strong><span>左侧可「拍照读数」，确认后再记入。</span></div>
-  <div class="welcome-guide-row"><strong>数据</strong><span>在「我的数据」里体检；下课再写报告、复盘。</span></div>
+  <div class="welcome-guide-row"><strong>读数</strong><span>左侧可「拍照获取读数」，确认后再记入。</span></div>
+  <div class="welcome-guide-row"><strong>数据</strong><span>进「数据核验」看提交记录、纠错结果和补测提示。</span></div>
   <p class="welcome-guide-foot">你也可以点上方推荐问题开始。</p>
 </div>`
 
@@ -123,6 +123,7 @@ export const useLabStore = defineStore('lab', {
     _difyStatusPromise: null,
     envTimer: null,
     _envCaptureFn: null,
+    _envEnsureCamFn: null,
     tutViewCount: 0,
     uploadingImage: false,
     loadingAssist: false,
@@ -200,6 +201,9 @@ export const useLabStore = defineStore('lab', {
       const step = state.experiment?.steps?.[String(state.activeStep)]
       return step?.dataSource === 'device'
     },
+    canCaptureCcdImage(state) {
+      return state.experiment?.code === 'newton_rings'
+    },
     composerDataReady(state) {
       return !!state.composerDataAttachment?.values
         && Object.keys(state.composerDataAttachment.values).length > 0
@@ -238,6 +242,12 @@ export const useLabStore = defineStore('lab', {
     },
     envCheckAvailable() {
       return this.envCheckDifyStatus?.available === true
+    },
+    envCaptureFn() {
+      return this._envCaptureFn
+    },
+    envEnsureCamFn() {
+      return this._envEnsureCamFn
     }
   },
   actions: {
@@ -913,26 +923,29 @@ export const useLabStore = defineStore('lab', {
       this.composerDataAttachment = null
     },
     /** 读数助手确认后的读数：放入对话附件，由学生发送后才入库 */
-    applyPhotoReadingToComposer({ value, instrumentLabel, instrumentKey } = {}) {
+    applyPhotoReadingToComposer({ value, instrumentLabel, instrumentKey, targetFieldKey } = {}) {
       const reading = String(value || '').trim()
       if (!reading) return false
       const fields = this.currentDataFields || []
-      const primary = fields.find((f) => f.required !== false) || fields[0]
-      const values = primary
-        ? { [primary.key]: reading }
+      const target = fields.find((f) => f.key === targetFieldKey)
+        || fields.find((f) => /读数|reading|直径|diameter/i.test(`${f.label || ''} ${f.key || ''}`))
+        || fields.find((f) => f.required !== false)
+        || fields[0]
+      const values = target
+        ? { [target.key]: reading }
         : { reading }
       this.composerDataAttachment = buildComposerDataAttachment({
         stepId: this.activeStep,
-        stepTitle: this.stepConfig?.title || instrumentLabel || '拍照读数',
-        fields: primary
+        stepTitle: this.stepConfig?.title || instrumentLabel || '拍照获取读数',
+        fields: target
           ? fields
           : [{ key: 'reading', label: instrumentLabel || '读数', unit: '' }],
         values,
         fromDevice: false
       })
       if (this.composerDataAttachment) {
-        this.composerDataAttachment.label = '拍照读数'
-        this.composerDataAttachment.title = `${instrumentLabel || instrumentKey || '仪器'}：${reading}`
+        this.composerDataAttachment.label = '拍照获取读数'
+        this.composerDataAttachment.title = `${target?.label || instrumentLabel || instrumentKey || '读数'}：${reading}${target?.unit || ''}`
       }
       this.clearComposerImage()
       return true
@@ -1240,8 +1253,42 @@ export const useLabStore = defineStore('lab', {
         })
         if (this.envLogs.length > 18) this.envLogs.pop()
         this.session = (await sessionApi.get(this.session.id)).data
+      } catch (e) {
+        const now = new Date()
+        const time = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+        const createdAt = now.toISOString()
+        const reason = e.response?.data?.message || e.message || '请求失败'
+        this.envLevel = 'NA'
+        this.envHint = `巡检请求失败：${reason}`
+        this.envLogs.unshift({
+          time,
+          createdAt,
+          level: 'NA',
+          summary: `巡检请求失败：${reason}`,
+          suggestion: '',
+          snapshotUrl: ''
+        })
+        if (this.envLogs.length > 18) this.envLogs.pop()
       } finally {
         this.envCheckRunning = false
+      }
+    },
+    async loadEnvLogs() {
+      if (!this.session?.id) return
+      try {
+        const { data } = await sessionApi.envLogs(this.session.id)
+        this.envLogs = (data || []).map((log) => ({
+          time: log.createdAt
+            ? new Date(log.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+            : '',
+          createdAt: log.createdAt || '',
+          level: log.level || 'NA',
+          summary: log.summary || '',
+          suggestion: log.suggestion || '',
+          snapshotUrl: log.snapshotUrl || ''
+        }))
+      } catch {
+        // 加载失败不阻断功能
       }
     },
     async runEnvCheckWithCapture() {

@@ -52,11 +52,10 @@
           v-if="canRate(msg)"
           class="mt-2 pt-2 border-t border-line-soft flex items-center gap-2 flex-wrap"
         >
-          <span class="text-[10px] text-ink-faint">这条回复</span>
+          <span class="text-[10px] text-ink-faint">本次回答是否有帮助？</span>
           <button
             type="button"
             class="feedback-btn"
-            :class="msg.feedbackRating === 'HELPFUL' ? 'feedback-btn--active' : ''"
             :disabled="feedbackLoadingId === msg.id"
             @click="submitFeedback(msg, 'HELPFUL')"
           >
@@ -65,12 +64,23 @@
           <button
             type="button"
             class="feedback-btn"
-            :class="msg.feedbackRating === 'NOT_HELPFUL' ? 'feedback-btn--active-danger' : ''"
             :disabled="feedbackLoadingId === msg.id"
             @click="submitFeedback(msg, 'NOT_HELPFUL')"
           >
             无帮助
           </button>
+        </div>
+        <div
+          v-else-if="msg.feedbackRating && msg.role === 'ai' && !msg.streaming"
+          class="mt-2 pt-2 border-t border-line-soft flex items-center gap-1.5"
+        >
+          <span class="text-[10px] text-ink-faint">已评价：</span>
+          <span
+            class="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+            :class="msg.feedbackRating === 'HELPFUL' ? 'text-emerald-600 bg-emerald-50' : 'text-rose-500 bg-rose-50'"
+          >
+            {{ msg.feedbackRating === 'HELPFUL' ? '有帮助' : '无帮助' }}
+          </span>
         </div>
       </div>
     </div>
@@ -168,7 +178,7 @@ function onImageError(event, msg) {
 }
 
 function canRate(msg) {
-  return props.enableFeedback && msg?.role === 'ai' && msg?.id && !msg?.streaming && !msg?.localWelcome && !!lab.session?.id
+  return props.enableFeedback && msg?.role === 'ai' && msg?.id && !msg?.streaming && !msg?.localWelcome && !!lab.session?.id && !msg?.feedbackRating
 }
 
 async function submitFeedback(msg, rating) {

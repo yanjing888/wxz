@@ -1,10 +1,16 @@
 node_modules/
 dist/
+.vite/
+tmp/
+frontend/android/**/build/
+frontend/android/.gradle/
 backend/target/
 backend/data/
 backend/uploads/
+backend/src/main/resources/static/
 backend/src/main/resources/application-local.yml
 *.log
+*.err
 .env
 config/*.env
 !config/dify.env

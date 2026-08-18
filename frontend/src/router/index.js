@@ -1,4 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { Capacitor } from '@capacitor/core'
+import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const studentMeta = { requiresAuth: true, role: 'STUDENT' }
@@ -9,11 +10,16 @@ const routes = [
     component: () => import('../layouts/StudentLayout.vue'),
     meta: studentMeta,
     children: [
-      { path: '', redirect: { name: 'experiments' } },
+      { path: '', redirect: { name: 'lab' } },
       {
         path: 'experiments',
         name: 'experiments',
-        component: () => import('../views/experiment/ExperimentEntryView.vue'),
+        redirect: { name: 'lab' }
+      },
+      {
+        path: 'after/:code',
+        name: 'after-center',
+        component: () => import('../views/after/AfterCenterView.vue'),
         meta: studentMeta
       },
       {
@@ -41,6 +47,12 @@ const routes = [
         meta: studentMeta
       },
       {
+        path: 'monitor',
+        name: 'lab-monitor',
+        component: () => import('../views/LabMonitorView.vue'),
+        meta: studentMeta
+      },
+      {
         path: 'after/:code/report',
         name: 'after-report',
         component: () => import('../views/after/AfterReportView.vue'),
@@ -58,10 +70,10 @@ const routes = [
         component: () => import('../views/FilesView.vue'),
         meta: studentMeta
       },
-      { path: 'profile', redirect: { name: 'experiments' } },
+      { path: 'profile', redirect: { name: 'lab' } },
       {
         path: 'experiments/:code',
-        redirect: (to) => ({ name: 'prep-ready', params: { code: to.params.code } })
+        redirect: (to) => ({ name: 'lab', query: { exp: to.params.code } })
       },
       {
         path: 'experiments/:code/:rest(.*)',
@@ -69,7 +81,7 @@ const routes = [
       }
     ]
   },
-  { path: '/home', redirect: { name: 'experiments' } },
+  { path: '/home', redirect: { name: 'lab' } },
   { path: '/ai', redirect: { name: 'agents' } },
   { path: '/ai/:code', redirect: { name: 'agents' } },
   { path: '/experiment/:code', redirect: (to) => ({ name: 'lab', query: { exp: to.params.code } }) },
@@ -80,11 +92,11 @@ const routes = [
     meta: { requiresAuth: true, role: 'TEACHER' }
   },
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
-  { path: '/:pathMatch(.*)*', redirect: { name: 'experiments' } }
+  { path: '/:pathMatch(.*)*', redirect: { name: 'lab' } }
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: Capacitor.isNativePlatform() ? createWebHashHistory() : createWebHistory(),
   routes
 })
 
@@ -110,6 +122,7 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   if (to.name === 'login' && auth.token) {
+    if (Capacitor.isNativePlatform() && auth.isStudent) return true
     return auth.homeRoute()
   }
   if (role === 'TEACHER' && !auth.isTeacher) {

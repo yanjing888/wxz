@@ -16,6 +16,7 @@ public class ExperimentProgressDto {
     private boolean dataSubmitted;
     /** 进门就绪：预习自测通过或已标记预习完成 */
     private boolean preLabCompleted;
+    private boolean reportCompleted;
     private boolean recapCompleted;
     private List<ExperimentStepProgressDto> steps = new ArrayList<>();
 }

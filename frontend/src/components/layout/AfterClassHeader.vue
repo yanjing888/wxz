@@ -24,11 +24,11 @@ const labRoute = computed(() => ({ name: 'lab', query: { exp: props.experimentCo
 </script>
 
 <style scoped>
-.after-head { @apply px-5 py-3 bg-white border-b border-line-soft; }
+.after-head { @apply px-5 py-2.5 bg-white border-b border-line-soft; }
 .back-link {
-  @apply inline-flex items-center gap-1 text-[13px] font-medium text-ink-muted
-    hover:text-brand-600 transition-colors mb-1;
+  @apply inline-flex items-center gap-1 text-[12px] font-medium text-ink-muted
+    hover:text-brand-600 transition-colors mb-0.5;
 }
-.after-title { @apply text-[17px] font-bold text-ink-strong; }
-.after-sub { @apply text-[13px] text-ink-muted mt-0.5; }
+.after-title { @apply text-[15px] font-bold text-ink-strong; }
+.after-sub { @apply text-[12px] text-ink-muted mt-0.5; }
 </style>

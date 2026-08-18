@@ -67,7 +67,7 @@
     "3": {
       "title": "暗环直径测量",
       "correctionMode": "data",
-      "dataSource": "device",
+      "dataSource": "image",
       "deviceType": "reading_microscope",
       "dataFields": [
         {
@@ -132,8 +132,7 @@
     "4": {
       "title": "曲率半径或波长计算",
       "correctionMode": "data",
-      "dataSource": "device",
-      "deviceType": "newton_analyzer",
+      "dataSource": "manual",
       "dataFields": [
         {
           "key": "delta_m",

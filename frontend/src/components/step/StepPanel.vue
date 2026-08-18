@@ -27,6 +27,14 @@
           </svg>
           本步骤教程
         </button>
+        <button
+          type="button"
+          class="flex items-center justify-center w-6 h-6 rounded-lg text-ink-muted hover:text-brand-600 hover:bg-brand-50 transition-colors shrink-0"
+          title="收起步骤引导"
+          @click="$emit('collapse')"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
+        </button>
       </div>
     </div>
 
@@ -61,8 +69,9 @@
 defineProps({
   menuLabels: { type: Array, default: () => [] },
   activeStep: { type: Number, default: 1 },
-  step: { type: Object, default: null }
+  step: { type: Object, default: null },
+  collapsed: { type: Boolean, default: false }
 })
 
-defineEmits(['select', 'tutorial', 'instrument-guide'])
+defineEmits(['select', 'tutorial', 'instrument-guide', 'collapse'])
 </script>

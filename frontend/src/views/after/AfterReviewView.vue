@@ -2,8 +2,8 @@
   <div class="after-page flex-1 min-h-0 flex flex-col bg-surface-soft/40">
     <AfterClassHeader
       :experiment-code="code"
-      title="个性复盘"
-      subtitle="基于本次纠错与数据记录回顾薄弱点；课上时间请留给操作与测量。"
+      title="实验复盘"
+      subtitle="回顾实验过程与思考题"
     />
     <div v-if="ready" class="after-body flex-1 min-h-0 flex flex-col bg-white">
       <StageTabs v-model="activeTab" :tabs="tabs" :unavailable="unavailableTools" />

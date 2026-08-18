@@ -1,6 +1,6 @@
 <template>
   <section class="workbench flex-1 min-h-0 flex flex-col overflow-hidden">
-    <nav class="wb-tabs shrink-0" aria-label="实验台">
+    <nav class="wb-tabs shrink-0" aria-label="实验台侧栏">
       <button
         v-for="tab in tabs"
         :key="tab.key"
@@ -44,21 +44,10 @@
         @clear-data="$emit('clear-data')"
       />
 
-      <LabSessionDataPanel
-        v-else-if="modelValue === 'data'"
-        :key="`${currentSessionId}-${dataCount}`"
+      <ChatRecordPanel
+        v-else-if="modelValue === 'record'"
+        :key="currentSessionId"
         :session-id="currentSessionId"
-        :step-title="stepTitle"
-        :experiment-code="experimentCode"
-        :experiment-name="experimentName"
-        :read-only="readOnly"
-      />
-
-      <LabAfterPanel
-        v-else-if="modelValue === 'after'"
-        :experiment-code="experimentCode"
-        :session-finished="sessionFinished"
-        @open-summary="$emit('open-summary')"
       />
     </div>
   </section>
@@ -66,8 +55,7 @@
 
 <script setup>
 import RightPanel from './RightPanel.vue'
-import LabSessionDataPanel from '../lab/LabSessionDataPanel.vue'
-import LabAfterPanel from '../lab/LabAfterPanel.vue'
+import ChatRecordPanel from '../lab/ChatRecordPanel.vue'
 
 defineProps({
   modelValue: { type: String, default: 'guide' },
@@ -76,7 +64,6 @@ defineProps({
   experimentName: { type: String, default: '' },
   stepTitle: { type: String, default: '' },
   studentName: { type: String, default: '' },
-  sessionFinished: { type: Boolean, default: false },
   messages: { type: Array, default: () => [] },
   loadingAssist: { type: Boolean, default: false },
   submittingData: { type: Boolean, default: false },
@@ -100,14 +87,12 @@ defineEmits([
   'upload-image',
   'capture-image',
   'clear-image',
-  'clear-data',
-  'open-summary'
+  'clear-data'
 ])
 
 const tabs = [
-  { key: 'guide', label: '实验助教' },
-  { key: 'data', label: '我的数据' },
-  { key: 'after', label: '课后' }
+  { key: 'guide', label: '物小智' },
+  { key: 'record', label: '问答记录' }
 ]
 </script>
 

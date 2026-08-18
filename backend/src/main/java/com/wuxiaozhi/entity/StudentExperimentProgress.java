@@ -27,6 +27,9 @@ public class StudentExperimentProgress {
     private boolean preLabCompleted;
 
     @Column(nullable = false)
+    private boolean reportCompleted;
+
+    @Column(nullable = false)
     private boolean recapCompleted;
 
     @Column(nullable = false)

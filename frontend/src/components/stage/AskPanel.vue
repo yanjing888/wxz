@@ -12,7 +12,7 @@
     <div v-else class="flex-1 min-h-0 flex flex-col bg-white max-w-[960px] mx-auto w-full">
       <ChatBox
         :messages="messages"
-        :loading="sending"
+        :loading="false"
         :student-name="auth.displayName || auth.username"
         :welcome-subtitle="welcomeSubtitle"
         :enable-feedback="false"
@@ -20,7 +20,7 @@
       <Composer
         :suggestions="suggestions"
         :read-only="sending || !conversationId"
-        :loading="sending"
+        :loading-assist="sending"
         @send="sendMessage"
       />
     </div>
@@ -106,6 +106,7 @@ async function sendMessage(text) {
   messages.value.push({ role: 'user', text: prompt, ts: Date.now() })
   const aiIndex = messages.value.length
   messages.value.push({ role: 'ai', text: '', streaming: true, ts: Date.now() })
+  let doneHandled = false
 
   try {
     await postSse(
@@ -115,8 +116,10 @@ async function sendMessage(text) {
         onChunk: (chunk) => { messages.value[aiIndex].text += chunk },
         onAnswerEnd: () => { messages.value[aiIndex].streaming = false },
         onDone: (data) => {
+          if (doneHandled) return
+          doneHandled = true
           messages.value[aiIndex].streaming = false
-          if (data?.feedback) messages.value[aiIndex].text = data.feedback
+          if (data?.feedback && !messages.value[aiIndex].text.trim()) messages.value[aiIndex].text = data.feedback
           if (data?.aiMessageId) messages.value[aiIndex].id = data.aiMessageId
         },
         onError: (msg) => {
@@ -133,8 +136,10 @@ async function sendMessage(text) {
     }
     return false
   } finally {
-    sending.value = false
-    if (assistAbort.value === abortCtrl) assistAbort.value = null
+    if (assistAbort.value === abortCtrl) {
+      sending.value = false
+      assistAbort.value = null
+    }
     if (messages.value[aiIndex]) messages.value[aiIndex].streaming = false
   }
 }

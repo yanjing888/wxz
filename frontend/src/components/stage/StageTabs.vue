@@ -25,13 +25,13 @@ defineEmits(['update:modelValue'])
 
 <style scoped>
 .stage-tabs {
-  @apply flex items-center gap-1 px-5 py-2 bg-white border-b border-line-soft overflow-x-auto;
+  @apply flex items-center gap-0 px-5 bg-white border-b border-line-soft overflow-x-auto;
 }
 .tab {
-  @apply relative flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] text-ink-muted
-    whitespace-nowrap transition-colors hover:bg-surface-soft hover:text-ink-strong;
+  @apply relative flex items-center gap-1.5 px-4 py-2.5 text-[13px] text-ink-muted font-medium
+    whitespace-nowrap transition-colors hover:text-ink-strong border-b-2 border-transparent;
 }
-.tab--active { @apply bg-brand-50 text-brand-700 font-semibold; }
+.tab--active { @apply text-brand-700 border-brand-600 font-semibold; }
 .tab--off { @apply text-ink-faint; }
 .tab-dot { @apply w-1.5 h-1.5 rounded-full bg-amber-400; }
 </style>

@@ -1,9 +1,14 @@
 <template>
   <section
     class="right-panel-shell relative flex-1 h-full grid overflow-hidden min-h-0 min-w-0"
+    :class="{ 'right-panel-history-collapsed': historyCollapsed }"
     :style="{ '--history-panel-width': `${historyWidth}px` }"
   >
-    <aside class="order-2 hidden lg:flex min-w-0 min-h-0 h-full flex-col gap-3 overflow-hidden border-l border-line-soft bg-white">
+    <aside
+      class="order-2 hidden lg:flex min-w-0 min-h-0 h-full flex-col gap-3 overflow-hidden border-l border-line-soft bg-white"
+      :class="{ '!flex-none !w-0 !overflow-hidden !border-l-0': historyCollapsed }"
+      v-show="!historyCollapsed"
+    >
       <button
         type="button"
         class="mx-3 mt-3 h-10 rounded-lg brand-gradient text-white text-sm font-bold shadow-brand flex items-center justify-center gap-2 btn-active-scale"
@@ -52,7 +57,30 @@
       </div>
     </aside>
 
+    <!-- 历史面板收起时的展开按钮 -->
+    <button
+      v-if="!historyCollapsed"
+      type="button"
+      class="history-collapse-btn hidden lg:flex absolute right-1 top-1/2 -translate-y-1/2 z-30 w-5 h-8 rounded-lg border border-line-soft bg-white text-ink-muted hover:text-brand-600 hover:border-brand-300 transition-colors items-center justify-center shadow-card"
+      title="收起历史对话"
+      @click="historyCollapsed = true"
+    >
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+    </button>
+
+    <!-- 历史面板收起后的展开按钮 -->
+    <button
+      v-if="historyCollapsed"
+      type="button"
+      class="history-expand-btn hidden lg:flex absolute right-0 top-0 bottom-0 z-30 w-6 border-l border-line-soft bg-white text-ink-muted hover:text-brand-600 hover:border-brand-300 transition-colors items-center justify-center"
+      title="展开历史对话"
+      @click="historyCollapsed = false"
+    >
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
+    </button>
+
     <div
+      v-show="!historyCollapsed"
       class="history-resizer hidden lg:block"
       title="拖拽调整会话记录宽度"
       @pointerdown="startResize"
@@ -111,6 +139,8 @@ const historyWidth = ref(
     ? Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, savedHistoryWidth))
     : DEFAULT_HISTORY_WIDTH
 )
+
+const historyCollapsed = ref(false)
 
 const props = defineProps({
   messages: { type: Array, default: () => [] },
@@ -193,6 +223,35 @@ onBeforeUnmount(() => {
   .right-panel-shell {
     grid-template-columns: minmax(0, 1fr) var(--history-panel-width);
   }
+}
+
+/* 历史面板收起时 */
+@media (min-width: 1024px) {
+  .right-panel-history-collapsed {
+    grid-template-columns: minmax(0, 1fr) 24px !important;
+  }
+}
+
+@media (max-width: 1366px), (max-height: 820px) {
+  .right-panel-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .right-panel-shell > aside,
+  .history-resizer,
+  .history-collapse-btn {
+    display: none !important;
+  }
+}
+
+:global(.native-shell) .right-panel-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:global(.native-shell) .right-panel-shell > aside,
+:global(.native-shell) .right-panel-shell .history-resizer,
+:global(.native-shell) .right-panel-shell .history-collapse-btn {
+  display: none !important;
 }
 
 .history-resizer {

@@ -447,16 +447,36 @@ public class AiToolService {
     private String buildReadingQuery(Map<String, Object> inputs) {
         String instrument = stringValue(inputs.get("instrumentLabel"));
         String precision = stringValue(inputs.get("precision"));
-        StringBuilder sb = new StringBuilder("请识别图片中");
-        sb.append(instrument.isBlank() ? "测量仪器" : instrument);
-        sb.append("的示数。要求：1) 给出最终读数并带单位；");
+        String experimentName = stringValue(inputs.get("experimentName"));
+        if (experimentName.isBlank()) {
+            experimentName = stringValue(inputs.get("experiment_name"));
+        }
+        String stepTitle = stringValue(inputs.get("stepTitle"));
+        String targetLabel = stringValue(inputs.get("targetFieldLabel"));
+        String targetUnit = stringValue(inputs.get("targetFieldUnit"));
+        String dataFields = stringValue(inputs.get("dataFields"));
+        StringBuilder sb = new StringBuilder("请结合当前实验步骤识别图片中的测量读数。");
+        if (!experimentName.isBlank()) sb.append("实验：").append(experimentName).append("。");
+        if (!stepTitle.isBlank()) sb.append("步骤：").append(stepTitle).append("。");
+        if (!targetLabel.isBlank()) {
+            sb.append("本次要填入的数据项：").append(targetLabel);
+            if (!targetUnit.isBlank()) sb.append("（单位 ").append(targetUnit).append("）");
+            sb.append("。");
+        }
+        if (!instrument.isBlank() && !"自动识别".equals(instrument)) {
+            sb.append("识别对象优先按：").append(instrument).append("。");
+        }
+        if (!dataFields.isBlank()) {
+            sb.append("当前步骤数据项包括：").append(dataFields).append("。");
+        }
+        sb.append("要求：1) 给出建议读数并带单位；");
         if (!precision.isBlank()) {
             sb.append("2) 按分度值 ").append(precision).append(" 保留正确位数；");
         } else {
-            sb.append("2) 说明该仪器的分度值与应保留的位数；");
+            sb.append("2) 如果能判断分度值，请说明应保留的位数；不能判断则说明需要学生确认；");
         }
-        sb.append("3) 分步讲解读数过程（主尺读数 + 游标/微分筒对齐格数 + 估读位）；");
-        sb.append("4) 指出本次读数中容易出错的地方。若图片模糊无法判读，请直接说明并给出重拍建议。");
+        sb.append("3) 按图片实际可见结构讲解读数过程，不要套用无关仪器模板；");
+        sb.append("4) 指出本次读数容易出错的位置。若图片模糊或字段不匹配，请直接说明并给出重拍建议。");
         return sb.toString();
     }
 

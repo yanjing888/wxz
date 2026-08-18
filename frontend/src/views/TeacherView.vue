@@ -1,379 +1,473 @@
 <template>
-  <div class="teacher-shell min-h-screen bg-bg-base flex flex-col">
-    <AppTopBar :center="scopeLabel" @logout="logout">
-      <nav class="teacher-nav">
-        <div class="teacher-tabs">
-          <button
-            v-for="item in navItems"
-            :key="item.key"
-            type="button"
-            class="teacher-tab"
-            :class="activeTab === item.key ? 'teacher-tab--active' : ''"
-            @click="switchTab(item.key)"
-          >
-            {{ item.label }}
-          </button>
-        </div>
+  <div class="teacher-terminal">
+    <!-- ====== 顶栏 ====== -->
+    <header class="terminal-head">
+      <div class="head-left">
+        <img src="/images/jyd-logo.png" alt="JYD" />
+        <span class="head-sep" />
+        <ExperimentSelect
+          :experiments="experimentOptions"
+          :experiment-code="selectedExpCode"
+          @experiment-change="onExperimentChange"
+        />
+      </div>
+      <div class="head-right">
+        <div class="user-avatar brand-gradient">{{ userInitial }}</div>
+        <span class="user-name">{{ auth.displayName || auth.username }}</span>
+        <span class="user-sep" aria-hidden="true" />
+        <button type="button" class="logout-link" @click="logout">退出</button>
+      </div>
+    </header>
+
+    <!-- ====== Tab 导航 ====== -->
+    <nav class="terminal-nav">
+        <button
+          v-for="tab in navTabs"
+          :key="tab.key"
+          type="button"
+          class="nav-tab"
+          :class="{ active: activeTab === tab.key }"
+          :style="{ '--icon-color': tab.color }"
+          @click="activeTab = tab.key"
+        >
+          <svg class="tab-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" :d="tab.icon" />
+            <path v-if="tab.iconFill" :fill="tab.color" :d="tab.iconFill" stroke="none" opacity="0.12" />
+          </svg>
+          <span class="tab-label">{{ tab.label }}</span>
+          <span v-if="tab.badge" class="tab-badge">{{ tab.badge }}</span>
+        </button>
       </nav>
-    </AppTopBar>
 
-    <main class="flex-1 min-h-0 overflow-y-auto custom-scroll bg-white">
-      <div class="teacher-page py-8 space-y-8">
-        <div v-if="loading" class="py-16 text-sm text-ink-faint text-center">加载中…</div>
+    <!-- ====== 加载/空 ====== -->
+    <div v-if="loading && !loadedOnce" class="terminal-state">加载中…</div>
+    <div v-else-if="!selectedExpCode" class="terminal-state">暂无可查看的实验。</div>
 
-        <!-- 概览 -->
-        <template v-else-if="activeTab === 'overview'">
-          <section>
-            <div class="section-head-row">
-              <h2 class="section-head">数据概览</h2>
+    <!-- ====== 内容区 ====== -->
+    <div v-else class="terminal-content">
+
+      <!-- ========== Tab 1: 学情总览 ========== -->
+      <div v-show="activeTab === 'overview'" class="tab-panel">
+        <!-- KPI 看板卡片 -->
+        <div class="kpi-row">
+          <div class="kpi-card kpi-total">
+            <div class="kpi-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
             </div>
-            <div class="stat-grid">
-              <div v-for="card in overviewCards" :key="card.label" class="stat-item">
-                <p class="stat-label">{{ card.label }}</p>
-                <p class="stat-value tabular-nums" :class="card.tone">{{ card.value }}</p>
+            <div class="kpi-body">
+              <span class="kpi-label">学生总数</span>
+              <strong class="kpi-value">{{ overview?.studentCount ?? classroomStudents.length }}</strong>
+              <span class="kpi-sub">{{ overview?.managedClass || '全部班级' }}</span>
+            </div>
+          </div>
+          <div class="kpi-card kpi-active">
+            <div class="kpi-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </div>
+            <div class="kpi-body">
+              <span class="kpi-label">进行中</span>
+              <strong class="kpi-value">{{ classroom?.activeCount ?? 0 }}</strong>
+              <span class="kpi-sub">正在实验</span>
+            </div>
+          </div>
+          <div class="kpi-card kpi-done">
+            <div class="kpi-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div class="kpi-body">
+              <span class="kpi-label">已完成报告</span>
+              <strong class="kpi-value">{{ overview?.reportCount ?? 0 }}</strong>
+              <span class="kpi-sub">已提交</span>
+            </div>
+          </div>
+          <div class="kpi-card kpi-alert">
+            <div class="kpi-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            </div>
+            <div class="kpi-body">
+              <span class="kpi-label">需关注</span>
+              <strong class="kpi-value">{{ classroom?.highPriorityCount ?? 0 }}</strong>
+              <span class="kpi-sub">优先处理</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="overview-body">
+          <!-- 学生卡片网格 -->
+          <section class="student-grid-section">
+            <div class="grid-toolbar">
+              <h2>学生实验看板</h2>
+              <span class="toolbar-exp">{{ classroom?.experimentName || currentExperimentName }}</span>
+            </div>
+            <div v-if="!classroomStudents.length" class="empty-state">暂无学生进行此实验。</div>
+            <div v-else class="student-grid custom-scroll">
+              <div
+                v-for="row in classroomStudents"
+                :key="row.userId"
+                class="student-card"
+                :class="[
+                  `card-${row.priority || 'normal'}`,
+                  { active: selectedUserId === row.userId }
+                ]"
+                @click="selectedUserId = row.userId"
+              >
+                <div class="card-top">
+                  <div class="card-avatar" :class="row.status === 'ACTIVE' ? 'avatar-active' : ''">
+                    {{ (row.studentName || '?').charAt(0) }}
+                  </div>
+                  <div class="card-name-block">
+                    <strong>{{ row.studentName }}</strong>
+                    <span>{{ row.studentClass || '—' }}</span>
+                  </div>
+                  <span class="state-pill" :class="row.status === 'ACTIVE' ? 'active' : 'idle'">
+                    {{ row.status === 'ACTIVE' ? '进行中' : '未开始' }}
+                  </span>
+                </div>
+                <div class="card-step">
+                  <svg class="card-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                  <span>{{ row.stepTitle || '未开始' }}</span>
+                </div>
+                <div class="card-stats">
+                  <div class="card-stat">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>{{ row.status === 'ACTIVE' ? `${row.minutesOnSession}min` : '—' }}</span>
+                  </div>
+                  <div class="card-stat" :class="{ 'stat-warn': row.helpCount > 0 }">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.01 2.907-.603.111-.99.759-.99 1.371V15M12 18.5h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>求助 {{ row.helpCount ?? 0 }}</span>
+                  </div>
+                  <div class="card-stat" :class="{ 'stat-warn': row.errorPointCount > 0 }">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    <span>纠错 {{ row.errorPointCount ?? 0 }}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
 
-          <section>
-            <div class="section-head-row">
-              <h2 class="section-head">最近报告</h2>
-              <button v-if="reports.length" type="button" class="link-btn" @click="switchTab('reports')">查看全部 {{ reports.length }} 份</button>
-            </div>
-            <div v-if="!recentReports.length" class="empty-block">还没有学生提交报告。</div>
-            <table v-else class="teacher-table">
-              <thead>
-                <tr>
-                  <th class="w-12">#</th>
-                  <th>学生</th>
-                  <th>班级</th>
-                  <th>实验</th>
-                  <th class="w-20 text-center">问答</th>
-                  <th class="w-20 text-center">纠错</th>
-                  <th>完成时间</th>
-                  <th class="text-right w-28">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, index) in recentReports" :key="item.sessionId">
-                  <td class="text-ink-faint tabular-nums">{{ index + 1 }}</td>
-                  <td class="font-semibold text-ink-strong">{{ item.studentName || '—' }}</td>
-                  <td>{{ item.studentClass || '—' }}</td>
-                  <td>{{ item.experimentName }}</td>
-                  <td class="text-center tabular-nums">{{ item.helpCount ?? 0 }}</td>
-                  <td class="text-center tabular-nums">{{ item.errorPointCount ?? 0 }}</td>
-                  <td class="text-ink-muted tabular-nums">{{ formatTime(item.endTime || item.startTime) }}</td>
-                  <td class="text-right whitespace-nowrap">
-                    <button type="button" class="link-btn" @click="openReport(item.sessionId)">查看</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
+          <!-- 学生详情面板 -->
+          <transition name="slide-fade">
+            <aside v-if="selectedStudent" class="detail-panel">
+              <div class="detail-header">
+                <div>
+                  <p class="detail-exp">{{ currentExperimentName }}</p>
+                  <h2>{{ selectedStudent.studentName }}</h2>
+                  <p class="detail-class">{{ selectedStudent.studentClass || '—' }}</p>
+                </div>
+                <span class="state-pill" :class="selectedStudent.status === 'ACTIVE' ? 'active' : 'idle'">
+                  {{ selectedStudent.status === 'ACTIVE' ? '进行中' : '未开始' }}
+                </span>
+              </div>
 
-          <section>
-            <div class="section-head-row">
-              <h2 class="section-head">待处理反馈</h2>
-              <button v-if="pendingFeedback.length" type="button" class="link-btn" @click="switchTab('feedback')">查看全部</button>
+              <div class="detail-stats">
+                <div>
+                  <span>当前步骤</span>
+                  <strong>{{ selectedStudent.stepTitle || '—' }}</strong>
+                </div>
+                <div>
+                  <span>用时</span>
+                  <strong>{{ selectedStudent.status === 'ACTIVE' ? `${selectedStudent.minutesOnSession} 分钟` : '—' }}</strong>
+                </div>
+                <div>
+                  <span>求助次数</span>
+                  <strong>{{ selectedStudent.helpCount ?? 0 }}</strong>
+                </div>
+                <div>
+                  <span>纠错次数</span>
+                  <strong>{{ selectedStudent.errorPointCount ?? 0 }}</strong>
+                </div>
+                <div>
+                  <span>预习完成</span>
+                  <strong :class="selectedStudent.preLabCompleted ? 'ok-text' : 'bad-text'">
+                    {{ selectedStudent.preLabCompleted ? '是' : '否' }}
+                  </strong>
+                </div>
+                <div>
+                  <span>数据校验</span>
+                  <strong :class="selectedStudent.dataIssue ? 'bad-text' : 'ok-text'">
+                    {{ selectedStudent.lastDataValidation || '—' }}
+                  </strong>
+                </div>
+              </div>
+
+              <div v-if="selectedStudent.recentCorrectionTypes?.length" class="detail-section">
+                <h3>近期纠错类型</h3>
+                <div class="tag-list">
+                  <span v-for="t in selectedStudent.recentCorrectionTypes" :key="t" class="tag-item">{{ t }}</span>
+                </div>
+              </div>
+
+              <div class="detail-quick-actions">
+                <button type="button" @click="activeTab = 'camera'; openCameraModal(selectedStudent.userId)">查看摄像头</button>
+                <button type="button" @click="activeTab = 'feedback'; selectedFeedbackUserId = selectedStudent.userId">查看问答反馈</button>
+              </div>
+            </aside>
+          </transition>
+        </div>
+      </div>
+
+      <!-- ========== Tab 2: 问答反馈 ========== -->
+      <div v-show="activeTab === 'feedback'" class="tab-panel">
+        <!-- 列表视图 -->
+        <template v-if="!selectedFeedbackId">
+          <div class="fb-tabs">
+            <button type="button" class="fb-tab" :class="{ active: feedbackFilter === 'HELPFUL' }" @click="feedbackFilter = 'HELPFUL'">
+              有帮助 ({{ helpfulCount }})
+            </button>
+            <button type="button" class="fb-tab" :class="{ active: feedbackFilter === 'NOT_HELPFUL' }" @click="feedbackFilter = 'NOT_HELPFUL'">
+              无帮助 ({{ notHelpfulCount }})
+            </button>
+          </div>
+
+          <div v-if="!filteredFeedback.length" class="empty-state">暂无{{ feedbackFilter === 'HELPFUL' ? '有帮助' : '无帮助' }}反馈。</div>
+          <div v-else class="fb-list-wrap custom-scroll">
+            <div class="fb-list-head">
+              <span class="fb-col-student">学生</span>
+              <span class="fb-col-step">步骤</span>
+              <span class="fb-col-question">提问内容</span>
+              <span class="fb-col-time">时间</span>
+              <span class="fb-col-status">状态</span>
             </div>
-            <div v-if="!recentPendingFeedback.length" class="empty-block">暂无待处理的学生评价。</div>
-            <table v-else class="teacher-table">
-              <thead>
-                <tr>
-                  <th class="w-36">时间</th>
-                  <th class="w-24">学生</th>
-                  <th class="w-32">实验</th>
-                  <th class="w-16">步骤</th>
-                  <th class="w-20">评价</th>
-                  <th>问题摘要</th>
-                  <th class="text-right w-28">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template v-for="item in recentPendingFeedback" :key="item.id">
-                  <tr>
-                    <td class="text-ink-muted tabular-nums">{{ formatTime(item.createdAt) }}</td>
-                    <td class="font-semibold text-ink-strong">{{ item.studentName }}</td>
-                    <td>{{ item.experimentName }}</td>
-                    <td class="tabular-nums">{{ item.stepId }}</td>
-                    <td>
-                      <span class="rating-tag" :class="item.rating === 'HELPFUL' ? 'rating-tag--ok' : 'rating-tag--bad'">
-                        {{ item.rating === 'HELPFUL' ? '有帮助' : '无帮助' }}
-                      </span>
-                    </td>
-                    <td><p class="line-clamp-2 leading-relaxed" :title="item.userQuestion">{{ item.userQuestion || '—' }}</p></td>
-                    <td class="text-right whitespace-nowrap">
-                      <button type="button" class="link-btn" @click="markProcessed(item.id)">已处理</button>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </section>
+            <div
+              v-for="item in filteredFeedback"
+              :key="item.id"
+              class="fb-list-row"
+              :class="{ unprocessed: !item.processed }"
+              @click="selectedFeedbackId = item.id"
+            >
+              <span class="fb-col-student">
+                <span class="fb-avatar">{{ (item.studentName || '?').charAt(0) }}</span>
+                <strong>{{ item.studentName }}</strong>
+              </span>
+              <span class="fb-col-step">{{ item.stepId || '—' }}</span>
+              <span class="fb-col-question">{{ item.userQuestion || '（学生未输入问题文本）' }}</span>
+              <span class="fb-col-time">{{ formatTime(item.createdAt) }}</span>
+              <span class="fb-col-status">
+                <span class="fb-badge" :class="item.processed ? 'fb-badge--done' : 'fb-badge--pending'">
+                  {{ item.processed ? '已处理' : '待处理' }}
+                </span>
+              </span>
+            </div>
+          </div>
         </template>
 
-        <!-- 课堂态势 -->
-        <section v-else-if="activeTab === 'classroom'" class="space-y-5">
-          <div class="section-head-row">
-            <h2 class="section-head">课堂态势</h2>
-            <div class="flex flex-wrap items-center gap-2">
-              <select v-model="classroomExpCode" class="field-select" @change="loadClassroom">
-                <option value="">全部进行中实验</option>
-                <option v-for="exp in allExperiments" :key="exp.code" :value="exp.code">{{ exp.name }}</option>
-              </select>
-              <button type="button" class="link-btn" :disabled="classroomLoading" @click="loadClassroom">
-                {{ classroomLoading ? '刷新中…' : '刷新' }}
-              </button>
-            </div>
-          </div>
-
-          <div class="stat-grid">
-            <div class="stat-item">
-              <p class="stat-label">进行中</p>
-              <p class="stat-value tabular-nums">{{ classroom?.activeCount ?? 0 }}</p>
-            </div>
-            <div class="stat-item">
-              <p class="stat-label">优先介入</p>
-              <p class="stat-value tabular-nums" :class="(classroom?.highPriorityCount ?? 0) > 0 ? 'text-red-500' : ''">
-                {{ classroom?.highPriorityCount ?? 0 }}
-              </p>
-            </div>
-            <div class="stat-item">
-              <p class="stat-label">未就绪</p>
-              <p class="stat-value tabular-nums" :class="(classroom?.notReadyCount ?? 0) > 0 ? 'text-amber-600' : ''">
-                {{ classroom?.notReadyCount ?? 0 }}
-              </p>
-            </div>
-            <div class="stat-item">
-              <p class="stat-label">数据异常</p>
-              <p class="stat-value tabular-nums" :class="(classroom?.dataIssueCount ?? 0) > 0 ? 'text-red-500' : ''">
-                {{ classroom?.dataIssueCount ?? 0 }}
-              </p>
-            </div>
-          </div>
-
-          <div v-if="!(classroom?.students || []).length" class="empty-block">
-            当前没有进行中的会话。学生进入实验台后会出现在这里；指定实验后还会列出未就绪学生。
-          </div>
-          <table v-else class="teacher-table">
-            <thead>
-              <tr>
-                <th class="w-20">优先级</th>
-                <th>学生</th>
-                <th>班级</th>
-                <th>实验</th>
-                <th>状态</th>
-                <th>当前步骤</th>
-                <th class="w-16 text-center">时长</th>
-                <th class="w-16 text-center">问答</th>
-                <th class="w-16 text-center">纠错</th>
-                <th>建议</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in classroom.students" :key="`${item.userId}-${item.sessionId || 'idle'}`">
-                <td>
-                  <span class="prio-tag" :class="`prio-tag--${item.priority || 'normal'}`">
-                    {{ priorityLabel(item.priority) }}
-                  </span>
-                </td>
-                <td class="font-semibold text-ink-strong">{{ item.studentName || '—' }}</td>
-                <td>{{ item.studentClass || '—' }}</td>
-                <td>{{ item.experimentName || item.experimentCode }}</td>
-                <td>{{ statusLabel(item.status) }}</td>
-                <td>
-                  <span v-if="item.status === 'ACTIVE'">步骤 {{ item.activeStep }}{{ item.stepTitle ? ` · ${item.stepTitle}` : '' }}</span>
-                  <span v-else class="text-ink-faint">—</span>
-                </td>
-                <td class="text-center tabular-nums">{{ item.minutesOnSession ? `${item.minutesOnSession}m` : '—' }}</td>
-                <td class="text-center tabular-nums">{{ item.helpCount ?? 0 }}</td>
-                <td class="text-center tabular-nums">{{ item.errorPointCount ?? 0 }}</td>
-                <td class="text-[13px] text-ink-muted">{{ item.priorityReason || '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        <!-- 实验报告 -->
-        <section v-else-if="activeTab === 'reports'" class="space-y-5">
-          <p v-if="reports.length" class="text-[13px] text-ink-faint">共 {{ reports.length }} 份</p>
-          <div v-if="!reports.length" class="empty-block">暂无报告。学生结束实验并生成报告后会出现在这里。</div>
-          <table v-else class="teacher-table">
-            <thead>
-              <tr>
-                <th class="w-12">#</th>
-                <th>学生</th>
-                <th>班级</th>
-                <th>实验</th>
-                <th class="w-20 text-center">问答</th>
-                <th class="w-20 text-center">纠错</th>
-                <th>开始时间</th>
-                <th>完成时间</th>
-                <th class="text-right w-36">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in reports" :key="item.sessionId">
-                <td class="text-ink-faint tabular-nums">{{ index + 1 }}</td>
-                <td class="font-semibold text-ink-strong">{{ item.studentName || '—' }}</td>
-                <td>{{ item.studentClass || '—' }}</td>
-                <td>{{ item.experimentName }}</td>
-                <td class="text-center tabular-nums">{{ item.helpCount ?? 0 }}</td>
-                <td class="text-center tabular-nums">{{ item.errorPointCount ?? 0 }}</td>
-                <td class="text-ink-muted tabular-nums">{{ formatTime(item.startTime) }}</td>
-                <td class="text-ink-muted tabular-nums">{{ formatTime(item.endTime || item.startTime) }}</td>
-                <td class="text-right whitespace-nowrap">
-                  <button type="button" class="link-btn" @click="openReport(item.sessionId)">查看</button>
-                  <span class="text-line-strong mx-2">|</span>
-                  <button type="button" class="link-btn" @click="downloadReport(item.sessionId, item.experimentName)">下载</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        <!-- 问答反馈 -->
-        <section v-else-if="activeTab === 'feedback'" class="space-y-5">
-          <div class="flex items-center justify-between gap-4 flex-wrap">
-            <div class="flex items-center gap-2">
-            <button
-              v-for="filter in feedbackFilters"
-              :key="filter.key"
-              type="button"
-              class="filter-chip"
-              :class="feedbackFilter === filter.key ? 'filter-chip--active' : ''"
-              @click="setFeedbackFilter(filter.key)"
-            >
-              {{ filter.label }}
+        <!-- 详情视图 -->
+        <template v-else-if="selectedFeedbackDetail">
+          <div class="fb-detail-top">
+            <button type="button" class="back-btn" @click="selectedFeedbackId = null">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="back-icon">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              返回列表
             </button>
+            <span class="fb-detail-time">{{ formatTime(selectedFeedbackDetail.createdAt) }}</span>
+          </div>
+
+          <div class="fb-detail-body custom-scroll">
+            <div class="fb-detail-student">
+              <strong>{{ selectedFeedbackDetail.studentName }}</strong>
+              <span>步骤 {{ selectedFeedbackDetail.stepId || '—' }} · {{ selectedFeedbackDetail.experimentName || '—' }}</span>
             </div>
-            <span v-if="feedbackList.length" class="text-[13px] text-ink-faint">共 {{ feedbackList.length }} 条</span>
-          </div>
-          <div v-if="!feedbackList.length" class="empty-block">暂无学生评价。</div>
-          <table v-else class="teacher-table">
-            <thead>
-              <tr>
-                <th class="w-12">#</th>
-                <th class="w-36">时间</th>
-                <th class="w-24">学生</th>
-                <th class="w-24">班级</th>
-                <th>实验</th>
-                <th class="w-16">步骤</th>
-                <th class="w-20">评价</th>
-                <th>问题</th>
-                <th class="text-right w-36">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <template v-for="(item, index) in feedbackList" :key="item.id">
-                <tr>
-                  <td class="text-ink-faint tabular-nums">{{ index + 1 }}</td>
-                  <td class="text-ink-muted tabular-nums">{{ formatTime(item.createdAt) }}</td>
-                  <td class="font-semibold text-ink-strong">{{ item.studentName }}</td>
-                  <td>{{ item.studentClass || '—' }}</td>
-                  <td>{{ item.experimentName }}</td>
-                  <td class="tabular-nums">{{ item.stepId }}</td>
-                  <td>
-                    <span class="rating-tag" :class="item.rating === 'HELPFUL' ? 'rating-tag--ok' : 'rating-tag--bad'">
-                      {{ item.rating === 'HELPFUL' ? '有帮助' : '无帮助' }}
-                    </span>
-                  </td>
-                  <td><p class="line-clamp-2 leading-relaxed" :title="item.userQuestion">{{ item.userQuestion || '—' }}</p></td>
-                  <td class="text-right whitespace-nowrap">
-                    <button type="button" class="link-btn" @click="toggleFeedbackDetail(item.id)">
-                      {{ expandedFeedbackId === item.id ? '收起' : '详情' }}
-                    </button>
-                    <template v-if="!item.processed">
-                      <span class="text-line-strong mx-2">|</span>
-                      <button type="button" class="link-btn" @click="markProcessed(item.id)">已处理</button>
-                    </template>
-                    <span v-else class="ml-2 text-[12px] text-ink-faint">已处理</span>
-                  </td>
-                </tr>
-                <tr v-if="expandedFeedbackId === item.id" class="detail-row">
-                  <td colspan="9">
-                    <div class="detail-block">
-                      <p><span class="detail-label">学生问题</span>{{ item.userQuestion || '—' }}</p>
-                      <p class="mt-3"><span class="detail-label">AI 回复</span><span class="whitespace-pre-wrap leading-relaxed">{{ plainText(item.aiReply) }}</span></p>
-                    </div>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </section>
 
-        <!-- 班级管理 -->
-        <section v-else-if="activeTab === 'students'" class="space-y-6">
-          <div class="import-bar">
-            <button type="button" class="btn-ghost px-4 py-2 rounded-xl text-sm font-semibold" @click="downloadImportTemplate">
-              下载模板
-            </button>
-            <button
-              type="button"
-              class="btn-brand px-4 py-2 rounded-xl text-sm font-semibold"
-              :disabled="importing"
-              @click="triggerImport"
-            >
-              {{ importing ? '导入中…' : '导入名单' }}
-            </button>
-            <input
-              ref="importFileInput"
-              type="file"
-              accept=".csv,text/csv"
-              class="hidden"
-              @change="onImportFileChange"
-            />
-          </div>
+            <div class="fb-detail-block fb-detail-q">
+              <span class="fb-detail-role">学生提问</span>
+              <p>{{ selectedFeedbackDetail.userQuestion || '（学生未输入问题文本）' }}</p>
+            </div>
 
-          <div v-if="students.length" class="flex flex-wrap items-center gap-3">
-            <p class="text-[13px] text-ink-faint flex-1">共 {{ students.length }} 人</p>
-            <button
-              v-if="selectedStudentIds.length"
-              type="button"
-              class="btn-ghost px-3 py-2 rounded-xl text-xs font-semibold"
-              @click="openBulkAssign"
-            >
-              批量分配（{{ selectedStudentIds.length }}）
-            </button>
+            <div class="fb-detail-block fb-detail-a">
+              <span class="fb-detail-role">AI 回复</span>
+              <p>{{ plainText(selectedFeedbackDetail.aiReply) || '（暂无 AI 回复内容）' }}</p>
+            </div>
+
+            <div class="fb-detail-footer">
+              <span v-if="selectedFeedbackDetail.processed" class="processed-tag">已处理</span>
+              <button v-else type="button" class="fb-process-btn" @click="markProcessed(selectedFeedbackDetail.id)">标记已处理</button>
+            </div>
           </div>
-          <div v-if="!students.length" class="empty-block">暂无学生</div>
-          <table v-else class="teacher-table">
-            <thead>
-              <tr>
-                <th class="w-10">
-                  <input type="checkbox" :checked="allStudentsSelected" @change="toggleSelectAll" />
-                </th>
-                <th class="w-12">#</th>
-                <th class="w-32">姓名</th>
-                <th>账号</th>
-                <th class="w-36">班级</th>
-                <th>已分配实验</th>
-                <th class="text-right w-28">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(student, index) in students" :key="student.userId">
-                <td>
-                  <input type="checkbox" :value="student.userId" v-model="selectedStudentIds" />
-                </td>
-                <td class="text-ink-faint tabular-nums">{{ index + 1 }}</td>
-                <td class="font-semibold text-ink-strong">{{ student.displayName }}</td>
-                <td>{{ student.username }}</td>
-                <td>{{ student.studentClass || '—' }}</td>
-                <td>
-                  <span v-if="!(student.assignedExperimentNames || []).length" class="text-ink-faint">未分配</span>
-                  <span v-else>{{ (student.assignedExperimentNames || []).join('、') }}</span>
-                </td>
-                <td class="text-right whitespace-nowrap">
-                  <button type="button" class="link-btn" @click="openAssign(student)">分配实验</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
+        </template>
       </div>
-    </main>
+
+      <!-- ========== Tab 3: 摄像头监控 ========== -->
+      <div v-show="activeTab === 'camera'" class="tab-panel camera-tab">
+        <div class="grid-toolbar">
+          <h2>实验台摄像头</h2>
+          <span class="toolbar-exp">{{ benchCameraConfig?.enabled ? '摄像头已连接' : '摄像头未配置' }}</span>
+        </div>
+        <div v-if="!cameraStudents.length" class="empty-state">暂无学生。</div>
+        <div v-else class="camera-grid custom-scroll">
+          <button
+            v-for="row in cameraStudents"
+            :key="row.userId"
+            type="button"
+            class="camera-card"
+            @click="openCameraModal(row.userId)"
+          >
+            <div class="cam-preview-mini">
+              <span class="cam-badge" :class="benchCameraConfig?.enabled ? 'online' : 'offline'">
+                {{ benchCameraConfig?.enabled ? '在线' : '离线' }}
+              </span>
+              <div class="cam-placeholder">
+                <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                  <rect x="3" y="6" width="18" height="14" rx="2.5" />
+                  <circle cx="12" cy="13" r="3.5" />
+                </svg>
+              </div>
+            </div>
+            <div class="cam-info">
+              <strong>{{ row.studentName }}</strong>
+              <span>{{ row.status === 'ACTIVE' ? row.stepTitle || '实验中' : '未开始' }}</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- 摄像头放大弹窗 -->
+        <div v-if="cameraModalOpen" class="cam-modal-overlay" @click.self="closeCameraModal">
+          <div class="cam-modal" :class="{ expanded: camExpanded }">
+            <div ref="camLargeRef" class="cam-large-preview">
+              <video v-show="camReady" ref="camVideoRef" class="cam-video" playsinline muted />
+              <div v-if="!camReady" class="cam-loading">
+                <div class="spinner" />
+                <p>{{ camError || '连接中…' }}</p>
+              </div>
+              <div v-if="camReady" class="cam-overlay-tl">
+                <span class="rec-dot" />
+                <span class="rec-text">REC</span>
+              </div>
+              <div v-if="camReady" class="cam-overlay-bl">
+                <span class="live-text">LIVE</span>
+              </div>
+              <div v-if="camReady" class="cam-overlay-tr">
+                <button type="button" class="cam-expand-btn" title="全屏" @click="toggleExpand">
+                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 3H3v5m13-5h5v5M8 21H3v-5m18 0v5h-5" />
+                  </svg>
+                </button>
+              </div>
+              <div class="cam-overlay-br">
+                <strong>{{ cameraSelectedStudent?.studentName }}</strong>
+                <span>{{ cameraSelectedStudent?.studentClass || '—' }} · {{ cameraSelectedStudent?.stepTitle || '—' }}</span>
+              </div>
+            </div>
+            <div class="cam-modal-bar">
+              <div class="cam-modal-actions">
+                <button type="button" @click="startCameraStream" :disabled="camReady">开启画面</button>
+                <button type="button" @click="stopCameraStream" :disabled="!camReady">关闭画面</button>
+              </div>
+              <button type="button" class="cam-modal-close" @click="closeCameraModal">关闭</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== Tab 4: 报告分析 ========== -->
+      <div v-show="activeTab === 'report'" class="tab-panel">
+        <div class="report-layout">
+          <section class="report-list-section">
+            <h2>实验报告 ({{ currentReports.length }}/{{ cameraStudents.length }})</h2>
+            <div v-if="!reportsByClass.length" class="empty-state">暂无学生数据。</div>
+            <div v-else class="report-class-list custom-scroll">
+              <div
+                v-for="grp in reportsByClass"
+                :key="grp.className"
+                class="class-group"
+                :class="{ expanded: expandedClasses[grp.className] !== false }"
+              >
+                <button type="button" class="class-group-header" @click="toggleClassExpand(grp.className)">
+                  <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <span class="class-name">{{ grp.className }}</span>
+                  <span class="class-stats">
+                    <span class="stat-chip submitted">{{ grp.submitted }}/{{ grp.total }} 已提交</span>
+                    <span v-if="grp.total - grp.submitted > 0" class="stat-chip pending">{{ grp.total - grp.submitted }} 未提交</span>
+                  </span>
+                </button>
+                <div v-if="expandedClasses[grp.className] !== false" class="class-group-body">
+                  <button
+                    v-for="stu in grp.students"
+                    :key="stu.userId"
+                    type="button"
+                    class="student-report-row"
+                    :class="{ active: stu.report && selectedReportId === stu.report.sessionId }"
+                    @click="stu.report && selectReportItem(stu.report.sessionId)"
+                  >
+                    <span class="stu-avatar" :class="stu.submitted ? 'submitted' : 'not-submitted'">
+                      {{ (stu.studentName || '?').charAt(0) }}
+                    </span>
+                    <div class="stu-info">
+                      <strong>{{ stu.studentName }}</strong>
+                      <span>{{ stu.submitted ? formatTime(stu.report.endTime || stu.report.startTime) : '未提交' }}</span>
+                    </div>
+                    <span v-if="stu.submitted" class="stu-badges">
+                      <span v-if="stu.report.helpCount" class="badge-help">求助 {{ stu.report.helpCount }}</span>
+                      <span v-if="stu.report.errorPointCount" class="badge-err">纠错 {{ stu.report.errorPointCount }}</span>
+                      <span v-if="!stu.report.helpCount && !stu.report.errorPointCount" class="badge-ok">正常</span>
+                    </span>
+                    <span v-else class="stu-status pending">未提交</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="report-detail-section">
+            <div v-if="!selectedReportItem" class="empty-state">请选择左侧学生查看报告详情。</div>
+            <template v-else>
+              <header class="rd-head">
+                <div>
+                  <h2>{{ selectedReportItem.studentName }}</h2>
+                  <p>{{ selectedReportItem.studentClass }} · {{ selectedReportItem.experimentName }} · {{ formatTime(selectedReportItem.endTime || selectedReportItem.startTime) }}</p>
+                </div>
+                <div class="rd-actions">
+                  <button type="button" @click="openReport(selectedReportItem.sessionId)">查看完整报告</button>
+                  <button type="button" class="ai-btn" @click="openReportWithReview(selectedReportItem.sessionId)">AI 预评</button>
+                  <button type="button" @click="downloadReport(selectedReportItem.sessionId, selectedReportItem.experimentName)">下载</button>
+                </div>
+              </header>
+
+              <div v-if="previewLoading" class="empty-state">正在读取报告数据…</div>
+              <div v-else-if="selectedReportPreview" class="rd-body custom-scroll">
+                <div class="rd-summary">
+                  <span>求助 <strong>{{ selectedReportPreview.helpCount ?? 0 }}</strong></span>
+                  <span>纠错 <strong class="bad-text">{{ selectedReportPreview.errorPointCount ?? 0 }}</strong></span>
+                  <span>教程查阅 <strong>{{ selectedReportPreview.tutViewCount ?? 0 }}</strong></span>
+                  <span>环境巡检 <strong>{{ selectedReportPreview.labL3Count ?? 0 }}</strong></span>
+                </div>
+
+                <h3 class="rd-section-title">实验数据记录</h3>
+                <table v-if="previewDataRows.length" class="data-check-table">
+                  <thead>
+                    <tr><th>步骤</th><th>提交数据</th><th>校验结果</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(item, i) in previewDataRows" :key="i">
+                      <td>{{ item.stepTitle || '—' }}</td>
+                      <td>{{ item.valuesSummary || '—' }}</td>
+                      <td :class="isBadValidation(item.validationSummary) ? 'bad-text' : 'ok-text'">
+                        {{ item.validationSummary || '—' }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div v-else class="empty-state small">本次报告暂无结构化数据。</div>
+
+                <div v-if="selectedReportPreview.corrections?.length" class="rd-corrections">
+                  <h3 class="rd-section-title">操作纠错记录</h3>
+                  <article v-for="(log, i) in selectedReportPreview.corrections" :key="i" class="correction-item">
+                    <div class="corr-head">
+                      <span>{{ log.stepTitle || '—' }}</span>
+                      <span class="corr-type">{{ log.errorType || '—' }}</span>
+                    </div>
+                    <p>{{ log.detail || '—' }}</p>
+                  </article>
+                </div>
+              </div>
+              <div v-else class="empty-state">暂无报告数据。</div>
+            </template>
+          </section>
+        </div>
+      </div>
+    </div>
 
     <ReportModal
       :visible="reportVisible"
@@ -387,57 +481,47 @@
       @download-docx="downloadSelectedReport"
       @ai-review="runAiReview"
     />
-
-    <div v-if="assignVisible" class="assign-overlay" @click.self="closeAssign">
-      <div class="assign-modal">
-        <h3 class="assign-title">{{ assignBulkMode ? `批量分配（${selectedStudentIds.length} 人）` : `为 ${assignTarget?.displayName || ''} 分配实验` }}</h3>
-        <div v-if="!allExperiments.length" class="empty-block py-6">加载实验列表…</div>
-        <div v-else class="assign-list custom-scroll">
-          <label v-for="exp in allExperiments" :key="exp.code" class="assign-item">
-            <input type="checkbox" :value="exp.code" v-model="assignSelectedCodes" />
-            <span>{{ exp.name }}</span>
-          </label>
-        </div>
-        <div class="assign-footer">
-          <button type="button" class="btn-ghost px-4 py-2 rounded-xl text-sm font-semibold" @click="closeAssign">取消</button>
-          <button type="button" class="btn-brand px-4 py-2 rounded-xl text-sm font-semibold" :disabled="assignSaving" @click="saveAssign">
-            {{ assignSaving ? '保存中…' : '保存分配' }}
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { teacherApi, experimentApi } from '../api'
+import flvjs from 'flv.js'
+import { experimentApi, teacherApi, systemApi } from '../api'
 import { useAuthStore } from '../stores/auth'
-import AppTopBar from '../components/layout/AppTopBar.vue'
 import ReportModal from '../components/modals/ReportModal.vue'
+import ExperimentSelect from '../components/layout/ExperimentSelect.vue'
 
+const CURRENT_EXP_KEY = 'wxz_teacher_current_exp'
 const auth = useAuthStore()
 const router = useRouter()
 
-const activeTab = ref('overview')
+const userInitial = computed(() => {
+  const n = (auth.displayName || auth.username || '').trim()
+  return n ? n.charAt(0) : '用'
+})
+
 const loading = ref(false)
+const loadedOnce = ref(false)
+const experiments = ref([])
 const overview = ref(null)
+const classroom = ref(null)
 const reports = ref([])
 const feedbackList = ref([])
-const pendingFeedback = ref([])
+const selectedFeedbackId = ref(null)
 const students = ref([])
-const allExperiments = ref([])
-const importFileInput = ref(null)
-const importing = ref(false)
-const selectedStudentIds = ref([])
-const assignVisible = ref(false)
-const assignTarget = ref(null)
-const assignBulkMode = ref(false)
-const assignSelectedCodes = ref([])
-const assignSaving = ref(false)
-const feedbackFilter = ref('all')
-const expandedFeedbackId = ref(null)
+const benchCameraConfig = ref(null)
+const selectedExpCode = ref('')
+const activeTab = ref('overview')
+
+const selectedUserId = ref(null)
+const feedbackFilter = ref('NOT_HELPFUL')
+const selectedReportId = ref(null)
+const selectedReportPreview = ref(null)
+const previewLoading = ref(false)
+const expandedClasses = ref({})
+
 const reportVisible = ref(false)
 const selectedReport = ref(null)
 const selectedReportSessionId = ref(null)
@@ -446,262 +530,266 @@ const reviewingReport = ref(false)
 const reviewText = ref('')
 const reviewFromDify = ref(true)
 const reviewError = ref('')
-const classroom = ref(null)
-const classroomExpCode = ref('')
-const classroomLoading = ref(false)
-let classroomTimer = null
 
-const navItems = [
-  { key: 'overview', label: '概览' },
-  { key: 'classroom', label: '课堂态势' },
-  { key: 'reports', label: '实验报告' },
-  { key: 'feedback', label: '问答反馈' },
-  { key: 'students', label: '班级管理' }
-]
+const cameraSelectedId = ref(null)
+const camReady = ref(false)
+const camError = ref('')
+const camExpanded = ref(false)
+const camLargeRef = ref(null)
+const camVideoRef = ref(null)
+const cameraModalOpen = ref(false)
+let flvPlayer = null
 
-const feedbackFilters = [
-  { key: 'all', label: '全部' },
-  { key: 'NOT_HELPFUL', label: '无帮助' },
-  { key: 'unprocessed', label: '未处理' }
-]
-
-const scopeLabel = computed(() => {
-  const cls = overview.value?.managedClass
-  return cls ? `当前班级：${cls}` : '全部班级'
+const experimentOptions = computed(() => {
+  if (experiments.value.length) return experiments.value
+  const codes = new Map()
+  students.value.forEach((s) => {
+    ;(s.assignedExperimentCodes || []).forEach((code, i) => {
+      codes.set(code, s.assignedExperimentNames?.[i] || code)
+    })
+  })
+  return [...codes.entries()].map(([code, name]) => ({ code, name }))
 })
 
-const overviewCards = computed(() => {
-  const d = overview.value || {}
-  return [
-    { label: '学生人数', value: d.studentCount ?? 0, tone: 'text-ink-strong' },
-    { label: '已完成实验', value: d.finishedSessionCount ?? 0, tone: 'text-ink-strong' },
-    { label: '实验报告', value: d.reportCount ?? 0, tone: 'text-ink-strong' },
-    { label: '问答反馈', value: d.feedbackCount ?? 0, tone: 'text-ink-strong' },
-    { label: '无帮助', value: d.notHelpfulCount ?? 0, tone: (d.notHelpfulCount ?? 0) > 0 ? 'text-red-500' : 'text-ink-strong' },
-    { label: '待处理', value: d.unprocessedFeedbackCount ?? 0, tone: (d.unprocessedFeedbackCount ?? 0) > 0 ? 'text-amber-600' : 'text-ink-strong' }
-  ]
+const currentExperimentName = computed(() =>
+  experimentOptions.value.find((e) => e.code === selectedExpCode.value)?.name
+    || classroom.value?.experimentName
+    || selectedExpCode.value
+    || '实验'
+)
+
+const classroomStudents = computed(() => classroom.value?.students || [])
+const currentReports = computed(() =>
+  reports.value.filter((r) => r.experimentCode === selectedExpCode.value)
+)
+const currentFeedback = computed(() =>
+  feedbackList.value.filter((f) => f.experimentCode === selectedExpCode.value)
+)
+
+const cameraStudents = computed(() => {
+  if (classroomStudents.value.length) return classroomStudents.value
+  return students.value
+    .filter((s) => !selectedExpCode.value || (s.assignedExperimentCodes || []).includes(selectedExpCode.value))
+    .map((s) => ({
+      userId: s.userId,
+      studentName: s.displayName || s.username,
+      studentClass: s.studentClass,
+      status: 'NOT_STARTED',
+      stepTitle: ''
+    }))
 })
 
-const recentReports = computed(() => reports.value.slice(0, 8))
-const recentPendingFeedback = computed(() => pendingFeedback.value.slice(0, 8))
-const allStudentsSelected = computed(() =>
-  students.value.length > 0 && selectedStudentIds.value.length === students.value.length
+const selectedStudent = computed(() =>
+  classroomStudents.value.find((s) => s.userId === selectedUserId.value) || null
+)
+
+const cameraSelectedStudent = computed(() =>
+  cameraStudents.value.find((s) => s.userId === cameraSelectedId.value) || null
+)
+
+const helpfulCount = computed(() => currentFeedback.value.filter((f) => f.rating === 'HELPFUL').length)
+const notHelpfulCount = computed(() => currentFeedback.value.filter((f) => f.rating === 'NOT_HELPFUL').length)
+const unprocessedCount = computed(() => currentFeedback.value.filter((f) => !f.processed).length)
+
+const filteredFeedback = computed(() =>
+  currentFeedback.value
+    .filter((f) => f.rating === feedbackFilter.value)
+    .sort((a, b) => timeValue(b.createdAt) - timeValue(a.createdAt))
+)
+
+const selectedFeedbackDetail = computed(() =>
+  currentFeedback.value.find((f) => f.id === selectedFeedbackId.value) || null
+)
+
+const sortedReports = computed(() =>
+  [...currentReports.value].sort((a, b) =>
+    timeValue(b.endTime || b.startTime) - timeValue(a.endTime || a.startTime)
+  )
+)
+
+const reportsByClass = computed(() => {
+  const reportMap = new Map()
+  currentReports.value.forEach((r) => {
+    const key = r.userId || r.studentName
+    reportMap.set(key, r)
+  })
+  const allStudents = cameraStudents.value
+  const classMap = new Map()
+  allStudents.forEach((s) => {
+    const cls = s.studentClass || '未分班'
+    if (!classMap.has(cls)) {
+      classMap.set(cls, { className: cls, students: [], submitted: 0, total: 0 })
+    }
+    const group = classMap.get(cls)
+    const report = reportMap.get(s.userId) || reportMap.get(s.studentName)
+    group.students.push({
+      ...s,
+      report: report || null,
+      submitted: !!report
+    })
+    group.total++
+    if (report) group.submitted++
+  })
+  return [...classMap.values()].sort((a, b) => a.className.localeCompare(b.className))
+})
+
+function toggleClassExpand(className) {
+  expandedClasses.value = { ...expandedClasses.value, [className]: !expandedClasses.value[className] }
+}
+
+const selectedReportItem = computed(() =>
+  sortedReports.value.find((r) => r.sessionId === selectedReportId.value) || null
+)
+
+const previewDataRows = computed(() => selectedReportPreview.value?.dataLogEntries || [])
+
+const navTabs = computed(() => [
+  {
+    key: 'overview', label: '学情总览', color: '#6366f1',
+    icon: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
+    iconFill: 'M3 13h8V3H3v10zm10 8h8V11h-8v10z',
+    badge: ''
+  },
+  {
+    key: 'feedback', label: '问答反馈', color: '#10b981',
+    icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 20l1.3-3.9A7.96 7.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
+    iconFill: 'M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 20l1.3-3.9A7.96 7.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
+    badge: unprocessedCount.value ? String(unprocessedCount.value) : ''
+  },
+  {
+    key: 'camera', label: '摄像头监控', color: '#f59e0b',
+    icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
+    iconFill: 'M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
+    badge: ''
+  },
+  {
+    key: 'report', label: '报告分析', color: '#ec4899',
+    icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+    iconFill: 'M7 3a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2',
+    badge: currentReports.value.length ? String(currentReports.value.length) : ''
+  }
+])
+
+watch(activeTab, (tab) => {
+  if (tab === 'report' && !selectedReportId.value && sortedReports.value.length) {
+    selectedReportId.value = sortedReports.value[0].sessionId
+  }
+  if (tab !== 'camera') stopCameraStream()
+})
+
+watch(
+  () => selectedReportItem.value?.sessionId,
+  (sid) => loadPreviewReport(sid),
+  { immediate: false }
 )
 
 onMounted(() => {
-  loadOverview()
+  loadInitial()
+  loadBenchCameraConfig()
 })
 
 onUnmounted(() => {
-  stopClassroomPoll()
+  stopCameraStream()
 })
 
-async function switchTab(key) {
-  if (activeTab.value === key) return
-  activeTab.value = key
-  expandedFeedbackId.value = null
-  stopClassroomPoll()
-  if (key === 'overview') await loadOverview()
-  if (key === 'classroom') {
-    if (!allExperiments.value.length) {
-      const { data } = await experimentApi.list()
-      allExperiments.value = data || []
-    }
-    await loadClassroom()
-    startClassroomPoll()
+async function loadInitial() {
+  loading.value = true
+  try {
+    const [expRes, studentRes] = await Promise.all([
+      experimentApi.list(),
+      teacherApi.students()
+    ])
+    experiments.value = expRes.data || []
+    students.value = studentRes.data || []
+    const saved = localStorage.getItem(CURRENT_EXP_KEY)
+    selectedExpCode.value = experimentOptions.value.some((e) => e.code === saved)
+      ? saved
+      : experimentOptions.value[0]?.code || ''
+    await loadExperimentData()
+  } finally {
+    loading.value = false
+    loadedOnce.value = true
   }
-  if (key === 'reports') await loadReports()
-  if (key === 'feedback') await loadFeedback()
-  if (key === 'students') await loadStudents()
 }
 
-async function loadClassroom() {
-  classroomLoading.value = true
+async function loadExperimentData() {
+  if (!selectedExpCode.value) return
+  const [overviewRes, classroomRes, reportRes, feedbackRes] = await Promise.all([
+    teacherApi.overview(),
+    teacherApi.classroom({ experimentCode: selectedExpCode.value }),
+    teacherApi.reports({ experimentCode: selectedExpCode.value }),
+    teacherApi.feedback({ experimentCode: selectedExpCode.value })
+  ])
+  overview.value = overviewRes.data
+  classroom.value = classroomRes.data
+  reports.value = reportRes.data || []
+  feedbackList.value = feedbackRes.data || []
+  selectedUserId.value = classroomStudents.value[0]?.userId || null
+  selectedReportId.value = sortedReports.value[0]?.sessionId || null
+  await loadPreviewReport(selectedReportId.value)
+}
+
+async function refresh() {
+  loading.value = true
   try {
-    const params = {}
-    if (classroomExpCode.value) params.experimentCode = classroomExpCode.value
-    const { data } = await teacherApi.classroom(params)
-    classroom.value = data
+    const { data } = await teacherApi.students()
+    students.value = data || []
+    await loadExperimentData()
+  } finally {
+    loading.value = false
+  }
+}
+
+async function onExperimentChange(code) {
+  if (code) selectedExpCode.value = code
+  localStorage.setItem(CURRENT_EXP_KEY, selectedExpCode.value)
+  selectedUserId.value = null
+  selectedReportId.value = null
+  selectedReportPreview.value = null
+  loading.value = true
+  try {
+    await loadExperimentData()
+  } finally {
+    loading.value = false
+  }
+}
+
+function selectReportItem(sessionId) {
+  selectedReportId.value = sessionId
+}
+
+function openCameraModal(userId) {
+  cameraSelectedId.value = userId
+  cameraModalOpen.value = true
+  camReady.value = false
+  camError.value = ''
+  nextTick(() => startCameraStream())
+}
+
+function closeCameraModal() {
+  stopCameraStream()
+  cameraModalOpen.value = false
+  cameraSelectedId.value = null
+}
+
+async function loadPreviewReport(sessionId) {
+  if (!sessionId) {
+    selectedReportPreview.value = null
+    return
+  }
+  previewLoading.value = true
+  try {
+    const { data } = await teacherApi.report(sessionId)
+    selectedReportPreview.value = data
   } catch {
-    classroom.value = { students: [], activeCount: 0, highPriorityCount: 0, notReadyCount: 0, dataIssueCount: 0 }
+    selectedReportPreview.value = null
   } finally {
-    classroomLoading.value = false
+    previewLoading.value = false
   }
-}
-
-function startClassroomPoll() {
-  stopClassroomPoll()
-  classroomTimer = setInterval(() => {
-    if (activeTab.value === 'classroom') loadClassroom()
-  }, 45000)
-}
-
-function stopClassroomPoll() {
-  if (classroomTimer) {
-    clearInterval(classroomTimer)
-    classroomTimer = null
-  }
-}
-
-function priorityLabel(priority) {
-  if (priority === 'high') return '优先'
-  if (priority === 'medium') return '关注'
-  return '正常'
-}
-
-function statusLabel(status) {
-  if (status === 'ACTIVE') return '进行中'
-  if (status === 'NOT_STARTED') return '未开始'
-  return status || '—'
-}
-
-async function loadOverview() {
-  loading.value = true
-  try {
-    const [overviewRes, reportsRes, pendingRes] = await Promise.all([
-      teacherApi.overview(),
-      teacherApi.reports(),
-      teacherApi.feedback({ processed: false })
-    ])
-    overview.value = overviewRes.data
-    reports.value = reportsRes.data || []
-    pendingFeedback.value = pendingRes.data || []
-  } finally {
-    loading.value = false
-  }
-}
-
-async function loadReports() {
-  loading.value = true
-  try {
-    const { data } = await teacherApi.reports()
-    reports.value = data || []
-  } finally {
-    loading.value = false
-  }
-}
-
-async function loadStudents() {
-  loading.value = true
-  try {
-    const [studentsRes, expRes] = await Promise.all([
-      teacherApi.students(),
-      experimentApi.list()
-    ])
-    students.value = studentsRes.data || []
-    allExperiments.value = expRes.data || []
-    selectedStudentIds.value = selectedStudentIds.value.filter((id) =>
-      students.value.some((s) => s.userId === id)
-    )
-  } finally {
-    loading.value = false
-  }
-}
-
-function downloadImportTemplate() {
-  const content = '\uFEFF账号,姓名,密码,班级\n'
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = '学生名单模板.csv'
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function triggerImport() {
-  importFileInput.value?.click()
-}
-
-async function onImportFileChange(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  importing.value = true
-  try {
-    const csv = await file.text()
-    await teacherApi.importStudents({ csv, defaultPassword: '123456' })
-    await loadStudents()
-  } catch (e) {
-    window.alert(e.response?.data?.message || e.message || '导入失败')
-  } finally {
-    importing.value = false
-    event.target.value = ''
-  }
-}
-
-function toggleSelectAll(event) {
-  selectedStudentIds.value = event.target.checked
-    ? students.value.map((s) => s.userId)
-    : []
-}
-
-function openAssign(student) {
-  assignBulkMode.value = false
-  assignTarget.value = student
-  assignSelectedCodes.value = [...(student.assignedExperimentCodes || [])]
-  assignVisible.value = true
-}
-
-function openBulkAssign() {
-  if (!selectedStudentIds.value.length) return
-  assignBulkMode.value = true
-  assignTarget.value = null
-  assignSelectedCodes.value = []
-  assignVisible.value = true
-}
-
-function closeAssign() {
-  assignVisible.value = false
-  assignTarget.value = null
-  assignBulkMode.value = false
-}
-
-async function saveAssign() {
-  assignSaving.value = true
-  try {
-    if (assignBulkMode.value) {
-      await teacherApi.bulkAssignExperiments({
-        userIds: selectedStudentIds.value,
-        experimentCodes: assignSelectedCodes.value
-      })
-    } else if (assignTarget.value) {
-      await teacherApi.assignExperiments(assignTarget.value.userId, {
-        experimentCodes: assignSelectedCodes.value
-      })
-    }
-    closeAssign()
-    await loadStudents()
-  } finally {
-    assignSaving.value = false
-  }
-}
-
-async function loadFeedback() {
-  loading.value = true
-  try {
-    const params = {}
-    if (feedbackFilter.value === 'NOT_HELPFUL') params.rating = 'NOT_HELPFUL'
-    if (feedbackFilter.value === 'unprocessed') params.processed = false
-    const { data } = await teacherApi.feedback(params)
-    feedbackList.value = data || []
-    if (!feedbackList.value.some((item) => item.id === expandedFeedbackId.value)) {
-      expandedFeedbackId.value = null
-    }
-  } finally {
-    loading.value = false
-  }
-}
-
-function setFeedbackFilter(key) {
-  feedbackFilter.value = key
-  loadFeedback()
-}
-
-function toggleFeedbackDetail(id) {
-  expandedFeedbackId.value = expandedFeedbackId.value === id ? null : id
 }
 
 async function openReport(sessionId) {
+  if (!sessionId) return
   const { data } = await teacherApi.report(sessionId)
   selectedReport.value = data
   selectedReportSessionId.value = sessionId
@@ -709,6 +797,11 @@ async function openReport(sessionId) {
   reviewError.value = ''
   reviewFromDify.value = true
   reportVisible.value = true
+}
+
+async function openReportWithReview(sessionId) {
+  await openReport(sessionId)
+  await runAiReview()
 }
 
 function closeReport() {
@@ -733,11 +826,13 @@ async function runAiReview() {
 
 async function downloadReport(sessionId, experimentName) {
   const { data } = await teacherApi.reportDocx(sessionId)
-  const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+  const blob = new Blob([data], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `实验总结报告-${experimentName || '实验'}.docx`
+  a.download = `实验报告-${experimentName || currentExperimentName.value || '实验'}.docx`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -754,14 +849,124 @@ async function downloadSelectedReport() {
 
 async function markProcessed(feedbackId) {
   await teacherApi.markFeedbackProcessed(feedbackId)
-  pendingFeedback.value = pendingFeedback.value.filter((item) => item.id !== feedbackId)
-  if (activeTab.value === 'feedback') {
-    await loadFeedback()
+  await loadExperimentData()
+}
+
+async function loadBenchCameraConfig() {
+  try {
+    const { data } = await systemApi.benchCamera()
+    benchCameraConfig.value = data
+  } catch {
+    benchCameraConfig.value = null
   }
-  if (overview.value) {
-    const { data } = await teacherApi.overview()
-    overview.value = data
+}
+
+function resolveStreamUrl(url) {
+  if (url?.startsWith('/ws/')) {
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${protocol}://${window.location.host}${url}`
   }
+  return url
+}
+
+async function startCameraStream() {
+  stopCameraStream()
+  camError.value = ''
+  camReady.value = false
+  const cfg = benchCameraConfig.value
+  if (!cfg?.enabled || !cfg.browserStreamUrl) {
+    camError.value = '摄像头未配置或不可用'
+    return
+  }
+  if (!flvjs.isSupported()) {
+    camError.value = '当前浏览器不支持 FLV 实时预览'
+    return
+  }
+  await nextTick()
+  const video = camVideoRef.value
+  if (!video) return
+  video.muted = true
+  try {
+    flvPlayer = flvjs.createPlayer({
+      type: 'flv',
+      url: resolveStreamUrl(cfg.browserStreamUrl),
+      isLive: true,
+      cors: true
+    }, {
+      enableWorker: false,
+      enableStashBuffer: false,
+      stashInitialSize: 32,
+      maxBufferLength: 0.3,
+      liveBufferLatencyChasing: true,
+      autoCleanupSourceBuffer: true,
+      autoplay: true,
+      muted: true
+    })
+    flvPlayer.attachMediaElement(video)
+    flvPlayer.load()
+    await video.play()
+    await waitForVideoFrame(video, 7000)
+    camReady.value = true
+  } catch {
+    camError.value = '无法播放摄像头视频流，请确认摄像头在线'
+    cleanupFlv()
+  }
+}
+
+function waitForVideoFrame(video, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    if (video.readyState >= 2 && video.videoWidth > 0) { resolve(); return }
+    const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')) }, timeoutMs)
+    const onReady = () => { if (video.videoWidth > 0) { cleanup(); resolve() } }
+    const cleanup = () => {
+      clearTimeout(timer)
+      video.removeEventListener('loadeddata', onReady)
+      video.removeEventListener('playing', onReady)
+    }
+    video.addEventListener('loadeddata', onReady)
+    video.addEventListener('playing', onReady)
+  })
+}
+
+function cleanupFlv() {
+  if (flvPlayer) {
+    try {
+      flvPlayer.pause()
+      flvPlayer.unload()
+      flvPlayer.detachMediaElement()
+      flvPlayer.destroy()
+    } catch { /* noop */ }
+    flvPlayer = null
+  }
+  const video = camVideoRef.value
+  if (video) {
+    video.srcObject = null
+    video.removeAttribute('src')
+    video.load()
+  }
+}
+
+function stopCameraStream() {
+  cleanupFlv()
+  camReady.value = false
+  camExpanded.value = false
+}
+
+function toggleExpand() {
+  camExpanded.value = !camExpanded.value
+}
+
+function priorityLabel(p) {
+  return { high: '高', medium: '中', normal: '低' }[p] || '低'
+}
+
+function isBadValidation(text) {
+  return /异常|错误|不通过|fail|error/i.test(String(text || ''))
+}
+
+function timeValue(value) {
+  const d = new Date(value || 0)
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime()
 }
 
 function formatTime(value) {
@@ -769,16 +974,12 @@ function formatTime(value) {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return String(value)
   return d.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
   })
 }
 
 function plainText(text) {
-  return String(text || '').replace(/[#>*`_\-]/g, '').trim()
+  return String(text || '').replace(/[#>*`_\-]/g, '').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 function logout() {
@@ -788,135 +989,556 @@ function logout() {
 </script>
 
 <style scoped>
-.teacher-page {
-  @apply w-full max-w-[1280px] mx-auto px-8 lg:px-12;
+.teacher-terminal {
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: #1e293b;
+  background: #f2f3f7;
 }
-.section-head-row {
-  @apply flex items-center justify-between gap-4 mb-4;
+
+/* ====== 顶栏 ====== */
+.terminal-head {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: #fff;
+  border-bottom: 1px solid #e4e9f3;
+  flex-shrink: 0;
 }
-.section-head {
-  @apply flex items-center gap-3 text-[16px] font-bold text-ink-strong;
+.head-left, .head-right { display: flex; align-items: center; gap: 10px; }
+.head-left img { height: 32px; width: auto; object-fit: contain; }
+.head-sep {
+  width: 1px; height: 22px; background: #e4e9f3; flex-shrink: 0;
 }
-.section-head::before {
-  content: '';
-  @apply w-1 h-5 rounded-full bg-brand-600 shrink-0;
+.terminal-head h1 { font-size: 17px; font-weight: 700; color: #0f172a; white-space: nowrap; }
+.head-right { font-size: 13px; color: #64748b; }
+.head-right .user-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 11px; font-weight: 700; flex-shrink: 0;
 }
-.stat-grid {
-  @apply grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-5 pb-2;
+.head-right .user-name {
+  font-size: 13px; color: #1e293b; font-weight: 500;
+  max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.stat-item {
-  @apply py-1;
+.head-right .user-sep {
+  width: 1px; height: 14px; background: #e4e9f3; flex-shrink: 0;
 }
-.stat-label {
-  @apply text-[13px] text-ink-faint;
+.head-right .logout-link {
+  font-size: 13px; color: #64748b; font-weight: 500;
+  transition: color 0.15s;
 }
-.stat-value {
-  @apply text-[26px] font-bold mt-1.5;
+.head-right .logout-link:hover { color: #4f46e5; }
+
+/* ====== Tab 导航 ====== */
+.terminal-nav {
+  display: flex; align-items: stretch; justify-content: center; gap: 8px;
+  padding: 0; background: #fff;
+  border-bottom: 1px solid #e4e9f3; flex-shrink: 0;
 }
-.teacher-nav {
-  @apply -mx-6 px-6 border-t border-line-soft;
+.nav-tab {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  position: relative; padding: 8px 28px; border: none; background: transparent;
+  color: #94a3b8; transition: all 0.2s; white-space: nowrap;
 }
-.teacher-tabs {
-  @apply flex items-center justify-center gap-1 overflow-x-auto;
+.nav-tab:hover { color: #64748b; }
+.nav-tab:hover .tab-icon { color: #94a3b8; }
+.nav-tab.active .tab-icon { color: var(--icon-color, #4f46e5); }
+.nav-tab.active .tab-label { color: #0f172a; }
+.nav-tab.active::after {
+  content: ''; position: absolute; bottom: 0; left: 28px; right: 28px;
+  height: 2px; background: var(--icon-color, #4f46e5); border-radius: 999px;
 }
-.teacher-tab {
-  @apply relative px-5 py-3 text-[14px] font-medium text-ink-muted transition-colors;
+.tab-icon { width: 28px; height: 28px; color: #cbd5e1; transition: color 0.2s; }
+.tab-label { font-size: 10px; font-weight: 500; letter-spacing: 0.02em; }
+.nav-tab.active .tab-label { font-weight: 700; }
+.tab-badge {
+  position: absolute; top: 6px; right: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  background: #ef4444; color: #fff; font-size: 10px; font-weight: 700;
 }
-.teacher-tab:hover {
-  @apply text-ink-strong;
+
+/* ====== 状态/加载 ====== */
+.terminal-state {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: #94a3b8; font-size: 15px;
 }
-.teacher-tab--active {
-  @apply text-brand-600 font-semibold;
+.terminal-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.tab-panel { height: 100%; overflow: hidden; display: flex; flex-direction: column; padding: 14px 24px 20px; }
+
+/* ====== 统计栏 ====== */
+.stat-bar {
+  display: flex; align-items: center; gap: 0; flex-shrink: 0;
+  padding: 8px 16px; margin-bottom: 12px;
+  background: #fff; border: 1px solid #e4e9f3;
+  font-size: 13px; color: #64748b;
 }
-.teacher-tab--active::after {
-  content: '';
-  @apply absolute bottom-0 left-4 right-4 h-0.5 bg-brand-600 rounded-full;
+.stat-item { display: inline-flex; align-items: center; gap: 4px; }
+.stat-item strong { color: #0f172a; font-size: 16px; font-weight: 700; margin: 0 2px; }
+.stat-item strong.c-green { color: #059669; }
+.stat-item strong.c-red { color: #ef4444; }
+.stat-item em { font-size: 11px; color: #94a3b8; font-style: normal; }
+.stat-sep { width: 1px; height: 16px; background: #e4e9f3; margin: 0 18px; flex-shrink: 0; }
+
+/* ====== 学情总览 ====== */
+/* KPI 看板卡片 */
+.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 16px; flex-shrink: 0; }
+.kpi-card {
+  display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 14px;
+  background: #fff; border: 1px solid #e4e9f3; transition: all 0.2s;
 }
-.teacher-table {
-  @apply w-full text-[14px];
+.kpi-card:hover { border-color: #c7d2fe; box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08); }
+.kpi-icon { width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+.kpi-icon svg { width: 22px; height: 22px; }
+.kpi-body { display: flex; flex-direction: column; gap: 2px; }
+.kpi-label { font-size: 12px; color: #94a3b8; font-weight: 600; }
+.kpi-value { font-size: 26px; font-weight: 800; line-height: 1.2; color: #0f172a; }
+.kpi-sub { font-size: 11px; color: #cbd5e1; }
+
+.kpi-total .kpi-icon { background: #eef2ff; color: #6366f1; }
+.kpi-total .kpi-value { color: #6366f1; }
+.kpi-active .kpi-icon { background: #ecfdf5; color: #059669; }
+.kpi-active .kpi-value { color: #059669; }
+.kpi-done .kpi-icon { background: #eff6ff; color: #3b82f6; }
+.kpi-done .kpi-value { color: #3b82f6; }
+.kpi-alert .kpi-icon { background: #fef2f2; color: #ef4444; }
+.kpi-alert .kpi-value { color: #ef4444; }
+
+/* 学生卡片网格 */
+.overview-body { display: grid; grid-template-columns: 1fr 340px; gap: 0; flex: 1; min-height: 0; }
+.student-grid-section { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid #e4e9f3; }
+.grid-toolbar { height: 38px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding: 0 16px; background: #f8f9fc; border-bottom: 1px solid #e4e9f3; }
+.grid-toolbar h2 { color: #0f172a; font-size: 13px; font-weight: 700; }
+.toolbar-exp { color: #94a3b8; font-size: 12px; }
+
+.student-grid {
+  flex: 1; overflow-y: auto; padding: 14px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;
+  align-content: start;
 }
-.teacher-table thead {
-  @apply text-left border-b-2 border-line-strong;
+.student-card {
+  background: #fff; border: 1px solid #e4e9f3; border-radius: 12px; padding: 14px;
+  cursor: pointer; transition: all 0.18s; position: relative; overflow: hidden;
 }
-.teacher-table th {
-  @apply py-3 pr-6 text-[13px] font-bold text-ink-muted whitespace-nowrap;
+.student-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
 }
-.teacher-table th:last-child {
-  @apply pr-0;
+.student-card.card-high::before { background: #ef4444; }
+.student-card.card-medium::before { background: #f59e0b; }
+.student-card.card-normal::before { background: #e4e9f3; }
+.student-card:hover { border-color: #c7d2fe; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.1); transform: translateY(-1px); }
+.student-card.active { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15); }
+
+.card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.card-avatar {
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: #f1f5f9; color: #64748b; font-size: 15px; font-weight: 700;
 }
-.teacher-table td {
-  @apply py-4 pr-6 border-b border-line-soft align-top;
+.card-avatar.avatar-active { background: linear-gradient(135deg, #6366f1, #818cf8); color: #fff; }
+.card-name-block { flex: 1; min-width: 0; }
+.card-name-block strong { display: block; font-size: 14px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-name-block span { display: block; font-size: 11px; color: #94a3b8; margin-top: 1px; }
+
+.card-step {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px; border-radius: 8px; background: #f8f9fc; margin-bottom: 10px;
 }
-.teacher-table td:last-child {
-  @apply pr-0;
+.card-step-icon { width: 14px; height: 14px; flex-shrink: 0; color: #94a3b8; }
+.card-step span { font-size: 12px; color: #475569; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.card-stats { display: flex; gap: 12px; }
+.card-stat {
+  display: flex; align-items: center; gap: 4px; font-size: 11px; color: #94a3b8; font-weight: 600;
 }
-.teacher-table tbody tr:hover td {
-  @apply bg-surface-soft/60;
+.card-stat svg { width: 13px; height: 13px; }
+.card-stat.stat-warn { color: #f59e0b; }
+.card-stat.stat-warn svg { color: #f59e0b; }
+
+/* 状态标签 */
+.state-pill {
+  display: inline-flex; height: 22px; align-items: center; padding: 0 10px;
+  border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap;
 }
-.detail-row td {
-  @apply py-0 border-b border-line-soft bg-surface-soft/40;
+.state-pill.active { background: #ecfdf5; color: #059669; }
+.state-pill.idle { background: #f1f5f9; color: #64748b; }
+
+/* 优先级 */
+.priority-badge {
+  display: inline-flex; height: 20px; align-items: center; padding: 0 8px;
+  border-radius: 4px; font-size: 11px; font-weight: 700;
 }
-.detail-block {
-  @apply py-4 text-[14px] text-ink-base leading-relaxed;
+.priority-high { background: #fef2f2; color: #ef4444; }
+.priority-medium { background: #fffbeb; color: #d97706; }
+.priority-normal { background: #f1f5f9; color: #94a3b8; }
+
+/* 详情面板 */
+.detail-panel {
+  display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid #e4e9f3; background: #fff;
+  overflow: hidden;
 }
-.detail-label {
-  @apply inline-block w-20 shrink-0 text-ink-faint font-semibold;
+.detail-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid #e4e9f3; flex-shrink: 0;
 }
-.filter-chip {
-  @apply h-9 px-4 rounded-lg text-[13px] font-semibold text-ink-muted hover:text-ink-base hover:bg-surface-soft;
+.detail-exp { color: #94a3b8; font-size: 12px; font-weight: 600; }
+.detail-header h2 { margin-top: 2px; color: #0f172a; font-size: 18px; font-weight: 700; }
+.detail-class { color: #94a3b8; font-size: 12px; margin-top: 2px; }
+.detail-stats {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  border-bottom: 1px solid #e4e9f3; flex-shrink: 0;
 }
-.filter-chip--active {
-  @apply text-brand-700 bg-brand-50;
+.detail-stats div { padding: 10px 14px; border-right: 1px solid #e4e9f3; border-bottom: 1px solid #e4e9f3; }
+.detail-stats div:nth-child(2n) { border-right: 0; }
+.detail-stats div:nth-last-child(-n+2) { border-bottom: 0; }
+.detail-stats span { display: block; color: #94a3b8; font-size: 11px; font-weight: 600; }
+.detail-stats strong { display: block; margin-top: 3px; color: #0f172a; font-size: 13px; font-weight: 700; }
+
+.detail-alert {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 12px 18px; padding: 10px 12px;
+  border-radius: 8px; background: #fef2f2; border: 1px solid #fca5a5;
+  color: #dc2626; font-size: 12px; font-weight: 600; line-height: 1.4;
 }
-.link-btn {
-  @apply text-[13px] font-semibold text-brand-700 hover:text-brand-800;
+.alert-icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+
+.detail-section { padding: 12px 18px; border-bottom: 1px solid #e4e9f3; flex-shrink: 0; }
+.detail-section h3 { color: #0f172a; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-item {
+  padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  background: #f1f5f9; color: #475569;
 }
-.rating-tag {
-  @apply inline-block text-[12px] font-semibold;
+
+.detail-quick-actions { display: flex; gap: 8px; padding: 12px 18px; flex-shrink: 0; }
+.detail-quick-actions button {
+  flex: 1; height: 32px; border-radius: 8px;
+  border: 1px solid #e4e9f3; background: #f5f7fc; color: #64748b;
+  font-size: 12px; font-weight: 600; transition: all 0.15s;
 }
-.rating-tag--ok {
-  @apply text-emerald-700;
+.detail-quick-actions button:hover { background: #eef2ff; color: #4f46e5; border-color: #a5b4fc; }
+
+/* ====== 问答反馈 ====== */
+.fb-tabs { display: flex; border-bottom: 1px solid #e4e9f3; flex-shrink: 0; }
+.fb-tab {
+  flex: 1; padding: 10px 0; font-size: 13px; font-weight: 600;
+  color: #94a3b8; transition: color 0.15s; position: relative;
 }
-.rating-tag--bad {
-  @apply text-red-600;
+.fb-tab.active { color: #4f46e5; }
+.fb-tab.active::after {
+  content: ''; position: absolute; bottom: 0; left: 25%; right: 25%;
+  height: 2px; background: #4f46e5; border-radius: 2px;
 }
-.field-select {
-  @apply rounded-lg border border-line-soft bg-white px-3 py-1.5 text-[13px] text-ink-base;
+
+.fb-list-wrap { flex: 1; overflow-y: auto; }
+.fb-list-head {
+  display: grid;
+  grid-template-columns: 140px 60px 1fr 140px 80px;
+  gap: 0; padding: 0 16px; height: 36px; align-items: center;
+  background: #f8f9fc; border-bottom: 1px solid #e4e9f3;
+  position: sticky; top: 0; z-index: 1;
+  font-size: 12px; font-weight: 600; color: #64748b;
 }
-.prio-tag {
-  @apply inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border;
+.fb-list-row {
+  display: grid;
+  grid-template-columns: 140px 60px 1fr 140px 80px;
+  gap: 0; padding: 0 16px; min-height: 48px; align-items: center;
+  border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.12s;
 }
-.prio-tag--high {
-  @apply bg-rose-50 text-rose-700 border-rose-100;
+.fb-list-row:hover { background: #f5f7fc; }
+.fb-list-row.unprocessed { background: #fffbeb; }
+.fb-list-row.unprocessed:hover { background: #fef3c7; }
+
+.fb-col-student { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fb-avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #6366f1, #818cf8);
 }
-.prio-tag--medium {
-  @apply bg-amber-50 text-amber-700 border-amber-100;
+.fb-col-student strong { font-size: 13px; font-weight: 600; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fb-col-step { font-size: 13px; color: #64748b; }
+.fb-col-question {
+  font-size: 13px; color: #334155; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; padding-right: 12px;
 }
-.prio-tag--normal {
-  @apply bg-surface-soft text-ink-muted border-line-soft;
+.fb-col-time { font-size: 12px; color: #94a3b8; }
+
+.fb-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: 4px;
 }
-.empty-block {
-  @apply text-[14px] text-ink-faint py-10 pl-4;
+.fb-badge--pending { background: #fef3c7; color: #d97706; }
+.fb-badge--done { background: #f1f5f9; color: #94a3b8; }
+
+.fb-detail-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; border-bottom: 1px solid #e4e9f3; flex-shrink: 0;
 }
-.import-bar {
-  @apply flex flex-wrap items-center gap-3;
+.back-btn {
+  display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600;
+  color: #64748b; transition: color 0.15s;
 }
-.assign-overlay {
-  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4;
+.back-btn:hover { color: #4f46e5; }
+.back-icon { width: 16px; height: 16px; }
+.fb-detail-time { color: #94a3b8; font-size: 11px; }
+.fb-detail-body { flex: 1; overflow-y: auto; padding: 16px; }
+.fb-detail-student {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
 }
-.assign-modal {
-  @apply w-full max-w-md rounded-2xl bg-white shadow-card p-6 space-y-4;
+.fb-detail-student strong { color: #0f172a; font-size: 15px; }
+.fb-detail-student span { color: #94a3b8; font-size: 12px; }
+.fb-detail-block { border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.fb-detail-q { background: #f5f7fc; border: 1px solid #e4e9f3; }
+.fb-detail-a { background: #eef2ff; border: 1px solid #c7d2fe; }
+.fb-detail-role {
+  display: block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 6px;
 }
-.assign-title {
-  @apply text-[16px] font-bold text-ink-strong;
+.fb-detail-block p { font-size: 13px; line-height: 1.6; color: #334155; }
+.fb-detail-q p { color: #0f172a; }
+.fb-detail-footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid #e4e9f3; }
+.fb-process-btn {
+  height: 32px; padding: 0 16px; border-radius: 8px;
+  background: #4f46e5; color: #fff; font-size: 12px; font-weight: 600;
+  transition: background 0.15s;
 }
-.assign-list {
-  @apply max-h-64 overflow-y-auto space-y-2 py-1;
+.fb-process-btn:hover { background: #4338ca; }
+.processed-tag { color: #94a3b8; font-size: 12px; }
+
+/* ====== 摄像头监控 ====== */
+.camera-tab { display: flex; flex-direction: column; }
+.camera-grid {
+  flex: 1; overflow-y: auto; padding: 14px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px; align-content: start;
 }
-.assign-item {
-  @apply flex items-center gap-3 text-[14px] text-ink-base cursor-pointer py-1.5;
+.camera-card {
+  display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  border: 1px solid #e4e9f3; border-radius: 12px; background: #fff;
+  color: inherit; text-align: left;
+  transition: all 0.18s; cursor: pointer;
 }
-.assign-footer {
-  @apply flex justify-end gap-3 pt-2;
+.camera-card:hover { border-color: #c7d2fe; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.1); transform: translateY(-1px); }
+.cam-preview-mini {
+  position: relative; aspect-ratio: 16 / 10; border-radius: 8px; overflow: hidden;
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+}
+.cam-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; }
+.cam-placeholder svg { width: 36px; height: 36px; color: rgba(255, 255, 255, 0.2); }
+.cam-badge {
+  position: absolute; top: 6px; left: 6px; padding: 2px 8px;
+  border-radius: 4px; font-size: 9px; font-weight: 700; letter-spacing: 0.05em;
+}
+.cam-badge.online { background: rgba(16, 185, 129, 0.85); color: #fff; }
+.cam-badge.offline { background: rgba(100, 116, 139, 0.85); color: #cbd5e1; }
+.cam-info strong { display: block; color: #0f172a; font-size: 14px; font-weight: 700; }
+.cam-info span { display: block; color: #94a3b8; font-size: 12px; margin-top: 2px; }
+
+/* 摄像头放大弹窗 */
+.cam-modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(3px);
+}
+.cam-modal {
+  display: flex; flex-direction: column;
+  width: 720px; max-width: 92vw; height: 480px; max-height: 80vh;
+  background: #fff; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+.cam-modal.expanded { width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
+.cam-large-preview { flex: 1; position: relative; background: #0a0e1a; overflow: hidden; }
+.cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cam-loading {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+  color: #64748b; font-size: 14px;
+}
+.spinner {
+  width: 32px; height: 32px; border: 3px solid #e4e9f3;
+  border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.cam-overlay-tl, .cam-overlay-tr, .cam-overlay-bl, .cam-overlay-br { position: absolute; z-index: 10; pointer-events: none; }
+.cam-overlay-tl { top: 12px; left: 12px; }
+.cam-overlay-tr { top: 12px; right: 12px; pointer-events: auto; }
+.cam-overlay-bl { bottom: 12px; left: 12px; }
+.cam-overlay-br { bottom: 12px; right: 12px; }
+.rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.4; } }
+.rec-text { margin-left: 6px; color: #f87171; font-size: 11px; font-family: monospace; font-weight: 700; }
+.live-text { color: #34d399; font-size: 11px; font-family: monospace; font-weight: 700; }
+.cam-expand-btn {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px);
+  color: #fff; display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+}
+.cam-expand-btn:hover { background: rgba(0, 0, 0, 0.6); }
+.cam-expand-btn svg { width: 16px; height: 16px; }
+.cam-overlay-br { background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(6px); padding: 8px 14px; border-radius: 8px; }
+.cam-overlay-br strong { display: block; color: #fff; font-size: 14px; font-weight: 700; }
+.cam-overlay-br span { display: block; color: rgba(255, 255, 255, 0.7); font-size: 11px; margin-top: 2px; }
+.cam-modal-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; border-top: 1px solid #e4e9f3; flex-shrink: 0; background: #f8f9fc;
+}
+.cam-modal-actions { display: flex; gap: 8px; }
+.cam-modal-actions button {
+  height: 32px; padding: 0 16px; border-radius: 8px;
+  border: 1px solid #e4e9f3; background: #fff; color: #64748b;
+  font-size: 13px; font-weight: 600; transition: all 0.15s;
+}
+.cam-modal-actions button:hover:not(:disabled) { color: #4f46e5; border-color: #a5b4fc; background: #eef2ff; }
+.cam-modal-actions button:disabled { opacity: 0.4; cursor: default; }
+.cam-modal-close {
+  height: 32px; padding: 0 18px; border-radius: 8px;
+  background: #4f46e5; color: #fff; font-size: 13px; font-weight: 600; transition: background 0.15s;
+}
+.cam-modal-close:hover { background: #4338ca; }
+
+/* ====== 报告分析 ====== */
+.report-layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; flex: 1; min-height: 0; }
+.report-list-section {
+  display: flex; flex-direction: column; min-height: 0;
+  border-right: 1px solid #e4e9f3; background: #fff;
+  padding: 12px;
+}
+.report-list-section h2 { color: #0f172a; font-size: 13px; font-weight: 700; flex-shrink: 0; margin-bottom: 10px; }
+.report-class-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.report-detail-section {
+  display: flex; flex-direction: column; min-height: 0;
+  background: #fff; padding: 16px;
+}
+
+/* 班级分组 */
+.class-group { border: 1px solid #e4e9f3; border-radius: 10px; overflow: hidden; }
+.class-group-header {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 10px 12px; background: #f8f9fc; border: none; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: #1e293b; transition: background 0.12s;
+}
+.class-group-header:hover { background: #f0f4ff; }
+.class-group-header .chevron { width: 14px; height: 14px; color: #94a3b8; transition: transform 0.2s; flex-shrink: 0; }
+.class-group.expanded .class-group-header .chevron { transform: rotate(90deg); }
+.class-group-header .class-name { flex: 1; text-align: left; }
+.class-group-header .class-stats { display: flex; gap: 4px; flex-shrink: 0; }
+.stat-chip { padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+.stat-chip.submitted { background: #dcfce7; color: #16a34a; }
+.stat-chip.pending { background: #fef3c7; color: #d97706; }
+
+/* 学生行 */
+.class-group-body { display: flex; flex-direction: column; }
+.student-report-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 12px; border: none; border-bottom: 1px solid #f1f5f9;
+  background: transparent; cursor: pointer; transition: background 0.12s; text-align: left;
+}
+.student-report-row:last-child { border-bottom: none; }
+.student-report-row:hover { background: #f5f7fc; }
+.student-report-row.active { background: #eef2ff; }
+.stu-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #fff;
+}
+.stu-avatar.submitted { background: linear-gradient(135deg, #6366f1, #818cf8); }
+.stu-avatar.not-submitted { background: #cbd5e1; }
+.stu-info { flex: 1; min-width: 0; }
+.stu-info strong { display: block; font-size: 13px; font-weight: 600; color: #1e293b; }
+.stu-info span { display: block; font-size: 11px; color: #94a3b8; margin-top: 1px; }
+.stu-badges { display: flex; gap: 4px; flex-shrink: 0; }
+.badge-help, .badge-err, .badge-ok {
+  padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; white-space: nowrap;
+}
+.badge-help { background: #fef3c7; color: #d97706; }
+.badge-err { background: #fee2e2; color: #dc2626; }
+.badge-ok { background: #dcfce7; color: #16a34a; }
+.stu-status.pending { font-size: 11px; color: #94a3b8; font-weight: 500; flex-shrink: 0; }
+
+.rd-head {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #e4e9f3;
+}
+.rd-head h2 { color: #0f172a; font-size: 17px; font-weight: 700; }
+.rd-head p { color: #94a3b8; font-size: 12px; font-weight: 600; margin-top: 2px; }
+.rd-actions { display: flex; gap: 8px; }
+.rd-actions button {
+  height: 32px; border-radius: 8px; border: 1px solid #e4e9f3;
+  background: #fff; color: #64748b; padding: 0 14px;
+  font-size: 12px; font-weight: 600; transition: all 0.15s;
+}
+.rd-actions button:hover { color: #4f46e5; border-color: #a5b4fc; background: #eef2ff; }
+.rd-actions .ai-btn {
+  background: #4f46e5; color: #fff;
+  border-color: transparent;
+}
+.rd-actions .ai-btn:hover { background: #4338ca; color: #fff; }
+
+.rd-body { flex: 1; overflow-y: auto; }
+.rd-section-title { color: #0f172a; font-size: 14px; font-weight: 700; margin-bottom: 10px; margin-top: 16px; }
+.rd-section-title:first-child { margin-top: 0; }
+.rd-summary {
+  display: flex; align-items: center; gap: 0; margin-bottom: 14px;
+  padding: 8px 0; border-bottom: 1px solid #f1f5f9;
+}
+.rd-summary span {
+  font-size: 12px; color: #64748b; font-weight: 600;
+  padding: 0 14px; border-right: 1px solid #e4e9f3;
+}
+.rd-summary span:first-child { padding-left: 0; }
+.rd-summary span:last-child { border-right: 0; }
+.rd-summary strong { font-size: 16px; font-weight: 700; color: #0f172a; margin-left: 4px; }
+
+.data-check-table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 10px; font-size: 12px; }
+.data-check-table th { background: #f5f7fc; color: #475569; font-weight: 700; text-align: left; }
+.data-check-table th, .data-check-table td { border: 1px solid #e4e9f3; padding: 10px; vertical-align: top; }
+
+.rd-corrections { margin-top: 16px; }
+.correction-item {
+  margin-bottom: 8px; padding: 12px;
+  border: 1px solid #fca5a5; border-radius: 10px; background: #fef2f2;
+}
+.corr-head { display: flex; align-items: center; justify-content: space-between; }
+.corr-head span:first-child { color: #dc2626; font-size: 11px; font-weight: 600; }
+.corr-type { padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; color: #dc2626; font-size: 10px; font-weight: 600; }
+.correction-item p { margin-top: 6px; color: #64748b; font-size: 12px; line-height: 1.5; }
+
+/* ====== 通用 ====== */
+.empty-state {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: #94a3b8; font-size: 14px; text-align: center;
+}
+.empty-state.small { min-height: 80px; }
+.bad-text { color: #ef4444 !important; font-weight: 700; }
+.ok-text { color: #059669 !important; font-weight: 700; }
+
+.custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scroll::-webkit-scrollbar-track { background: transparent; }
+.custom-scroll::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.22); border-radius: 3px; }
+.custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.4); }
+
+.slide-fade-enter-active { transition: all 0.25s ease; }
+.slide-fade-enter-from { opacity: 0; transform: translateX(20px); }
+
+@media (max-width: 1280px) {
+  .overview-body { grid-template-columns: 1fr; }
+  .detail-panel { max-height: 320px; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .report-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .teacher-terminal { height: auto; min-height: 100vh; overflow-y: auto; }
+  .terminal-head { flex-wrap: wrap; gap: 8px; padding: 12px; height: auto; }
+  .terminal-nav { padding: 0 12px; overflow-x: auto; }
+  .tab-panel { height: auto; }
+  .kpi-row { grid-template-columns: 1fr; }
+  .rd-summary { flex-wrap: wrap; }
 }
 </style>

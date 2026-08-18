@@ -1,5 +1,5 @@
 <template>
-  <StagePanel layout="single" title="实验复盘" desc="问题清单来自你本次实验的真实纠错与校验记录，不是通用说教。">
+  <StagePanel layout="single" title="实验复盘" desc="查看本次实验的问题清单与数据记录">
     <div v-if="!sessionId" class="empty-state">
       还没有本实验的记录。请先到「实验操作」完成一次实验。
     </div>
@@ -7,19 +7,19 @@
 
     <template v-else-if="report">
       <section class="stats-row">
-        <div class="stat-card">
+        <div class="stat-item">
           <p class="stat-val">{{ report.helpCount ?? 0 }}</p>
           <p class="stat-label">问答/纠错</p>
         </div>
-        <div class="stat-card">
+        <div class="stat-item">
           <p class="stat-val text-rose-500">{{ report.errorPointCount ?? 0 }}</p>
           <p class="stat-label">纠错标注</p>
         </div>
-        <div class="stat-card">
+        <div class="stat-item">
           <p class="stat-val text-emerald-600">{{ report.tutViewCount ?? 0 }}</p>
           <p class="stat-label">教程查阅</p>
         </div>
-        <div class="stat-card">
+        <div class="stat-item">
           <p class="stat-val">{{ dataEntryCount }}</p>
           <p class="stat-label">数据提交</p>
         </div>
@@ -67,13 +67,13 @@
 
       <section class="panel panel-ai">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h3 class="panel-title mb-0">个性复盘</h3>
-          <button type="button" class="btn-brand px-4 py-2 rounded-xl text-sm font-semibold" :disabled="aiLoading" @click="runAiRecap">
-            {{ aiLoading ? '生成中…' : '生成个性复盘' }}
+          <h3 class="panel-title mb-0">智能复盘</h3>
+          <button type="button" class="btn-brand px-4 py-2 text-sm font-semibold" :disabled="aiLoading" @click="runAiRecap">
+            {{ aiLoading ? '生成中…' : '生成复盘' }}
           </button>
         </div>
         <p class="text-[13px] text-ink-muted mb-3">
-          基于本次纠错与数据记录，输出：3 条薄弱点、1 条误差来源假设、1 条下次行动建议。
+          基于本次纠错与数据记录，分析薄弱点与改进建议。
         </p>
         <div v-if="aiText" class="chat-md" v-html="renderMd(aiText)" />
       </section>
@@ -175,17 +175,17 @@ function renderMd(text) {
 <style scoped>
 .empty-state { @apply text-center text-sm text-ink-muted py-16; }
 
-.stats-row { @apply grid grid-cols-2 sm:grid-cols-4 gap-3; }
-.stat-card { @apply rounded-xl border border-line-soft bg-white p-4 text-center; }
-.stat-val { @apply text-2xl font-black text-ink-strong; }
+.stats-row { @apply grid grid-cols-2 sm:grid-cols-4 gap-0; }
+.stat-item { @apply border border-line-soft bg-white p-4 text-center; }
+.stat-val { @apply text-2xl font-bold text-ink-strong; }
 .stat-label { @apply text-[11px] text-ink-faint mt-1 font-semibold; }
 
-.panel { @apply rounded-2xl border border-line-soft bg-white p-5; }
-.panel-ai { @apply bg-violet-50/40 border-violet-100; }
+.panel { @apply border border-line-soft bg-white p-5; }
+.panel-ai { @apply bg-gray-50/50; }
 .panel-title { @apply text-[15px] font-bold text-ink-strong mb-4; }
 
 .issue-list { @apply space-y-3; }
-.issue-item { @apply rounded-xl border p-4; }
+.issue-item { @apply border p-4; }
 .issue-item--high { @apply border-rose-100 bg-rose-50/60; }
 .issue-item--medium { @apply border-amber-100 bg-amber-50/50; }
 .issue-item--low { @apply border-sky-100 bg-sky-50/40; }

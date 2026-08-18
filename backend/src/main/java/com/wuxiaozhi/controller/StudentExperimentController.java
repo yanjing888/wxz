@@ -43,6 +43,11 @@ public class StudentExperimentController {
         return studentExperimentService.completePreLab(AuthSupport.currentUserId(authentication), experimentCode);
     }
 
+    @PostMapping("/{experimentCode}/progress/report")
+    public ExperimentProgressDto completeReport(@PathVariable String experimentCode, Authentication authentication) {
+        return studentExperimentService.completeReport(AuthSupport.currentUserId(authentication), experimentCode);
+    }
+
     @PostMapping("/{experimentCode}/progress/recap")
     public ExperimentProgressDto completeRecap(@PathVariable String experimentCode, Authentication authentication) {
         return studentExperimentService.completeRecap(AuthSupport.currentUserId(authentication), experimentCode);

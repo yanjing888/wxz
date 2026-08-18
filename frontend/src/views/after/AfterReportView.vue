@@ -2,8 +2,8 @@
   <div class="after-page flex-1 min-h-0 flex flex-col bg-surface-soft/40">
     <AfterClassHeader
       :experiment-code="code"
-      title="报告教练"
-      subtitle="基于本次实验数据起稿、润色与查缺漏；思考题请自己作答，AI 不代写结论。"
+      title="实验报告"
+      subtitle="撰写并提交实验报告"
     />
     <div class="after-body flex-1 min-h-0 flex flex-col">
       <ReportEditorPanel

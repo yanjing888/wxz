@@ -1,9 +1,9 @@
 <template>
   <StagePanel
     title="思考题"
-    desc="报告末尾的思考题，先看思路再自己作答——这里不会给可以照抄的答案。"
+    desc="输入思考题，获取解题思路后自行作答"
     empty-title="把思考题贴进来"
-    empty-hint="左侧输入讲义或报告末尾的思考题，会得到考查点、分析思路与常见错误答法。"
+    empty-hint="输入实验报告中的思考题，获取考查点与解题思路。"
   >
     <template #input>
       <section>
@@ -23,13 +23,13 @@
           v-model="myThought"
           class="field-textarea"
           rows="3"
-          placeholder="写下你已经想到的部分，回答会针对性地补充你缺的环节"
+          placeholder="写下你已经想到的部分，帮助更有针对性地分析"
         />
       </section>
 
       <button
         type="button"
-        class="btn-brand w-full py-2.5 rounded-xl text-sm font-semibold"
+        class="btn-brand w-full py-2.5 text-sm font-semibold"
         :disabled="loading || !question.trim()"
         @click="ask"
       >

@@ -132,6 +132,7 @@ const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clea
 const input = ref('')
 const fileInput = ref(null)
 const textareaRef = ref(null)
+const localSending = ref(false)
 
 const canSend = computed(() =>
   !props.readOnly
@@ -154,14 +155,19 @@ const inputPlaceholder = computed(() => {
 })
 
 async function send() {
-  if (!canSend.value || props.loadingAssist || props.submittingData) return
-  const text = input.value.trim()
-  const sent = await emit('send', text)
-  if (sent !== false) input.value = ''
+  if (!canSend.value || props.loadingAssist || props.submittingData || localSending.value) return
+  localSending.value = true
+  try {
+    const text = input.value.trim()
+    const sent = await emit('send', text)
+    if (sent !== false) input.value = ''
+  } finally {
+    localSending.value = false
+  }
 }
 
 function onKeydown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
     e.preventDefault()
     send()
   }

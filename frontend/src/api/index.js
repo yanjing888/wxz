@@ -1,5 +1,11 @@
 import http from './http'
 import { postSse } from './sse'
+import { apiUrl, mediaUrl } from './runtime'
+
+function withMediaUrl(file) {
+  if (!file || typeof file !== 'object') return file
+  return { ...file, rawUrl: file.url, url: mediaUrl(file.url) }
+}
 
 export const authApi = {
   register: (data) => http.post('/api/auth/register', data),
@@ -25,6 +31,7 @@ export const sessionApi = {
   assistStream: (id, data, handlers, signal) =>
     postSse(`/api/sessions/${id}/assist/stream`, data, handlers, signal),
   envCheck: (id, data = {}) => http.post(`/api/sessions/${id}/env-check`, data),
+  envLogs: (id) => http.get(`/api/sessions/${id}/env-logs`),
   tutorialView: (id) => http.post(`/api/sessions/${id}/tutorial-view`),
   getData: (id) => http.get(`/api/sessions/${id}/data`),
   submitData: (id, data) => http.post(`/api/sessions/${id}/data`, data),
@@ -49,7 +56,7 @@ export const uploadApi = {
 
     let res
     try {
-      res = await fetch('/api/upload', {
+      res = await fetch(apiUrl('/api/upload'), {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd
@@ -89,11 +96,16 @@ export const studentExperimentApi = {
   listProgress: () => http.get('/api/student/experiments/progress'),
   getProgress: (code) => http.get(`/api/student/experiments/${code}/progress`),
   completePreLab: (code) => http.post(`/api/student/experiments/${code}/progress/pre-lab`),
+  completeReport: (code) => http.post(`/api/student/experiments/${code}/progress/report`),
   completeRecap: (code) => http.post(`/api/student/experiments/${code}/progress/recap`)
 }
 
 export const studentFileApi = {
-  list: (experimentCode) => http.get('/api/student/files', { params: { experimentCode } }),
+  async list(experimentCode) {
+    const res = await http.get('/api/student/files', { params: { experimentCode } })
+    res.data = Array.isArray(res.data) ? res.data.map(withMediaUrl) : res.data
+    return res
+  },
   save: (data) => http.post('/api/student/files', data),
   rename: (id, data) => http.patch(`/api/student/files/${id}`, data),
   remove: (id) => http.delete(`/api/student/files/${id}`),
@@ -107,7 +119,7 @@ export const studentFileApi = {
 
     let res
     try {
-      res = await fetch('/api/student/files/upload', {
+      res = await fetch(apiUrl('/api/student/files/upload'), {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd

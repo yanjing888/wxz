@@ -3,6 +3,8 @@ kb_type: teaching
 experiment_code: newton_rings
 experiment_name: 牛顿环实验
 category: optics
+doc: newton_rings/teaching-knowledge.md
+sectionKey: newton_rings
 document_type: lecture_and_report_guide
 version: v1.0
 ---

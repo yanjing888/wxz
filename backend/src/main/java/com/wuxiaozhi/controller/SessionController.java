@@ -2,6 +2,7 @@ package com.wuxiaozhi.controller;
 
 import com.wuxiaozhi.dto.*;
 import com.wuxiaozhi.entity.ChatMessage;
+import com.wuxiaozhi.entity.EnvCheckLog;
 import com.wuxiaozhi.entity.LabSession;
 import com.wuxiaozhi.dto.device.DeviceStatusDto;
 import com.wuxiaozhi.service.DeviceAcquisitionService;
@@ -42,8 +43,10 @@ public class SessionController {
     }
 
     @GetMapping
-    public List<LabSession> list(@RequestParam(required = false) String experimentCode, Authentication authentication) {
-        return labSessionService.listSessions(currentUserId(authentication), experimentCode);
+    public List<LabSession> list(@RequestParam(required = false) String experimentCode,
+                                 @RequestParam(defaultValue = "false") boolean includeEmpty,
+                                 Authentication authentication) {
+        return labSessionService.listSessions(currentUserId(authentication), experimentCode, includeEmpty);
     }
 
     @GetMapping("/latest")
@@ -143,6 +146,12 @@ public class SessionController {
                                      @RequestBody(required = false) EnvCheckRequest req,
                                      Authentication authentication) {
         return labSessionService.envCheck(sessionId, currentUserId(authentication), req);
+    }
+
+    @GetMapping("/{sessionId}/env-logs")
+    public List<EnvCheckLog> envLogs(@PathVariable Long sessionId, Authentication authentication) {
+        currentUserId(authentication);
+        return labSessionService.getEnvCheckLogs(sessionId);
     }
 
     @PostMapping("/{sessionId}/tutorial-view")

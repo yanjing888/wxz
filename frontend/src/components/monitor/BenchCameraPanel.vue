@@ -480,7 +480,7 @@ onBeforeUnmount(() => {
   stopMediaTracks()
 })
 
-defineExpose({ captureFrame, ensureCameraReady })
+defineExpose({ captureFrame, ensureCameraReady, camUiActive, camReady })
 </script>
 
 <style scoped>

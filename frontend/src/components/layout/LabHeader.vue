@@ -50,32 +50,27 @@
 
     <div class="flex items-center gap-1.5 shrink-0">
 
-      <router-link
+      <button
         v-if="experimentCode"
-        :to="{ name: 'files', query: { exp: experimentCode } }"
-        class="btn-ghost px-2.5 py-2 rounded-xl text-xs font-semibold hidden md:inline-flex"
-        title="本实验资料"
+        type="button"
+        class="btn-ghost px-2.5 py-2 rounded-xl text-xs font-semibold hidden md:inline-flex relative"
+        title="暂未开放"
+        @click="showComingSoon"
       >
         资料
-      </router-link>
+        <span class="coming-soon-badge">暂未开放</span>
+      </button>
 
-      <router-link
+      <button
         v-if="experimentCode"
-        :to="{ name: 'after-report', params: { code: experimentCode } }"
-        class="btn-ghost px-2.5 py-2 rounded-xl text-xs font-semibold hidden lg:inline-flex"
-        title="课后撰写实验报告"
-      >
-        写报告
-      </router-link>
-
-      <router-link
-        v-if="experimentCode"
-        :to="{ name: 'after-review', params: { code: experimentCode } }"
-        class="btn-ghost px-2.5 py-2 rounded-xl text-xs font-semibold hidden lg:inline-flex"
-        title="课后复盘与思考题"
+        type="button"
+        class="btn-ghost px-2.5 py-2 rounded-xl text-xs font-semibold hidden lg:inline-flex relative"
+        title="暂未开放"
+        @click="showComingSoon"
       >
         复盘
-      </router-link>
+        <span class="coming-soon-badge">暂未开放</span>
+      </button>
 
       <button
 
@@ -157,6 +152,20 @@ const props = defineProps({
 
 defineEmits(['quick-stats', 'report', 'experiment-change'])
 
+function showComingSoon(e) {
+  const btn = e.currentTarget
+  const badge = btn.querySelector('.coming-soon-badge')
+  if (!badge) return
+  const rect = btn.getBoundingClientRect()
+  badge.style.top = `${rect.bottom + 8}px`
+  badge.style.left = `${rect.left + rect.width / 2}px`
+  badge.classList.add('show')
+  clearTimeout(btn._comingSoonTimer)
+  btn._comingSoonTimer = setTimeout(() => {
+    badge.classList.remove('show')
+  }, 1800)
+}
+
 
 
 const envLevelLabel = computed(() => (props.envLevel === 'NA' ? '不可用' : props.envLevel))
@@ -232,3 +241,34 @@ const difyStatusTitle = computed(() => {
 })
 
 </script>
+
+<style scoped>
+.coming-soon-badge {
+  position: fixed;
+  z-index: 9999;
+  white-space: nowrap;
+  background: #1e293b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  transform: translateX(-50%);
+}
+.coming-soon-badge.show {
+  opacity: 1;
+}
+.coming-soon-badge::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-bottom-color: #1e293b;
+}
+</style>

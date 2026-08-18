@@ -38,7 +38,7 @@ import java.util.function.Consumer;
 public class DifyService {
 
     private static final Logger log = LoggerFactory.getLogger(DifyService.class);
-    private static final int STATUS_CHECK_TIMEOUT_MS = 1_500;
+    private static final int STATUS_CHECK_TIMEOUT_MS = 5_000;
     private static final long STATUS_CACHE_TTL_MS = 30_000;
 
     private final DifyProperties difyProperties;
@@ -58,7 +58,7 @@ public class DifyService {
     public AssistResponse assist(String workflowKey, Map<String, Object> inputs, String userId,
                                  ExperimentConfig experiment, int stepId, boolean hasImage,
                                  String imageUrl) {
-        return assist(workflowKey, inputs, userId, experiment, stepId, hasImage, imageUrl, hasDataAssist(inputs));
+        return assist(workflowKey, inputs, userId, experiment, stepId, hasImage, imageUrl, false);
     }
 
     public AssistResponse assist(String workflowKey, Map<String, Object> inputs, String userId,
@@ -67,14 +67,14 @@ public class DifyService {
         if (canCall(workflowKey)) {
             try {
                 JsonNode payload = difyProperties.isChatMode(workflowKey)
-                        ? runChat(workflowKey, inputs, userId, buildAssistQuery(inputs, hasImage, hasData), imageUrl)
+                        ? runChat(workflowKey, inputs, userId, buildAssistQuery(inputs, hasImage), imageUrl)
                         : runWorkflow(workflowKey, inputs, userId);
-                return parseAssistPayload(payload, true, hasImage, hasData);
+                return parseAssistPayload(payload, true, hasImage);
             } catch (Throwable e) {
                 log.warn("Dify assist failed: {}", e.getMessage());
             }
         }
-        return unavailableAssist(hasImage, hasData);
+        return unavailableAssist(hasImage);
     }
 
     /**
@@ -87,8 +87,7 @@ public class DifyService {
                                        Consumer<List<MarkDto>> onMarks, Runnable onAnswerComplete) {
         if (canCall(workflowKey) && difyProperties.isChatMode(workflowKey)) {
             try {
-                boolean hasData = hasDataAssist(inputs);
-                String query = buildAssistQuery(inputs, hasImage, hasData);
+                String query = buildAssistQuery(inputs, hasImage);
                 Map<String, Object> body = buildChatBody(workflowKey, inputs, userId, query, imageUrl);
                 body.put("response_mode", "streaming");
                 String apiKey = difyProperties.resolveApiKey(workflowKey);
@@ -107,13 +106,12 @@ public class DifyService {
                 });
                 log.info("Dify stream ok, workflowKey={}, length={}, marks={}",
                         workflowKey, full.length(), streamMarks.size());
-                return buildStreamAssistResponse(full.toString(), streamMarks, hasImage, hasData);
+                return buildStreamAssistResponse(full.toString(), streamMarks, hasImage);
             } catch (Throwable e) {
                 log.warn("Dify stream failed: {}", e.getMessage());
             }
         }
-        boolean hasData = hasDataAssist(inputs);
-        AssistResponse unavailable = unavailableAssist(hasImage, hasData);
+        AssistResponse unavailable = unavailableAssist(hasImage);
         streamMockFeedback(unavailable.getFeedback(), onDelta);
         if (onAnswerComplete != null) {
             onAnswerComplete.run();
@@ -131,7 +129,7 @@ public class DifyService {
         if (!canCall(workflowKey)) {
             AiToolInvokeResponse resp = new AiToolInvokeResponse();
             resp.setFromDify(false);
-            resp.setText(unavailableAssist(hasImage, false).getFeedback());
+            resp.setText(unavailableAssist(hasImage).getFeedback());
             return resp;
         }
         try {
@@ -151,7 +149,7 @@ public class DifyService {
             log.warn("Dify invoke failed, workflowKey={}: {}", workflowKey, e.getMessage());
             AiToolInvokeResponse resp = new AiToolInvokeResponse();
             resp.setFromDify(false);
-            resp.setText(unavailableAssist(false, false).getFeedback());
+            resp.setText(unavailableAssist(false).getFeedback());
             return resp;
         }
     }
@@ -235,31 +233,17 @@ public class DifyService {
         }
     }
 
-    private AssistResponse buildStreamAssistResponse(String answer, List<MarkDto> streamMarks, boolean hasImage, boolean hasData) {
+    private AssistResponse buildStreamAssistResponse(String answer, List<MarkDto> streamMarks, boolean hasImage) {
         AssistResponse resp = new AssistResponse();
         resp.setFromDify(true);
         if (!streamMarks.isEmpty() || hasImage) {
             resp.setType("vision_correction");
-        } else if (hasData) {
-            resp.setType("data_correction");
         } else {
             resp.setType("text_assist");
         }
         resp.setFeedback(answer != null ? answer.trim() : "");
         resp.setMarks(streamMarks);
         return resp;
-    }
-
-    private boolean hasDataAssist(Map<String, Object> inputs) {
-        if (inputs == null) {
-            return false;
-        }
-        Object mode = inputs.get("correction_mode");
-        if ("data".equals(String.valueOf(mode))) {
-            return true;
-        }
-        Object data = inputs.get("data_json");
-        return data != null && !String.valueOf(data).isBlank();
     }
 
     /** mock 兜底：按字符逐字推送，模拟真实流式打字效果 */
@@ -399,7 +383,16 @@ public class DifyService {
         boolean configured = difyProperties.isConfigured();
         Map<String, Boolean> workflowConfigured = new LinkedHashMap<>();
         Map<String, Map<String, Object>> workflowStatuses = new LinkedHashMap<>();
-        List<String> workflowKeys = List.of("text-assist", "env-check");
+        List<String> workflowKeys = List.of(
+                "text-assist",
+                "env-check",
+                "report-assist",
+                "report-review",
+                "lab-recap",
+                "think-questions",
+                "instrument-reading",
+                "data-doctor"
+        );
         Map<String, CompletableFuture<Map<String, Object>>> statusFutures = new LinkedHashMap<>();
         for (String key : workflowKeys) {
             boolean canRun = difyProperties.canRun(key);
@@ -494,17 +487,12 @@ public class DifyService {
         return difyProperties.canRun(key);
     }
 
-    private String buildAssistQuery(Map<String, Object> inputs, boolean hasImage, boolean hasData) {
+    private String buildAssistQuery(Map<String, Object> inputs, boolean hasImage) {
         Object q = inputs.get("query");
         if (q == null) q = inputs.get("user_query");
         String userQuery = q != null ? String.valueOf(q).trim() : "";
         if (!userQuery.isBlank()) {
             return userQuery;
-        }
-        if (hasData) {
-            Object dataJson = inputs.get("data_json");
-            return "请检查以下实验测量数据是否合理，并指出可能的操作或计算错误：\n"
-                    + (dataJson != null ? dataJson : "");
         }
         if (hasImage) {
             return "请分析上传的实验图片。";
@@ -651,14 +639,14 @@ public class DifyService {
         }
     }
 
-    private AssistResponse parseAssistPayload(JsonNode payload, boolean fromDify, boolean hasImage, boolean hasData) {
+    private AssistResponse parseAssistPayload(JsonNode payload, boolean fromDify, boolean hasImage) {
         if (payload.has("answer")) {
-            return parseAnswerAsAssist(payload.path("answer").asText(""), fromDify, hasImage, hasData);
+            return parseAnswerAsAssist(payload.path("answer").asText(""), fromDify, hasImage);
         }
         return parseAssistResponse(payload, fromDify);
     }
 
-    private AssistResponse parseAnswerAsAssist(String answer, boolean fromDify, boolean hasImage, boolean hasData) {
+    private AssistResponse parseAnswerAsAssist(String answer, boolean fromDify, boolean hasImage) {
         String trimmed = answer != null ? answer.trim() : "";
         if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
             try {
@@ -674,7 +662,7 @@ public class DifyService {
         }
         AssistResponse resp = new AssistResponse();
         resp.setFromDify(fromDify);
-        resp.setType(hasImage ? "vision_correction" : (hasData ? "data_correction" : "text_assist"));
+        resp.setType(hasImage ? "vision_correction" : "text_assist");
         resp.setFeedback(trimmed);
         resp.setMarks(List.of());
         return resp;
@@ -748,10 +736,10 @@ public class DifyService {
         return resp;
     }
 
-    private AssistResponse unavailableAssist(boolean hasImage, boolean hasData) {
+    private AssistResponse unavailableAssist(boolean hasImage) {
         AssistResponse resp = new AssistResponse();
         resp.setFromDify(false);
-        resp.setType(hasImage ? "vision_correction" : (hasData ? "data_correction" : "text_assist"));
+        resp.setType(hasImage ? "vision_correction" : "text_assist");
         resp.setFeedback("**暂时无法连接Dify服务**\n\n我现在连接不上 Dify 服务，因此不能可靠回答这个问题。为避免给出不准确的信息，请稍后再试。\n\n如果多次出现，请联系Dify管理员检查 Dify 服务配置。");
         resp.setMarks(List.of());
         return resp;

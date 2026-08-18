@@ -110,11 +110,19 @@ public class LabSessionService {
     }
 
     public List<LabSession> listSessions(Long userId, String experimentCode) {
+        return listSessions(userId, experimentCode, false);
+    }
+
+    public List<LabSession> listSessions(Long userId, String experimentCode, boolean includeEmpty) {
         List<LabSession> sessions;
         if (experimentCode != null && !experimentCode.isBlank()) {
-            sessions = sessionRepository.findConversationSessionsByUserIdAndExperimentCode(userId, experimentCode.trim());
+            sessions = includeEmpty
+                    ? sessionRepository.findByUserIdAndExperimentCodeOrderByStartTimeDesc(userId, experimentCode.trim())
+                    : sessionRepository.findConversationSessionsByUserIdAndExperimentCode(userId, experimentCode.trim());
         } else {
-            sessions = sessionRepository.findConversationSessionsByUserId(userId);
+            sessions = includeEmpty
+                    ? sessionRepository.findByUserIdOrderByStartTimeDesc(userId)
+                    : sessionRepository.findConversationSessionsByUserId(userId);
         }
         sessions.forEach(this::attachHistoryTitle);
         return sessions;
@@ -320,8 +328,8 @@ public class LabSessionService {
         if (step.getDesc() != null) {
             inputs.put("step_desc", step.getDesc());
         }
-        putDifyRoutingInputs(inputs, step, false, true);
-        attachKnowledgeMapInputs(inputs, exp, stepId, true);
+        putDifyRoutingInputs(inputs, step, false);
+        attachKnowledgeMapInputs(inputs, exp, stepId, false);
         attachKnowledgeContext(inputs, exp, session, step, inputs.get("query").toString(), false);
 
         AssistResponse assist = difyService.assist("text-assist", inputs, "guest-" + sessionId, exp, stepId, false, null, true);
@@ -346,7 +354,7 @@ public class LabSessionService {
         saveChatMessage(sessionId, "user", stepId, submittedText, null);
         saveChatMessage(sessionId, "ai", stepId, feedback, null);
 
-        if ("data_correction".equals(assist.getType()) || !validation.isOk() || !validation.getWarnings().isEmpty()) {
+        if (!validation.isOk() || !validation.getWarnings().isEmpty()) {
             CorrectionLog correction = new CorrectionLog();
             correction.setSessionId(sessionId);
             correction.setStepId(stepId);
@@ -576,7 +584,7 @@ public class LabSessionService {
                 inputs.put("step_desc", step.getDesc());
             }
         }
-        putDifyRoutingInputs(inputs, step, hasImage, false);
+        putDifyRoutingInputs(inputs, step, hasImage);
         attachKnowledgeMapInputs(inputs, exp, stepId, hasImage);
         attachRepeatAssistHint(inputs, session.getId(), stepId);
 
@@ -748,6 +756,12 @@ public class LabSessionService {
         return resp;
     }
 
+    @Transactional(readOnly = true)
+    public List<EnvCheckLog> getEnvCheckLogs(Long sessionId) {
+        getSession(sessionId);
+        return envCheckLogRepository.findBySessionIdOrderByCreatedAtDesc(sessionId);
+    }
+
     @Transactional
     public LabSession incrementTutView(Long sessionId) {
         LabSession session = getSession(sessionId);
@@ -911,15 +925,10 @@ public class LabSessionService {
     }
 
     /**
-     * Dify 工作流「问题类别 category / 纠错模式 correction_mode」与实验 JSON 的 category（optics 等学科标签）不是同一字段。
-     * 见 docs/dify/物理实验智能纠错与指导-优化版-含知识库检索.yml 开始节点。
+     * Dify 工作流只按是否带图路由：有图走 vision，无图统一走文本教学/指导。
+     * 数据提交仍通过 query/data_json 进入文本分支，不再要求 Dify 单独维护 data 分支。
      */
-    private void putDifyRoutingInputs(Map<String, Object> inputs, StepConfig step, boolean hasImage, boolean hasData) {
-        if (hasData) {
-            inputs.put("category", "data");
-            inputs.put("correction_mode", "data");
-            return;
-        }
+    private void putDifyRoutingInputs(Map<String, Object> inputs, StepConfig step, boolean hasImage) {
         if (hasImage) {
             inputs.put("category", "vision");
             inputs.put("correction_mode", "vision");

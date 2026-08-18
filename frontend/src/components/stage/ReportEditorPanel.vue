@@ -1,133 +1,193 @@
 <template>
-  <StagePanel layout="chat" title="报告教练" desc="基于真实实验记录起稿、润色与查缺漏；思考题结论请自己完成。">
-    <template #actions>
-      <button
-        type="button"
-        class="btn-ghost px-3 py-1.5 rounded-lg text-[13px]"
-        :disabled="!sessionId || generating"
-        @click="generateFromSession"
-      >
-        {{ generating ? '填充中…' : '重新填充' }}
-      </button>
-      <button type="button" class="btn-ghost px-3 py-1.5 rounded-lg text-[13px]" :disabled="!hasContent" @click="copyFullReport">
-        复制全文
-      </button>
-      <button type="button" class="btn-brand px-4 py-1.5 rounded-lg text-[13px] font-semibold" :disabled="!sessionId || exporting" @click="downloadDocx">
-        {{ exporting ? '导出中…' : '导出 Word' }}
-      </button>
-      <button type="button" class="btn-ghost px-3 py-1.5 rounded-lg text-[13px]" :disabled="!hasContent || archiving" @click="saveToLibrary">
-        {{ archiving ? '存档中…' : '存入资料库' }}
-      </button>
-    </template>
-
+  <section class="report-editor flex flex-1 min-h-0 bg-white">
     <div v-if="!sessionId" class="empty-state flex-1 flex items-center justify-center">
       <div class="text-center max-w-md px-6">
         <p class="text-ink-strong font-semibold mb-2">还没有可用的实验记录</p>
         <p class="text-[13px] text-ink-muted">
-          请先到「实验操作」完成本实验并点击生成报告结束会话，系统会自动填入步骤、数据与知识要点。
+          请先到「实验台」完成本实验，系统会自动填入步骤、数据与知识要点。
         </p>
       </div>
     </div>
 
-    <div v-else class="ws-body flex-1 min-h-0 flex overflow-hidden">
-      <nav class="section-nav custom-scroll shrink-0">
-        <button
-          v-for="def in sectionDefs"
-          :key="def.key"
-          type="button"
-          class="nav-item"
-          :class="{
-            'nav-item--active': activeSection === def.key,
-            'nav-item--filled': (form[def.key] || '').trim().length >= 10
-          }"
-          @click="activeSection = def.key"
-        >
-          {{ def.label }}
-        </button>
-        <div class="nav-divider" />
-        <button
-          type="button"
-          class="nav-item nav-item--check"
-          :class="{ 'nav-item--active': activeSection === 'check' }"
-          @click="activeSection = 'check'"
-        >
-          规范检查
-        </button>
-      </nav>
-
-      <main class="editor-pane custom-scroll flex-1 min-h-0">
-        <template v-if="activeSection !== 'check'">
-          <div class="editor-head">
-            <h3>{{ currentSectionDef?.label }}</h3>
-            <button
-              type="button"
-              class="text-[12px] font-semibold text-brand-600 hover:text-brand-700 disabled:opacity-40"
-              :disabled="polishLoading || !(form[activeSection] || '').trim()"
-              @click="polishSection(activeSection)"
-            >
-              {{ polishLoading ? '润色中…' : 'AI 润色本段' }}
+    <template v-else>
+      <!-- ===== 左栏：报告编辑 ===== -->
+      <div class="report-main flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+        <header class="report-header">
+          <div class="header-left">
+            <h2>{{ experimentName || '实验报告' }}</h2>
+          </div>
+          <div class="header-actions">
+            <button type="button" class="btn-plain" :disabled="!sessionId || generating" @click="generateFromSession">
+              {{ generating ? '恢复中…' : '从实验记录填充' }}
+            </button>
+            <button type="button" class="btn-plain" :disabled="!hasContent" @click="copyFullReport">复制全文</button>
+            <button type="button" class="btn-plain" :disabled="!sessionId || exporting" @click="downloadDocx">
+              {{ exporting ? '导出中…' : '导出 Word' }}
+            </button>
+            <button type="button" class="btn-primary" :disabled="!hasContent || reportCompleting" @click="openPreview">
+              {{ reportDone ? '已提交' : '提交报告' }}
             </button>
           </div>
-          <textarea
-            v-model="form[activeSection]"
-            class="editor-area"
-            :placeholder="placeholders[activeSection]"
-            @input="saveDraft"
-          />
-          <p v-if="activeSection === 'results'" class="editor-tip">
-            提示：在「数据处理 → 计算与作图」中算完后，复制生成的段落粘贴到此处。
-          </p>
-        </template>
+        </header>
 
-        <template v-else>
-          <h3 class="editor-head-title">报告规范检查</h3>
-          <ul class="check-list">
-            <li
-              v-for="item in checkItems"
-              :key="item.key"
-              class="check-row"
-              :class="item.ok ? 'check-row--ok' : 'check-row--miss'"
-            >
-              <span>{{ item.ok ? '✓' : '○' }}</span>
-              <div>
-                <p class="check-name">{{ item.label }}</p>
-                <p class="check-msg">{{ item.message }}</p>
-              </div>
-            </li>
-          </ul>
-          <button
-            type="button"
-            class="btn-brand px-4 py-2 rounded-xl text-sm font-semibold mt-4"
-            :disabled="checkLoading || !hasContent"
-            @click="runAiCheck"
-          >
-            {{ checkLoading ? '检查中…' : 'AI 深度检查' }}
+        <!-- 工具栏 -->
+        <div class="rep-toolbar">
+          <button type="button" class="tool-btn" title="加粗" @mousedown.prevent="execFmt('bold')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"/></svg>
           </button>
-          <div v-if="checkResult" class="check-result chat-md mt-4" v-html="renderMd(checkResult)" />
-        </template>
-      </main>
+          <button type="button" class="tool-btn" title="斜体" @mousedown.prevent="execFmt('italic')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+          </button>
+          <button type="button" class="tool-btn" title="下划线" @mousedown.prevent="execFmt('underline')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a6 6 0 0012 0V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
+          </button>
+          <span class="tool-sep" />
+          <button type="button" class="tool-btn" title="上标" @mousedown.prevent="execFmt('superscript')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19l6-6 4 4 6-6"/><text x="14" y="9" font-size="8" fill="currentColor" stroke="none" font-weight="bold">x²</text></svg>
+          </button>
+          <button type="button" class="tool-btn" title="下标" @mousedown.prevent="execFmt('subscript')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19l6-6 4 4 6-6"/><text x="14" y="14" font-size="8" fill="currentColor" stroke="none" font-weight="bold">x₂</text></svg>
+          </button>
+          <span class="tool-sep" />
+          <button type="button" class="tool-btn" title="插入公式" @mousedown.prevent="startFormula">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3l3 3-3 3M3 7h6M14 17l3-3 3 3M14 21h6M3 21h6M17 7v10"/></svg>
+          </button>
+          <button type="button" class="tool-btn" title="插入图片" @mousedown.prevent="triggerImageUpload">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          </button>
+          <span class="tool-sep" />
+          <button type="button" class="tool-btn" title="无序列表" @mousedown.prevent="execFmt('insertUnorderedList')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+        </div>
 
-      <aside class="preview-pane custom-scroll shrink-0 hidden lg:block">
-        <h4 class="preview-title">报告预览</h4>
-        <div class="preview-doc">
-          <p class="preview-doc-title">{{ experimentName || '实验报告' }}</p>
-          <div v-for="def in sectionDefs" :key="def.key" class="preview-section">
-            <p class="preview-h">{{ def.label }}</p>
-            <p class="preview-p">
-              {{ (form[def.key] || '（未填写）').slice(0, 200) }}{{ (form[def.key] || '').length > 200 ? '…' : '' }}
-            </p>
-          </div>
+        <!-- 报告内容 -->
+        <div class="report-content custom-scroll flex-1 min-h-0">
+          <section
+            v-for="def in sectionDefs"
+            :id="`sec-${def.key}`"
+            :key="def.key"
+            class="report-field"
+          >
+            <label class="rep-label">
+              <span>{{ def.label }}</span>
+              <em>{{ sectionWordCount(def.key) }} 字</em>
+            </label>
+            <div
+              class="rep-editor"
+              contenteditable="true"
+              :data-key="def.key"
+              :data-placeholder="placeholders[def.key]"
+              @input="onEditorInput(def.key, $event)"
+              @focus="activeKey = def.key"
+              @blur="saveDraft"
+            />
+          </section>
+        </div>
+      </div>
+
+      <!-- ===== 右栏：小智辅助（常驻） ===== -->
+      <aside class="report-aside border-l border-line-soft flex flex-col bg-surface-soft/30">
+        <div class="aside-header">
+          <svg class="aside-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 2a7 7 0 017 7c0 2.5-1.5 4.5-3 6v2H8v-2c-1.5-1.5-3-3.5-3-6a7 7 0 017-7zM9 19h6M10 22h4" />
+          </svg>
+          <span>小智辅助</span>
+        </div>
+        <div class="aside-body flex-1 min-h-0 flex flex-col">
+          <AskPanel
+            title="小智辅助"
+            desc="实验报告写作助手"
+            tool-code="report-assist"
+            :experiment-code="experimentCode"
+            :experiment-name="experimentName"
+            :suggestions="reportAssistantSuggestions"
+          />
         </div>
       </aside>
+    </template>
+
+    <!-- 公式输入弹窗 -->
+    <div v-if="formulaOpen" class="formula-overlay" @click.self="formulaOpen = false">
+      <div class="formula-dialog">
+        <p class="formula-title">插入公式</p>
+        <input
+          ref="formulaInputRef"
+          v-model="formulaText"
+          class="formula-input"
+          placeholder="输入 LaTeX 公式，如 E=mc^2 或 \\frac{1}{2}mv^2"
+          @keydown.enter="confirmFormula"
+          @keydown.escape="formulaOpen = false"
+        />
+        <div class="formula-preview" v-if="formulaText">
+          <span class="formula-text">{{ formulaText }}</span>
+        </div>
+        <div class="formula-actions">
+          <button type="button" class="btn-plain" @click="formulaOpen = false">取消</button>
+          <button type="button" class="btn-primary" @click="confirmFormula">插入</button>
+        </div>
+      </div>
     </div>
-  </StagePanel>
+
+    <!-- 隐藏的图片上传 -->
+    <input
+      ref="imageInputRef"
+      type="file"
+      accept="image/*"
+      class="hidden"
+      @change="onImageSelected"
+    />
+
+    <!-- 报告预览弹窗 -->
+    <div v-if="previewOpen" class="preview-overlay" @click.self="previewOpen = false">
+      <div class="preview-wrapper">
+        <div class="preview-topbar">
+          <span class="preview-topbar-title">报告预览</span>
+          <div class="preview-topbar-actions">
+            <button type="button" class="btn-plain" @click="previewOpen = false">取消</button>
+            <button type="button" class="btn-primary" :disabled="reportCompleting || reportDone" @click="confirmSubmit">
+              {{ reportCompleting ? '提交中…' : reportDone ? '已提交' : '确认提交' }}
+            </button>
+          </div>
+        </div>
+        <div class="preview-scroll custom-scroll">
+          <div class="preview-page">
+            <div class="doc-header">
+              <h1 class="doc-title">{{ experimentName || '实验报告' }}</h1>
+              <div class="doc-subtitle">大学物理实验报告</div>
+              <table class="doc-info-table">
+                <tr>
+                  <td class="doc-info-label">姓名</td>
+                  <td class="doc-info-value">{{ studentName }}</td>
+                  <td class="doc-info-label">日期</td>
+                  <td class="doc-info-value">{{ todayStr }}</td>
+                </tr>
+              </table>
+            </div>
+            <div class="doc-body">
+              <section v-for="def in sectionDefs" :key="def.key" class="doc-section">
+                <h2 class="doc-heading">{{ def.label }}</h2>
+                <div
+                  v-if="stripHtml(form[def.key] || '').trim()"
+                  class="doc-content"
+                  v-html="form[def.key] || ''"
+                />
+                <p v-else class="doc-empty">（未填写）</p>
+              </section>
+            </div>
+          </div>
+        </div>
+        <p v-if="completionMessage" class="preview-msg">{{ completionMessage }}</p>
+      </div>
+    </div>
+  </section>
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
-import StagePanel from './StagePanel.vue'
-import { aiToolApi, sessionApi, studentFileApi } from '../../api'
-import { renderChatMarkdown } from '../../utils/markdown'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import AskPanel from './AskPanel.vue'
+import { useAuthStore } from '../../stores/auth'
+import { sessionApi, studentExperimentApi } from '../../api'
 import {
   REPORT_SECTION_DEFS,
   buildReportSections,
@@ -140,7 +200,8 @@ const props = defineProps({
   experimentName: { type: String, default: '' },
   sessionId: { type: [Number, String], default: null }
 })
-const emit = defineEmits(['saved'])
+
+const auth = useAuthStore()
 
 const sectionDefs = REPORT_SECTION_DEFS
 const placeholders = {
@@ -148,44 +209,147 @@ const placeholders = {
   principle: '核心公式与物理意义…',
   apparatus: '主要仪器名称与型号…',
   procedure: '按实际操作顺序简述…',
-  data: '原始数据表、计算过程（可从数据处理模块复制）…',
+  data: '原始数据表、必要计算过程、单位和有效数字…',
   results: '最终测量结果及不确定度表示…',
   discussion: '误差分析、结果合理性、改进措施…'
 }
 
 const form = reactive(defaultSections())
-const activeSection = ref('purpose')
 const generating = ref(false)
 const exporting = ref(false)
-const archiving = ref(false)
-const polishLoading = ref(false)
-const checkLoading = ref(false)
-const checkResult = ref('')
+const reportCompleting = ref(false)
+const reportDone = ref(false)
+const completionMessage = ref('')
+const sourceReport = ref(null)
+const activeKey = ref('')
+const formulaOpen = ref(false)
+const formulaText = ref('')
+const formulaInputRef = ref(null)
+const imageInputRef = ref(null)
+const previewOpen = ref(false)
 
-const currentSectionDef = computed(() => sectionDefs.find((d) => d.key === activeSection.value))
-const hasContent = computed(() => sectionDefs.some((d) => (form[d.key] || '').trim()))
-
-const checkItems = computed(() => {
-  const items = sectionDefs.map((d) => {
-    const len = (form[d.key] || '').trim().length
-    return {
-      key: d.key,
-      label: d.label,
-      ok: len >= 15,
-      message: len >= 15 ? `已填写 ${len} 字` : len ? '内容偏短' : '未填写'
-    }
-  })
-  const dataOk = /误差|不确定|±|标准差|相对/.test((form.data || '') + (form.results || ''))
-  items.push({
-    key: 'uncertainty',
-    label: '含不确定度/误差',
-    ok: dataOk,
-    message: dataOk ? '数据或结果段已涉及误差分析' : '建议在数据/结果段补充不确定度'
-  })
-  return items
+const hasContent = computed(() => sectionDefs.some((d) => stripHtml(form[d.key] || '').trim()))
+const studentName = computed(() => auth.displayName || auth.username || '—')
+const todayStr = computed(() => {
+  const d = new Date()
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
 })
 
+const reportAssistantSuggestions = computed(() => [
+  '帮我检查报告还缺什么',
+  '根据本次实验记录，帮我整理误差分析思路',
+  '帮我把测量数据整理成表格'
+])
+
 watch(() => props.sessionId, onSessionChange, { immediate: true })
+
+// ===== 工具函数 =====
+
+function stripHtml(html) {
+  if (!html) return ''
+  const tmp = document.createElement('div')
+  tmp.innerHTML = html
+  return tmp.textContent || tmp.innerText || ''
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+// ===== 富文本编辑 =====
+
+function onEditorInput(key, event) {
+  form[key] = event.target.innerHTML
+}
+
+function setEditorContent(key, content) {
+  const el = document.querySelector(`.rep-editor[data-key="${key}"]`)
+  if (el) {
+    if (content && content.includes('<')) {
+      el.innerHTML = content
+    } else {
+      el.innerText = content || ''
+    }
+    form[key] = el.innerHTML
+  }
+}
+
+function execFmt(command) {
+  document.execCommand(command, false, null)
+  const el = document.querySelector(`.rep-editor[data-key="${activeKey.value}"]`)
+  if (el) form[activeKey.value] = el.innerHTML
+}
+
+function getSelectionRange() {
+  const sel = window.getSelection()
+  if (!sel.rangeCount) return null
+  const range = sel.getRangeAt(0)
+  const container = range.commonAncestorContainer
+  const editor = container.nodeType === 3
+    ? container.parentElement?.closest('.rep-editor')
+    : container.closest?.('.rep-editor')
+  if (!editor) return null
+  return { range, editor }
+}
+
+// ===== 公式插入 =====
+
+function startFormula() {
+  formulaText.value = ''
+  formulaOpen.value = true
+  nextTick(() => formulaInputRef.value?.focus())
+}
+
+function confirmFormula() {
+  if (!formulaText.value.trim()) {
+    formulaOpen.value = false
+    return
+  }
+  const el = document.querySelector(`.rep-editor[data-key="${activeKey.value}"]`)
+  if (!el) {
+    formulaOpen.value = false
+    return
+  }
+  el.focus()
+  const formulaHtml = `<span class="inline-formula" contenteditable="false">$${escapeHtml(formulaText.value.trim())}$</span>&nbsp;`
+  document.execCommand('insertHTML', false, formulaHtml)
+  form[activeKey.value] = el.innerHTML
+  saveDraft()
+  formulaOpen.value = false
+}
+
+// ===== 图片插入 =====
+
+function triggerImageUpload() {
+  imageInputRef.value?.click()
+}
+
+function onImageSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  if (file.size > 3 * 1024 * 1024) {
+    completionMessage.value = '图片不能超过 3MB，请压缩后插入。'
+    setTimeout(() => { if (completionMessage.value.startsWith('图片')) completionMessage.value = '' }, 3000)
+    event.target.value = ''
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = () => {
+    const el = document.querySelector(`.rep-editor[data-key="${activeKey.value}"]`)
+    if (!el) return
+    el.focus()
+    const imgHtml = `<img src="${reader.result}" alt="${escapeHtml(file.name)}" style="max-width:100%;border-radius:6px;margin:4px 0" />`
+    document.execCommand('insertHTML', false, imgHtml)
+    form[activeKey.value] = el.innerHTML
+    saveDraft()
+  }
+  reader.readAsDataURL(file)
+  event.target.value = ''
+}
+
+// ===== 草稿 =====
 
 function draftKey() {
   return props.sessionId ? `wxz_report_draft_${props.sessionId}` : ''
@@ -203,7 +367,7 @@ function loadDraft() {
     const saved = JSON.parse(localStorage.getItem(key) || 'null')
     if (!saved) return false
     Object.keys(form).forEach((k) => {
-      if (saved[k]) form[k] = saved[k]
+      form[k] = saved[k] || ''
     })
     return true
   } catch {
@@ -212,73 +376,64 @@ function loadDraft() {
 }
 
 async function onSessionChange() {
-  checkResult.value = ''
+  completionMessage.value = ''
+  reportDone.value = false
+  sourceReport.value = null
   Object.keys(form).forEach((k) => { form[k] = '' })
   if (!props.sessionId) return
-  if (loadDraft()) return
+  if (loadDraft()) {
+    await nextTick()
+    syncEditorsFromForm()
+    await loadSourceReport()
+    return
+  }
   await generateFromSession()
+}
+
+function syncEditorsFromForm() {
+  sectionDefs.forEach((def) => {
+    setEditorContent(def.key, form[def.key] || '')
+  })
+}
+
+async function loadSourceReport() {
+  if (!props.sessionId) return
+  const { data: report } = await sessionApi.report(props.sessionId)
+  sourceReport.value = report || null
 }
 
 async function generateFromSession() {
   if (!props.sessionId) return
   generating.value = true
   try {
-    const { data: report } = await sessionApi.report(props.sessionId)
-    const built = buildReportSections(report)
-    Object.keys(form).forEach((k) => { form[k] = built[k] || '' })
+    await loadSourceReport()
+    const built = buildReportSections(sourceReport.value)
+    Object.keys(form).forEach((k) => { form[k] = escapeHtml(built[k] || '').replace(/\n/g, '<br>') })
+    await nextTick()
+    syncEditorsFromForm()
     saveDraft()
   } finally {
     generating.value = false
   }
 }
 
-async function polishSection(key) {
-  polishLoading.value = true
+async function markReportComplete({ silent = false } = {}) {
+  if (!props.experimentCode || reportCompleting.value || !hasContent.value) return
+  reportCompleting.value = true
+  if (!silent) completionMessage.value = ''
   try {
-    const { data } = await aiToolApi.invoke('report-assist', {
-      action: 'polish',
-      inputs: {
-        sessionId: Number(props.sessionId),
-        experimentCode: props.experimentCode,
-        experimentName: props.experimentName,
-        section: key,
-        sectionLabel: sectionDefs.find((d) => d.key === key)?.label || key,
-        text: form[key]
-      }
-    })
-    const polished = (data.text || '').replace(/^#+\s*.*\n+/m, '').trim()
-    if (polished) {
-      form[key] = polished
-      saveDraft()
-    }
+    await studentExperimentApi.completeReport(props.experimentCode)
+    reportDone.value = true
+    if (!silent) completionMessage.value = '报告状态已同步，教师端可在报告评阅中查看。'
   } finally {
-    polishLoading.value = false
-  }
-}
-
-async function runAiCheck() {
-  checkLoading.value = true
-  checkResult.value = ''
-  try {
-    const summary = checkItems.value.map((i) => `${i.ok ? '✓' : '✗'} ${i.label}`).join('\n')
-    const { data } = await aiToolApi.invoke('report-assist', {
-      action: 'check',
-      inputs: {
-        sessionId: Number(props.sessionId),
-        experimentCode: props.experimentCode,
-        experimentName: props.experimentName,
-        localCheckSummary: summary,
-        ...form
-      }
-    })
-    checkResult.value = data.text || ''
-  } finally {
-    checkLoading.value = false
+    reportCompleting.value = false
   }
 }
 
 function fullText() {
-  return sectionsToFullText(form, props.experimentName)
+  const plain = {}
+  Object.keys(form).forEach((k) => { plain[k] = stripHtml(form[k]) })
+  return sectionsToFullText(plain, props.experimentName)
 }
 
 function copyFullReport() {
@@ -289,7 +444,7 @@ async function downloadDocx() {
   if (!props.sessionId) return
   exporting.value = true
   try {
-    const sections = sectionDefs.map((def) => ({ label: def.label, content: form[def.key] || '' }))
+    const sections = sectionDefs.map((def) => ({ label: def.label, content: stripHtml(form[def.key] || '') }))
     const { data } = await sessionApi.studentReportDocx(props.sessionId, { sections })
     const url = URL.createObjectURL(data)
     const a = document.createElement('a')
@@ -297,69 +452,309 @@ async function downloadDocx() {
     a.download = `${props.experimentName || '实验'}-实验报告.docx`
     a.click()
     URL.revokeObjectURL(url)
+    await markReportComplete({ silent: true })
   } finally {
     exporting.value = false
   }
 }
 
-async function saveToLibrary() {
-  archiving.value = true
-  try {
-    const name = `${props.experimentName || '实验'}-实验报告.txt`
-    const file = new File([fullText()], name, { type: 'text/plain' })
-    await studentFileApi.upload(file, {
-      experimentCode: props.experimentCode,
-      category: 'report',
-      stage: 'report',
-      sessionId: props.sessionId || '',
-      note: '实验报告'
-    })
-    emit('saved')
-  } finally {
-    archiving.value = false
-  }
+function sectionWordCount(key) {
+  return stripHtml(form[key] || '').trim().length
 }
 
-function renderMd(text) {
-  return renderChatMarkdown(text, { normalize: true })
+function openPreview() {
+  saveDraft()
+  completionMessage.value = ''
+  previewOpen.value = true
+}
+
+async function confirmSubmit() {
+  if (reportDone.value) {
+    previewOpen.value = false
+    return
+  }
+  await markReportComplete()
+  if (reportDone.value) {
+    setTimeout(() => { previewOpen.value = false }, 1200)
+  }
 }
 </script>
 
 <style scoped>
-.ws-body { @apply min-h-0 bg-surface-soft/30; }
-.section-nav { @apply w-40 shrink-0 border-r border-line-soft bg-white py-3 overflow-y-auto; }
-.nav-item {
-  @apply block w-full text-left px-4 py-2.5 text-[13px] text-ink-muted hover:bg-surface-soft transition-colors;
+.report-editor { @apply overflow-hidden bg-white; }
+
+/* ===== 左栏 ===== */
+.report-main { @apply bg-white; }
+
+.report-header {
+  @apply flex items-center justify-between gap-3 px-4 py-1.5 border-b border-line-soft shrink-0;
 }
-.nav-item--active { @apply text-brand-600 bg-brand-50 font-semibold border-r-2 border-brand-600; }
-.nav-item--filled:not(.nav-item--active)::before { content: '● '; @apply text-emerald-500 text-[10px]; }
-.nav-item--check { @apply text-ink-faint; }
-.nav-divider { @apply my-2 border-t border-line-soft mx-3; }
+.header-left h2 { @apply text-[13px] font-bold text-ink-strong; }
+.header-left span { @apply text-[10px] text-ink-faint ml-1.5; }
+.header-actions { @apply flex items-center gap-1; }
 
-.editor-pane { @apply flex-1 min-w-0 p-5 bg-white; }
-.editor-head { @apply flex items-center justify-between mb-3; }
-.editor-head h3 { @apply text-[15px] font-bold text-ink-strong; }
-.editor-head-title { @apply text-[15px] font-bold text-ink-strong mb-4; }
-.editor-area {
-  @apply w-full min-h-[320px] rounded-xl border border-line-soft px-4 py-3 text-[14px] leading-relaxed resize-y;
+.btn-plain {
+  @apply border border-line-soft bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-muted
+    hover:text-ink-strong hover:border-brand-200 disabled:opacity-40 disabled:cursor-not-allowed;
 }
-.editor-tip { @apply text-[12px] text-brand-600 mt-2; }
+.btn-primary {
+  @apply bg-brand-600 px-2 py-0.5 text-[11px] font-semibold text-white
+    hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed;
+}
 
-.preview-pane { @apply w-64 border-l border-line-soft bg-surface-soft/50 p-4; }
-.preview-title { @apply text-[12px] font-bold text-ink-muted uppercase mb-3; }
-.preview-doc { @apply bg-white rounded-xl border border-line-soft p-4 text-[12px]; }
-.preview-doc-title { @apply font-bold text-ink-strong mb-3 pb-2 border-b border-line-soft; }
-.preview-section { @apply mb-3; }
-.preview-h { @apply font-semibold text-ink-muted mb-0.5; }
-.preview-p { @apply text-ink-faint leading-relaxed; }
+/* ===== 工具栏 ===== */
+.rep-toolbar {
+  @apply flex items-center gap-0.5 px-4 py-0.5 border-b border-line-soft bg-surface-soft/30 shrink-0;
+}
+.tool-btn {
+  @apply w-6 h-6 flex items-center justify-center rounded text-ink-muted
+    hover:bg-white hover:text-brand-600 hover:shadow-sm transition-all;
+}
+.tool-btn svg { @apply w-3.5 h-3.5; }
+.tool-sep { @apply w-px h-3.5 bg-line-soft mx-1; }
 
-.check-list { @apply space-y-2; }
-.check-row { @apply flex gap-3 rounded-xl border px-4 py-3 text-[14px]; }
-.check-row--ok { @apply border-emerald-100 bg-emerald-50/60; }
-.check-row--miss { @apply border-amber-100 bg-amber-50/50; }
-.check-name { @apply font-semibold text-ink-strong; }
-.check-msg { @apply text-[12px] text-ink-muted; }
-.check-result { @apply rounded-xl border border-line-soft p-4 bg-surface-soft/50; }
+/* ===== 报告内容 ===== */
+.report-content {
+  @apply px-4 py-3;
+  overflow-y: auto;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.report-field { @apply mb-5; }
+.rep-label {
+  @apply flex items-center justify-between mb-1.5;
+}
+.rep-label span { @apply text-[14px] font-bold text-ink-strong; }
+.rep-label em { @apply text-[12px] text-ink-faint not-italic; }
+
+.rep-editor {
+  @apply w-full min-h-[100px] border border-line-soft px-3 py-2 text-[14px] leading-7
+    text-ink-strong outline-none focus:border-brand-300 focus:bg-brand-50/20 rounded-sm;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rep-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--ink-faint, #94a3b8);
+  font-size: 14px;
+  pointer-events: none;
+}
+.rep-editor :deep(img) { max-width: 100%; border-radius: 6px; margin: 4px 0; }
+.rep-editor :deep(.inline-formula) {
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: "Cambria Math", "Latin Modern Math", serif;
+  font-size: 0.95em;
+  margin: 0 2px;
+  user-select: all;
+}
+
+/* ===== 右栏：小智辅助 ===== */
+.report-aside {
+  width: 340px;
+  flex-shrink: 0;
+}
+.aside-header {
+  @apply flex items-center gap-2 px-4 py-3 border-b border-line-soft bg-white;
+}
+.aside-icon { @apply w-4 h-4 text-brand-600; }
+.aside-header span { @apply text-[13px] font-bold text-ink-strong; }
+.aside-body { @apply bg-white; }
+.aside-body :deep(.stage-panel) { @apply h-full border-0; }
+.aside-body :deep(.panel-head) { @apply px-4 py-2.5; }
+.aside-body :deep(.panel-actions) { @apply hidden; }
+.aside-body :deep(.max-w-\[960px\]) { @apply max-w-none; }
+
+/* ===== 公式弹窗 ===== */
+.formula-overlay {
+  @apply fixed inset-0 z-50 flex items-center justify-center;
+  background: rgba(0,0,0,0.25);
+}
+.formula-dialog {
+  @apply bg-white rounded-lg shadow-xl p-5 w-[420px] max-w-[90vw];
+}
+.formula-title { @apply text-[14px] font-bold text-ink-strong mb-3; }
+.formula-input {
+  @apply w-full border border-line-soft px-3 py-2 text-[14px] outline-none
+    focus:border-brand-300 rounded-sm;
+  font-family: "Cambria Math", "Consolas", monospace;
+}
+.formula-preview {
+  @apply mt-2 px-3 py-2 bg-surface-soft/40 rounded-sm border border-line-soft;
+}
+.formula-text {
+  font-family: "Cambria Math", "Latin Modern Math", serif;
+  font-size: 15px;
+  color: #4338ca;
+}
+.formula-actions { @apply flex gap-2 mt-3 justify-end; }
 
 .empty-state { @apply text-sm text-ink-muted bg-surface-soft/30; }
+
+/* ===== 报告预览弹窗 ===== */
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(2px);
+}
+.preview-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 820px;
+  max-width: 94vw;
+  height: 90vh;
+  max-height: 900px;
+  background: #f1f5f9;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+.preview-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid var(--border-soft, #e4e9f3);
+  flex-shrink: 0;
+}
+.preview-topbar-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong, #0f172a);
+}
+.preview-topbar-actions {
+  display: flex;
+  gap: 8px;
+}
+.preview-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 0;
+}
+.preview-msg {
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #059669;
+  background: #ecfdf5;
+  border-top: 1px solid #a7f3d0;
+  flex-shrink: 0;
+}
+
+/* Word 文档页面 */
+.preview-page {
+  width: 680px;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #fff;
+  padding: 56px 60px 48px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  min-height: 800px;
+  font-family: "SimSun", "宋体", "Times New Roman", serif;
+  color: #1a1a1a;
+  line-height: 1.9;
+}
+.doc-header {
+  text-align: center;
+  margin-bottom: 28px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #1a1a1a;
+}
+.doc-title {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: "SimHei", "黑体", "Microsoft YaHei", sans-serif;
+  margin: 0 0 4px;
+  letter-spacing: 2px;
+}
+.doc-subtitle {
+  font-size: 14px;
+  color: #555;
+  font-family: "SimHei", "黑体", "Microsoft YaHei", sans-serif;
+  letter-spacing: 1px;
+}
+.doc-info-table {
+  width: 100%;
+  margin-top: 14px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.doc-info-table td {
+  padding: 2px 6px;
+  border: none;
+}
+.doc-info-label {
+  text-align: right;
+  font-weight: 600;
+  white-space: nowrap;
+  width: 60px;
+  color: #333;
+}
+.doc-info-value {
+  text-align: left;
+  border-bottom: 1px solid #999;
+  min-width: 120px;
+  color: #1a1a1a;
+}
+.doc-body {
+  font-size: 14px;
+}
+.doc-section {
+  margin-bottom: 18px;
+}
+.doc-heading {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: "SimHei", "黑体", "Microsoft YaHei", sans-serif;
+  margin: 0 0 6px;
+  color: #1a1a1a;
+}
+.doc-content {
+  font-size: 14px;
+  line-height: 2;
+  text-indent: 2em;
+  word-break: break-word;
+}
+.doc-content :deep(img) {
+  max-width: 100%;
+  border-radius: 4px;
+  margin: 6px 0;
+}
+.doc-content :deep(.inline-formula) {
+  background: #f0f4ff;
+  color: #4338ca;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: "Cambria Math", "Latin Modern Math", serif;
+  font-size: 0.95em;
+  margin: 0 2px;
+}
+.doc-empty {
+  color: #999;
+  font-style: italic;
+  font-size: 13px;
+  text-indent: 2em;
+}
+
+@media (max-width: 1024px) {
+  .report-aside { width: 280px; }
+}
+@media (max-width: 768px) {
+  .report-editor { @apply flex-col; }
+  .report-aside { width: 100%; height: 300px; border-left: 0; border-top: 1px solid var(--line-soft, #e4e9f3); }
+  .report-header { @apply flex-col items-start gap-2; }
+  .header-actions { @apply w-full; }
+  .report-content { @apply px-4; }
+  .preview-wrapper { width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
+  .preview-page { width: 100%; padding: 24px 20px; }
+}
 </style>

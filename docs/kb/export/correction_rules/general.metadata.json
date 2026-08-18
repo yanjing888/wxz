@@ -1,0 +1,7 @@
+{
+  "experiment_code": "general",
+  "kb_type": "correction_rule",
+  "doc": "general/visual-rules.md",
+  "sectionKey": "general",
+  "dataset": "correction_rules"
+}

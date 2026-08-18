@@ -9,7 +9,9 @@
         </div>
       </div>
 
-      <p v-if="center" class="header-center">{{ center }}</p>
+      <slot name="center">
+        <p v-if="center" class="header-center">{{ center }}</p>
+      </slot>
 
       <div class="user-area">
         <div class="user-avatar brand-gradient">{{ userInitial }}</div>
@@ -47,10 +49,10 @@ const userInitial = computed(() => {
   @apply shrink-0 bg-white border-b border-line-soft px-6;
 }
 .header-main {
-  @apply flex items-center justify-between gap-6 h-14;
+  @apply flex items-center gap-6 h-14;
 }
 .brand-block {
-  @apply flex items-center gap-3 min-w-0;
+  @apply flex items-center gap-3 shrink-0;
 }
 .jyd-logo {
   @apply h-8 w-auto shrink-0 object-contain;
@@ -68,7 +70,7 @@ const userInitial = computed(() => {
   @apply hidden lg:block flex-1 text-center text-[12px] text-ink-faint truncate;
 }
 .user-area {
-  @apply flex items-center gap-2.5 shrink-0;
+  @apply flex items-center gap-2.5 shrink-0 ml-auto;
 }
 .user-avatar {
   @apply w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0;
@@ -81,5 +83,30 @@ const userInitial = computed(() => {
 }
 .logout-link {
   @apply text-[13px] text-ink-muted hover:text-brand-600 transition-colors;
+}
+
+@media (max-width: 980px), (max-height: 760px) {
+  .app-header {
+    @apply px-3;
+  }
+  .header-main {
+    @apply gap-3 h-12;
+  }
+  .jyd-logo {
+    @apply h-7;
+  }
+  .brand-text {
+    @apply hidden;
+  }
+  .user-name {
+    @apply max-w-[72px];
+  }
+}
+
+@media (max-width: 760px) {
+  .user-name,
+  .user-sep {
+    @apply hidden;
+  }
 }
 </style>
