@@ -1,12 +1,12 @@
 <template>
   <div class="student-app h-full flex flex-col">
     <AppTopBar title="" subtitle="" @logout="logout">
-      <template #center>
+      <template #left-extra>
         <StudentExperimentSwitcher />
       </template>
-      <div class="student-nav">
+      <template #center>
         <StudentTabBar />
-      </div>
+      </template>
     </AppTopBar>
 
     <main class="content-area flex-1 min-h-0">
@@ -38,9 +38,6 @@ function logout() {
 <style scoped>
 .content-area {
   @apply flex flex-col overflow-hidden;
-}
-.student-nav {
-  @apply flex items-center border-t border-line-soft;
 }
 :deep(.page-root) {
   @apply flex-1 min-h-0 flex flex-col;

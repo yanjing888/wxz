@@ -1,6 +1,6 @@
 <template>
   <div class="teacher-terminal">
-    <!-- ====== 顶栏 ====== -->
+    <!-- ====== 顶栏（含 Tab 导航） ====== -->
     <header class="terminal-head">
       <div class="head-left">
         <img src="/images/jyd-logo.png" alt="JYD" />
@@ -11,16 +11,7 @@
           @experiment-change="onExperimentChange"
         />
       </div>
-      <div class="head-right">
-        <div class="user-avatar brand-gradient">{{ userInitial }}</div>
-        <span class="user-name">{{ auth.displayName || auth.username }}</span>
-        <span class="user-sep" aria-hidden="true" />
-        <button type="button" class="logout-link" @click="logout">退出</button>
-      </div>
-    </header>
-
-    <!-- ====== Tab 导航 ====== -->
-    <nav class="terminal-nav">
+      <nav class="terminal-nav">
         <button
           v-for="tab in navTabs"
           :key="tab.key"
@@ -38,6 +29,13 @@
           <span v-if="tab.badge" class="tab-badge">{{ tab.badge }}</span>
         </button>
       </nav>
+      <div class="head-right">
+        <div class="user-avatar brand-gradient">{{ userInitial }}</div>
+        <span class="user-name">{{ auth.displayName || auth.username }}</span>
+        <span class="user-sep" aria-hidden="true" />
+        <button type="button" class="logout-link" @click="logout">退出</button>
+      </div>
+    </header>
 
     <!-- ====== 加载/空 ====== -->
     <div v-if="loading && !loadedOnce" class="terminal-state">加载中…</div>
@@ -47,98 +45,76 @@
     <div v-else class="terminal-content">
 
       <!-- ========== Tab 1: 学情总览 ========== -->
-      <div v-show="activeTab === 'overview'" class="tab-panel">
-        <!-- KPI 看板卡片 -->
-        <div class="kpi-row">
-          <div class="kpi-card kpi-total">
-            <div class="kpi-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-            </div>
-            <div class="kpi-body">
-              <span class="kpi-label">学生总数</span>
-              <strong class="kpi-value">{{ overview?.studentCount ?? classroomStudents.length }}</strong>
-              <span class="kpi-sub">{{ overview?.managedClass || '全部班级' }}</span>
-            </div>
-          </div>
-          <div class="kpi-card kpi-active">
-            <div class="kpi-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-            </div>
-            <div class="kpi-body">
-              <span class="kpi-label">进行中</span>
-              <strong class="kpi-value">{{ classroom?.activeCount ?? 0 }}</strong>
-              <span class="kpi-sub">正在实验</span>
-            </div>
-          </div>
-          <div class="kpi-card kpi-done">
-            <div class="kpi-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            </div>
-            <div class="kpi-body">
-              <span class="kpi-label">已完成报告</span>
-              <strong class="kpi-value">{{ overview?.reportCount ?? 0 }}</strong>
-              <span class="kpi-sub">已提交</span>
-            </div>
-          </div>
-          <div class="kpi-card kpi-alert">
-            <div class="kpi-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-            </div>
-            <div class="kpi-body">
-              <span class="kpi-label">需关注</span>
-              <strong class="kpi-value">{{ classroom?.highPriorityCount ?? 0 }}</strong>
-              <span class="kpi-sub">优先处理</span>
-            </div>
+      <div v-show="activeTab === 'overview'" class="tab-panel overview-panel">
+        <div class="overview-toolbar">
+          <h2>{{ classroom?.experimentName || currentExperimentName }}</h2>
+          <div class="overview-summary">
+            <span>共 {{ classroomStudents.length }} 人</span>
+            <span class="sep">·</span>
+            <span>{{ classroom?.activeCount ?? 0 }} 进行中</span>
+            <span class="sep">·</span>
+            <span>{{ finishedCount }} 已完成</span>
           </div>
         </div>
 
         <div class="overview-body">
-          <!-- 学生卡片网格 -->
+          <!-- 按班级分组的学情列表 -->
           <section class="student-grid-section">
-            <div class="grid-toolbar">
-              <h2>学生实验看板</h2>
-              <span class="toolbar-exp">{{ classroom?.experimentName || currentExperimentName }}</span>
-            </div>
             <div v-if="!classroomStudents.length" class="empty-state">暂无学生进行此实验。</div>
-            <div v-else class="student-grid custom-scroll">
+            <div v-else class="class-list custom-scroll">
               <div
-                v-for="row in classroomStudents"
-                :key="row.userId"
-                class="student-card"
-                :class="[
-                  `card-${row.priority || 'normal'}`,
-                  { active: selectedUserId === row.userId }
-                ]"
-                @click="selectedUserId = row.userId"
+                v-for="grp in studentsByClass"
+                :key="grp.name"
+                class="class-group"
+                :class="{ expanded: expandedClasses[grp.name] !== false }"
               >
-                <div class="card-top">
-                  <div class="card-avatar" :class="row.status === 'ACTIVE' ? 'avatar-active' : ''">
-                    {{ (row.studentName || '?').charAt(0) }}
-                  </div>
-                  <div class="card-name-block">
-                    <strong>{{ row.studentName }}</strong>
-                    <span>{{ row.studentClass || '—' }}</span>
-                  </div>
-                  <span class="state-pill" :class="row.status === 'ACTIVE' ? 'active' : 'idle'">
-                    {{ row.status === 'ACTIVE' ? '进行中' : '未开始' }}
+                <button type="button" class="class-group-header" @click="toggleClassExpand(grp.name)">
+                  <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <span class="class-name">{{ grp.name }}</span>
+                  <span class="class-stats">
+                    <span class="stat-chip">{{ grp.students.length }} 人</span>
+                    <span v-if="grp.activeCount" class="stat-chip active-chip">{{ grp.activeCount }} 进行中</span>
+                    <span v-if="grp.finishedCount" class="stat-chip done-chip">{{ grp.finishedCount }} 已完成</span>
                   </span>
-                </div>
-                <div class="card-step">
-                  <svg class="card-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                  <span>{{ row.stepTitle || '未开始' }}</span>
-                </div>
-                <div class="card-stats">
-                  <div class="card-stat">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span>{{ row.status === 'ACTIVE' ? `${row.minutesOnSession}min` : '—' }}</span>
-                  </div>
-                  <div class="card-stat" :class="{ 'stat-warn': row.helpCount > 0 }">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.01 2.907-.603.111-.99.759-.99 1.371V15M12 18.5h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span>求助 {{ row.helpCount ?? 0 }}</span>
-                  </div>
-                  <div class="card-stat" :class="{ 'stat-warn': row.errorPointCount > 0 }">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                    <span>纠错 {{ row.errorPointCount ?? 0 }}</span>
+                </button>
+                <div v-if="expandedClasses[grp.name] !== false" class="class-group-body">
+                  <!-- 学生学情卡片网格 -->
+                  <div class="learn-card-grid">
+                    <button
+                      v-for="row in grp.students"
+                      :key="row.userId"
+                      type="button"
+                      class="learn-card"
+                      :class="{
+                        'learn-card--active': selectedUserId === row.userId,
+                        'learn-card--online': row.status === 'ACTIVE',
+                        'learn-card--done': row.status === 'FINISHED',
+                        'learn-card--warn': (row.helpCount > 0 || row.errorPointCount > 0) && row.status === 'ACTIVE'
+                      }"
+                      @click="selectedUserId = row.userId"
+                    >
+                      <div class="learn-card-top">
+                        <span class="learn-name">{{ row.studentName }}</span>
+                        <span class="learn-dot" :class="row.status === 'ACTIVE' ? 'dot-on' : row.status === 'FINISHED' ? 'dot-done' : 'dot-off'"></span>
+                      </div>
+                      <div class="learn-card-step">{{ row.stepTitle || '未开始' }}</div>
+                      <div class="learn-card-bottom">
+                        <span class="learn-stat">
+                          <span class="learn-stat-label">用时</span>
+                          <span class="learn-stat-val">{{ row.status === 'ACTIVE' || row.status === 'FINISHED' ? `${row.minutesOnSession}min` : '—' }}</span>
+                        </span>
+                        <span class="learn-stat" :class="{ warn: row.helpCount > 0 }">
+                          <span class="learn-stat-label">求助</span>
+                          <span class="learn-stat-val">{{ row.helpCount ?? 0 }}</span>
+                        </span>
+                        <span class="learn-stat" :class="{ warn: row.errorPointCount > 0 }">
+                          <span class="learn-stat-label">纠错</span>
+                          <span class="learn-stat-val">{{ row.errorPointCount ?? 0 }}</span>
+                        </span>
+                      </div>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -150,12 +126,11 @@
             <aside v-if="selectedStudent" class="detail-panel">
               <div class="detail-header">
                 <div>
-                  <p class="detail-exp">{{ currentExperimentName }}</p>
                   <h2>{{ selectedStudent.studentName }}</h2>
                   <p class="detail-class">{{ selectedStudent.studentClass || '—' }}</p>
                 </div>
-                <span class="state-pill" :class="selectedStudent.status === 'ACTIVE' ? 'active' : 'idle'">
-                  {{ selectedStudent.status === 'ACTIVE' ? '进行中' : '未开始' }}
+                <span class="state-pill" :class="selectedStudent.status === 'ACTIVE' ? 'active' : selectedStudent.status === 'FINISHED' ? 'done' : 'idle'">
+                  {{ selectedStudent.status === 'ACTIVE' ? '进行中' : selectedStudent.status === 'FINISHED' ? '已完成' : '未开始' }}
                 </span>
               </div>
 
@@ -166,14 +141,14 @@
                 </div>
                 <div>
                   <span>用时</span>
-                  <strong>{{ selectedStudent.status === 'ACTIVE' ? `${selectedStudent.minutesOnSession} 分钟` : '—' }}</strong>
+                  <strong>{{ (selectedStudent.status === 'ACTIVE' || selectedStudent.status === 'FINISHED') ? `${selectedStudent.minutesOnSession} 分钟` : '—' }}</strong>
                 </div>
                 <div>
-                  <span>求助次数</span>
+                  <span>求助</span>
                   <strong>{{ selectedStudent.helpCount ?? 0 }}</strong>
                 </div>
                 <div>
-                  <span>纠错次数</span>
+                  <span>纠错</span>
                   <strong>{{ selectedStudent.errorPointCount ?? 0 }}</strong>
                 </div>
                 <div>
@@ -559,6 +534,26 @@ const currentExperimentName = computed(() =>
 )
 
 const classroomStudents = computed(() => classroom.value?.students || [])
+
+const finishedCount = computed(() => classroomStudents.value.filter((s) => s.status === 'FINISHED').length)
+
+const studentsByClass = computed(() => {
+  const groups = {}
+  for (const s of classroomStudents.value) {
+    const cls = s.studentClass || '未分班'
+    if (!groups[cls]) groups[cls] = []
+    groups[cls].push(s)
+  }
+  return Object.entries(groups).map(([name, list]) => ({
+    name,
+    students: list,
+    activeCount: list.filter((s) => s.status === 'ACTIVE').length,
+    finishedCount: list.filter((s) => s.status === 'FINISHED').length,
+    reportCount: 0,
+    helpCount: list.reduce((sum, s) => sum + (s.helpCount || 0), 0),
+    errorCount: list.reduce((sum, s) => sum + (s.errorPointCount || 0), 0)
+  }))
+})
 const currentReports = computed(() =>
   reports.value.filter((r) => r.experimentCode === selectedExpCode.value)
 )
@@ -998,12 +993,11 @@ function logout() {
   background: #f2f3f7;
 }
 
-/* ====== 顶栏 ====== */
+/* ====== 顶栏（含 Tab 导航） ====== */
 .terminal-head {
   height: 56px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: stretch;
   padding: 0 24px;
   background: #fff;
   border-bottom: 1px solid #e4e9f3;
@@ -1015,7 +1009,7 @@ function logout() {
   width: 1px; height: 22px; background: #e4e9f3; flex-shrink: 0;
 }
 .terminal-head h1 { font-size: 17px; font-weight: 700; color: #0f172a; white-space: nowrap; }
-.head-right { font-size: 13px; color: #64748b; }
+.head-right { font-size: 13px; color: #64748b; margin-left: auto; }
 .head-right .user-avatar {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -1034,30 +1028,30 @@ function logout() {
 }
 .head-right .logout-link:hover { color: #4f46e5; }
 
-/* ====== Tab 导航 ====== */
+/* ====== Tab 导航（嵌入顶栏） ====== */
 .terminal-nav {
-  display: flex; align-items: stretch; justify-content: center; gap: 8px;
-  padding: 0; background: #fff;
-  border-bottom: 1px solid #e4e9f3; flex-shrink: 0;
+  display: flex; align-items: stretch; justify-content: center; gap: 4px;
+  flex: 1; min-width: 0;
 }
 .nav-tab {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  position: relative; padding: 8px 28px; border: none; background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  position: relative; padding: 4px 18px; border: none; background: transparent;
   color: #94a3b8; transition: all 0.2s; white-space: nowrap;
+  border-radius: 8px 8px 0 0;
 }
-.nav-tab:hover { color: #64748b; }
+.nav-tab:hover { color: #64748b; background: rgba(0, 0, 0, 0.03); }
 .nav-tab:hover .tab-icon { color: #94a3b8; }
 .nav-tab.active .tab-icon { color: var(--icon-color, #4f46e5); }
 .nav-tab.active .tab-label { color: #0f172a; }
 .nav-tab.active::after {
-  content: ''; position: absolute; bottom: 0; left: 28px; right: 28px;
+  content: ''; position: absolute; bottom: 0; left: 18px; right: 18px;
   height: 2px; background: var(--icon-color, #4f46e5); border-radius: 999px;
 }
-.tab-icon { width: 28px; height: 28px; color: #cbd5e1; transition: color 0.2s; }
+.tab-icon { width: 26px; height: 26px; color: #cbd5e1; transition: color 0.2s; }
 .tab-label { font-size: 10px; font-weight: 500; letter-spacing: 0.02em; }
 .nav-tab.active .tab-label { font-weight: 700; }
 .tab-badge {
-  position: absolute; top: 6px; right: 18px;
+  position: absolute; top: 4px; right: 10px;
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
   background: #ef4444; color: #fff; font-size: 10px; font-weight: 700;
@@ -1086,79 +1080,89 @@ function logout() {
 .stat-sep { width: 1px; height: 16px; background: #e4e9f3; margin: 0 18px; flex-shrink: 0; }
 
 /* ====== 学情总览 ====== */
-/* KPI 看板卡片 */
-.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 16px; flex-shrink: 0; }
-.kpi-card {
-  display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 14px;
-  background: #fff; border: 1px solid #e4e9f3; transition: all 0.2s;
+.overview-panel { padding: 0; }
+.overview-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; border-bottom: 1px solid #e4e9f3; flex-shrink: 0;
+  background: #fff;
 }
-.kpi-card:hover { border-color: #c7d2fe; box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08); }
-.kpi-icon { width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-.kpi-icon svg { width: 22px; height: 22px; }
-.kpi-body { display: flex; flex-direction: column; gap: 2px; }
-.kpi-label { font-size: 12px; color: #94a3b8; font-weight: 600; }
-.kpi-value { font-size: 26px; font-weight: 800; line-height: 1.2; color: #0f172a; }
-.kpi-sub { font-size: 11px; color: #cbd5e1; }
+.overview-toolbar h2 { font-size: 14px; font-weight: 700; color: #0f172a; }
+.overview-summary { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; }
+.overview-summary .sep { color: #cbd5e1; }
 
-.kpi-total .kpi-icon { background: #eef2ff; color: #6366f1; }
-.kpi-total .kpi-value { color: #6366f1; }
-.kpi-active .kpi-icon { background: #ecfdf5; color: #059669; }
-.kpi-active .kpi-value { color: #059669; }
-.kpi-done .kpi-icon { background: #eff6ff; color: #3b82f6; }
-.kpi-done .kpi-value { color: #3b82f6; }
-.kpi-alert .kpi-icon { background: #fef2f2; color: #ef4444; }
-.kpi-alert .kpi-value { color: #ef4444; }
-
-/* 学生卡片网格 */
-.overview-body { display: grid; grid-template-columns: 1fr 340px; gap: 0; flex: 1; min-height: 0; }
+.overview-body { display: grid; grid-template-columns: 1fr 300px; gap: 0; flex: 1; min-height: 0; }
 .student-grid-section { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid #e4e9f3; }
-.grid-toolbar { height: 38px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding: 0 16px; background: #f8f9fc; border-bottom: 1px solid #e4e9f3; }
-.grid-toolbar h2 { color: #0f172a; font-size: 13px; font-weight: 700; }
-.toolbar-exp { color: #94a3b8; font-size: 12px; }
+.class-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 
-.student-grid {
-  flex: 1; overflow-y: auto; padding: 14px;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;
-  align-content: start;
+/* 班级分组 */
+.class-group { border: 1px solid #e4e9f3; border-radius: 8px; overflow: hidden; background: #fff; }
+.class-group-header {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 9px 12px; background: #f8f9fc; border: none; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: #1e293b; transition: background 0.12s;
 }
-.student-card {
-  background: #fff; border: 1px solid #e4e9f3; border-radius: 12px; padding: 14px;
-  cursor: pointer; transition: all 0.18s; position: relative; overflow: hidden;
-}
-.student-card::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
-}
-.student-card.card-high::before { background: #ef4444; }
-.student-card.card-medium::before { background: #f59e0b; }
-.student-card.card-normal::before { background: #e4e9f3; }
-.student-card:hover { border-color: #c7d2fe; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.1); transform: translateY(-1px); }
-.student-card.active { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15); }
+.class-group-header:hover { background: #f0f4ff; }
+.class-group-header .chevron { width: 14px; height: 14px; color: #94a3b8; transition: transform 0.2s; flex-shrink: 0; }
+.class-group.expanded .class-group-header .chevron { transform: rotate(90deg); }
+.class-group-header .class-name { flex: 1; text-align: left; }
+.class-group-header .class-stats { display: flex; gap: 4px; flex-shrink: 0; }
+.stat-chip { padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #f1f5f9; color: #64748b; }
+.stat-chip.active-chip { background: #ecfdf5; color: #059669; }
+.stat-chip.done-chip { background: #f0fdf4; color: #10b981; border: 1px solid #d1fae5; }
+.class-group-body { display: flex; flex-direction: column; }
 
-.card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.card-avatar {
-  width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  background: #f1f5f9; color: #64748b; font-size: 15px; font-weight: 700;
+/* 学情卡片 */
+.learn-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 10px;
 }
-.card-avatar.avatar-active { background: linear-gradient(135deg, #6366f1, #818cf8); color: #fff; }
-.card-name-block { flex: 1; min-width: 0; }
-.card-name-block strong { display: block; font-size: 14px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-name-block span { display: block; font-size: 11px; color: #94a3b8; margin-top: 1px; }
+.learn-card {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px; border-radius: 10px;
+  background: #fff; border: 1px solid #e8ecf2;
+  cursor: pointer; transition: all 0.18s; text-align: left;
+}
+.learn-card:hover { border-color: #c7d2fe; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08); }
+.learn-card--active { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12); }
+.learn-card--warn { border-color: #fcd34d; background: #fffbeb; }
+.learn-card--warn.learn-card--active { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.12); }
+.learn-card--done { border-color: #d1fae5; background: #f0fdf4; }
+.learn-card--done.learn-card--active { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.12); }
+.learn-card--done .learn-name { color: #059669; }
+.learn-card--done .learn-card-step { background: #ecfdf5; color: #059669; }
 
-.card-step {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 10px; border-radius: 8px; background: #f8f9fc; margin-bottom: 10px;
+.learn-card-top {
+  display: flex; align-items: center; justify-content: space-between;
 }
-.card-step-icon { width: 14px; height: 14px; flex-shrink: 0; color: #94a3b8; }
-.card-step span { font-size: 12px; color: #475569; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.learn-name {
+  font-size: 14px; font-weight: 700; color: #1e293b;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.learn-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.learn-dot.dot-on { background: #22c55e; box-shadow: 0 0 5px rgba(34, 197, 94, 0.4); }
+.learn-dot.dot-off { background: #d1d5db; }
+.learn-dot.dot-done { background: #10b981; }
 
-.card-stats { display: flex; gap: 12px; }
-.card-stat {
-  display: flex; align-items: center; gap: 4px; font-size: 11px; color: #94a3b8; font-weight: 600;
+.learn-card-step {
+  font-size: 12px; color: #64748b;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 4px 8px; background: #f8f9fc; border-radius: 4px;
 }
-.card-stat svg { width: 13px; height: 13px; }
-.card-stat.stat-warn { color: #f59e0b; }
-.card-stat.stat-warn svg { color: #f59e0b; }
+
+.learn-card-bottom {
+  display: flex; gap: 0; margin-top: 2px;
+  border-top: 1px solid #f1f5f9; padding-top: 8px;
+}
+.learn-stat {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.learn-stat-label { font-size: 10px; color: #94a3b8; font-weight: 600; }
+.learn-stat-val { font-size: 13px; font-weight: 700; color: #334155; font-variant-numeric: tabular-nums; }
+.learn-stat.warn .learn-stat-val { color: #f59e0b; }
 
 /* 状态标签 */
 .state-pill {
@@ -1166,6 +1170,7 @@ function logout() {
   border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap;
 }
 .state-pill.active { background: #ecfdf5; color: #059669; }
+.state-pill.done { background: #f0fdf4; color: #10b981; border: 1px solid #d1fae5; }
 .state-pill.idle { background: #f1f5f9; color: #64748b; }
 
 /* 优先级 */
@@ -1187,8 +1192,7 @@ function logout() {
   display: flex; align-items: flex-start; justify-content: space-between;
   padding: 14px 16px; border-bottom: 1px solid #e4e9f3; flex-shrink: 0;
 }
-.detail-exp { color: #94a3b8; font-size: 12px; font-weight: 600; }
-.detail-header h2 { margin-top: 2px; color: #0f172a; font-size: 18px; font-weight: 700; }
+.detail-header h2 { color: #0f172a; font-size: 16px; font-weight: 700; }
 .detail-class { color: #94a3b8; font-size: 12px; margin-top: 2px; }
 .detail-stats {
   display: grid; grid-template-columns: repeat(2, 1fr);
@@ -1536,7 +1540,9 @@ function logout() {
 @media (max-width: 768px) {
   .teacher-terminal { height: auto; min-height: 100vh; overflow-y: auto; }
   .terminal-head { flex-wrap: wrap; gap: 8px; padding: 12px; height: auto; }
-  .terminal-nav { padding: 0 12px; overflow-x: auto; }
+  .terminal-nav { padding: 0 8px; overflow-x: auto; flex-basis: 100%; order: 3; }
+  .nav-tab { padding: 3px 12px; }
+  .tab-icon { width: 22px; height: 22px; }
   .tab-panel { height: auto; }
   .kpi-row { grid-template-columns: 1fr; }
   .rd-summary { flex-wrap: wrap; }

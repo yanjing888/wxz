@@ -14,12 +14,11 @@
     <div v-else class="lab-page flex flex-col flex-1 min-h-0 w-full overflow-hidden">
     <!-- 顶栏 -->
     <LabHeader
-      :experiments="lab.experiments"
       :experiment-code="lab.experiment?.code || ''"
       :env-level="lab.envLevel"
       :dify-status="lab.difyStatus"
       :dify-status-loading="lab.difyStatusLoading"
-      :switching="lab.switchingExperiment"
+      :session-finished="currentSessionReadOnly"
       @quick-stats="showQuickStats = true"
       @report="openReport"
     />

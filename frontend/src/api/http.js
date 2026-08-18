@@ -1,6 +1,10 @@
 import axios from 'axios'
+import { Capacitor } from '@capacitor/core'
+import { apiBaseUrl } from './runtime'
 
-const http = axios.create({ baseURL: '' })
+const http = axios.create({
+  baseURL: Capacitor.isNativePlatform() ? apiBaseUrl : ''
+})
 
 http.interceptors.request.use((config) => {
   const token = localStorage.getItem('wxz_token')
@@ -17,8 +21,12 @@ http.interceptors.response.use(
       ;['wxz_token', 'wxz_userId', 'wxz_username', 'wxz_displayName', 'wxz_class'].forEach((key) =>
         localStorage.removeItem(key)
       )
-      if (window.location.pathname !== '/login') {
-        window.location.assign('/login')
+      const isNative = Capacitor.isNativePlatform()
+      const onLogin = isNative
+        ? window.location.hash.startsWith('#/login')
+        : window.location.pathname === '/login'
+      if (!onLogin) {
+        window.location.assign(isNative ? '/#/login' : '/login')
       }
     }
     return Promise.reject(error)

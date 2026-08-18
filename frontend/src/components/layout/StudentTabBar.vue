@@ -82,25 +82,28 @@ function isActive(tab) {
 .tab-bar {
   display: flex;
   flex: 1;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  gap: 8px;
-  overflow-x: auto;
+  gap: 4px;
+  height: 100%;
+  min-width: 0;
 }
 .tab-item {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 8px 28px;
+  gap: 2px;
+  padding: 4px 18px;
   position: relative;
   color: #94a3b8;
   white-space: nowrap;
   transition: all 0.2s;
+  border-radius: 8px 8px 0 0;
 }
 .tab-item:hover {
   color: #64748b;
+  background: rgba(0, 0, 0, 0.03);
 }
 .tab-item:hover .tab-icon {
   color: #94a3b8;
@@ -116,15 +119,15 @@ function isActive(tab) {
   content: '';
   position: absolute;
   bottom: 0;
-  left: 28px;
-  right: 28px;
+  left: 18px;
+  right: 18px;
   height: 2px;
   background: var(--icon-color, #4f46e5);
   border-radius: 999px;
 }
 .tab-icon {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   color: #cbd5e1;
   transition: color 0.2s;
 }
@@ -139,15 +142,15 @@ function isActive(tab) {
     justify-content: center;
   }
   .tab-item {
-    padding: 7px 18px;
+    padding: 3px 12px;
   }
   .tab-icon {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
   }
   .tab-item--active::after {
-    left: 18px;
-    right: 18px;
+    left: 12px;
+    right: 12px;
   }
 }
 </style>

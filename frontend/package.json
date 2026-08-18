@@ -15,6 +15,11 @@
     "test:resizable-workspace": "node scripts/check-resizable-workspace.mjs"
   },
   "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/splash-screen": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0",
     "axios": "^1.7.2",
     "flv.js": "^1.6.2",
     "marked": "^12.0.2",
@@ -23,8 +28,10 @@
     "vue-router": "^4.3.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.0.0",
     "@vitejs/plugin-vue": "^5.0.4",
     "autoprefixer": "^10.4.19",
+    "jimp": "^1.6.1",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "vite": "^5.2.11"

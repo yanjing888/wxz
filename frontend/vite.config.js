@@ -7,6 +7,7 @@ const backendOrigin = `http://127.0.0.1:${BACKEND_PORT}`
 const cameraProxyTarget = process.env.BENCH_CAMERA_PROXY_TARGET || `ws://${BENCH_CAMERA_IP}`
 
 export default defineConfig({
+  base: './',
   plugins: [vue()],
   server: {
     port: FRONTEND_PORT,

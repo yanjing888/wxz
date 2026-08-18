@@ -1,0 +1,11 @@
+{
+  "appId": "com.wuxiaozhi.app",
+  "appName": "物小智",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

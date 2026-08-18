@@ -1,3 +1,5 @@
+import { apiUrl } from './runtime'
+
 function parseSseBlock(block, handlers) {
   let event = 'message'
   let data = ''
@@ -95,7 +97,7 @@ export async function postSse(url, body, handlers = {}, signal) {
 
 export async function getSse(url, handlers = {}, signal) {
   const token = localStorage.getItem('wxz_token')
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     method: 'GET',
     headers: {
       Accept: 'text/event-stream',

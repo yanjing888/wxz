@@ -9,6 +9,8 @@
         </div>
       </div>
 
+      <slot name="left-extra" />
+
       <slot name="center">
         <p v-if="center" class="header-center">{{ center }}</p>
       </slot>
@@ -20,8 +22,6 @@
         <button type="button" class="logout-link" @click="emit('logout')">退出</button>
       </div>
     </div>
-
-    <slot />
   </header>
 </template>
 
@@ -49,7 +49,7 @@ const userInitial = computed(() => {
   @apply shrink-0 bg-white border-b border-line-soft px-6;
 }
 .header-main {
-  @apply flex items-center gap-6 h-14;
+  @apply flex items-center gap-4 h-14;
 }
 .brand-block {
   @apply flex items-center gap-3 shrink-0;
@@ -67,7 +67,7 @@ const userInitial = computed(() => {
   @apply mt-0.5 text-[12px] text-ink-faint truncate;
 }
 .header-center {
-  @apply hidden lg:block flex-1 text-center text-[12px] text-ink-faint truncate;
+  @apply flex-1 flex items-center justify-center min-w-0;
 }
 .user-area {
   @apply flex items-center gap-2.5 shrink-0 ml-auto;
@@ -100,6 +100,15 @@ const userInitial = computed(() => {
   }
   .user-name {
     @apply max-w-[72px];
+  }
+}
+
+@media (max-width: 760px) {
+  .header-main {
+    @apply gap-2;
+  }
+  .brand-text {
+    @apply hidden;
   }
 }
 
