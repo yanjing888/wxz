@@ -1,5 +1,6 @@
 package com.wuxiaozhi.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wuxiaozhi.config.AiToolDefinition;
 import com.wuxiaozhi.dto.*;
@@ -121,6 +122,13 @@ public class AiToolService {
 
         String workflowKey = catalogService.resolveWorkflowKey(tool);
         Map<String, Object> inputs = buildToolInputs(tool, userMessage, req.getExperimentCode(), conversation.getId());
+        if ("report-assist".equals(tool.getCode())) {
+            if (req.getSessionId() != null) {
+                inputs.put("sessionId", req.getSessionId());
+            }
+            enrichReportAssistInputs(userId, inputs);
+            attachReportDraftSections(inputs, req.getReportSectionsJson());
+        }
         String difyUser = "ai-tool-" + userId + "-" + conversation.getId();
 
         CompletableFuture.runAsync(() -> {
@@ -266,15 +274,46 @@ public class AiToolService {
             Map<String, Object> report = labSessionService.buildReportData(sessionId, userId);
             inputs.put("report_context", report);
             inputs.put("experiment_name", stringValue(report.get("experimentName")));
+            inputs.put("experiment_code", stringValue(report.get("experimentCode")));
             if (report.get("dataLogEntries") != null) {
                 inputs.put("data_logs_json", writeJson(report.get("dataLogEntries")));
             }
+            if (report.get("corrections") != null) {
+                inputs.put("corrections_json", writeJson(report.get("corrections")));
+            }
+            if (report.get("reportKnowledge") != null) {
+                inputs.put("report_knowledge", writeJson(report.get("reportKnowledge")));
+            }
+            if (report.get("reportPath") != null) {
+                inputs.put("report_path", writeJson(report.get("reportPath")));
+            }
             sessionRepository.findByIdAndUserId(sessionId, userId).ifPresent(session -> {
-                inputs.put("experiment_code", session.getExperimentCode());
                 inputs.put("session_summary", formatSessionSummary(session));
             });
         } catch (ResponseStatusException ignored) {
             // session not accessible
+        }
+    }
+
+    private void attachReportDraftSections(Map<String, Object> inputs, String reportSectionsJson) {
+        if (reportSectionsJson == null || reportSectionsJson.isBlank()) {
+            return;
+        }
+        inputs.put("report_sections_json", reportSectionsJson);
+        try {
+            Map<String, Object> draft = objectMapper.readValue(reportSectionsJson, new TypeReference<>() {});
+            Object sections = draft.get("sections");
+            if (sections instanceof Map<?, ?> map) {
+                map.forEach((key, value) -> inputs.put(String.valueOf(key), stringValue(value)));
+            }
+            if (draft.get("filledKeys") != null) {
+                inputs.put("filled_section_keys", writeJson(draft.get("filledKeys")));
+            }
+            if (draft.get("wordCounts") != null) {
+                inputs.put("section_word_counts", writeJson(draft.get("wordCounts")));
+            }
+        } catch (Exception ignored) {
+            // draft parse failed
         }
     }
 

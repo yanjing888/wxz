@@ -47,6 +47,11 @@ public class LabSession {
 
     private LocalDateTime endTime;
 
+    /** 学生端是否已开启监控页摄像头预览（供教师端卡片显示） */
+    private boolean cameraActive = false;
+
+    private LocalDateTime cameraActiveAt;
+
     @Transient
     private String historyTitle;
 }

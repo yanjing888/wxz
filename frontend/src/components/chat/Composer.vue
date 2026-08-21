@@ -41,7 +41,14 @@
       </div>
 
       <div v-if="imagePreview" class="mb-2 flex items-center gap-2 p-1.5 bg-surface-soft rounded-lg border border-line-soft">
-        <img :src="imagePreview" alt="附件" class="w-10 h-10 object-cover rounded-md border border-line-soft" />
+        <button
+          type="button"
+          class="relative w-10 h-10 shrink-0 overflow-hidden rounded-md border border-line-soft bg-white cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+          title="放大查看"
+          @click="openImagePreview"
+        >
+          <img :src="imagePreview" alt="附件" class="w-full h-full object-cover" />
+        </button>
         <span class="text-[11px] text-ink-muted flex-1 leading-tight">{{ attachHint }}</span>
         <button
           type="button"
@@ -86,6 +93,23 @@
             </svg>
             拍照
           </button>
+          <button
+            type="button"
+            class="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-md transition-all btn-active-scale shrink-0 disabled:opacity-50"
+            :class="voiceRecording ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-ink-muted hover:text-brand-600 hover:bg-brand-50'"
+            :title="voiceTitle"
+            :disabled="readOnly || voiceTranscribing"
+            @click="toggleVoiceInput"
+          >
+            <svg v-if="voiceRecording" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="6" width="12" height="12" rx="1.8" />
+            </svg>
+            <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3.75a3 3 0 00-3 3v5.5a3 3 0 006 0v-5.5a3 3 0 00-3-3z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5.75 11.5a6.25 6.25 0 0012.5 0M12 17.75v2.5m-3 0h6" />
+            </svg>
+            {{ voiceButtonText }}
+          </button>
         </div>
         <button
           v-if="loadingAssist || submittingData"
@@ -108,13 +132,45 @@
           发送
         </button>
       </div>
+      <p
+        v-if="voiceHint"
+        class="mt-1.5 px-0.5 text-[11px] leading-relaxed"
+        :class="voiceError ? 'text-rose-500' : 'text-ink-faint'"
+      >
+        {{ voiceHint }}
+      </p>
       <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/bmp,.jpg,.jpeg,.png,.gif,.webp,.bmp" class="hidden" @change="onFileChange" />
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="previewOpen && imagePreview"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8"
+        @click.self="closeImagePreview"
+      >
+        <button
+          type="button"
+          class="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-xl text-white hover:bg-white/25"
+          aria-label="关闭预览"
+          @click="closeImagePreview"
+        >
+          ×
+        </button>
+        <img
+          :src="imagePreview"
+          alt="附件大图"
+          class="max-h-[90vh] max-w-full select-none rounded-lg object-contain shadow-2xl"
+          @click.stop
+        />
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { voiceApi } from '../../api'
+import { createWavRecorder } from '../../utils/voiceRecorder'
 
 const props = defineProps({
   loadingAssist: { type: Boolean, default: false },
@@ -133,6 +189,12 @@ const input = ref('')
 const fileInput = ref(null)
 const textareaRef = ref(null)
 const localSending = ref(false)
+const previewOpen = ref(false)
+const voiceRecording = ref(false)
+const voiceTranscribing = ref(false)
+const voiceError = ref('')
+const voiceStatus = ref('')
+const voiceRecorder = ref(null)
 
 const canSend = computed(() =>
   !props.readOnly
@@ -153,6 +215,20 @@ const inputPlaceholder = computed(() => {
   }
   return '问物小智：实验中遇到的问题，都可以在这里说…（Enter 发送，Shift+Enter 换行）'
 })
+
+const voiceButtonText = computed(() => {
+  if (voiceTranscribing.value) return '识别中'
+  if (voiceRecording.value) return '停止'
+  return '语音'
+})
+
+const voiceTitle = computed(() => {
+  if (voiceTranscribing.value) return '正在识别语音'
+  if (voiceRecording.value) return '停止录音并识别'
+  return '语音输入'
+})
+
+const voiceHint = computed(() => voiceError.value || voiceStatus.value)
 
 async function send() {
   if (!canSend.value || props.loadingAssist || props.submittingData || localSending.value) return
@@ -183,10 +259,83 @@ function triggerCapture() {
   emit('capture-image')
 }
 
+function openImagePreview() {
+  if (!props.imagePreview) return
+  previewOpen.value = true
+}
+
+function closeImagePreview() {
+  previewOpen.value = false
+}
+
+function onWindowKeydown(e) {
+  if (e.key === 'Escape') closeImagePreview()
+}
+
 function onSuggestion(text) {
   if (!text || props.loadingAssist || props.readOnly) return
   input.value = text
   nextTick(() => textareaRef.value?.focus())
+}
+
+function appendVoiceText(text) {
+  const recognized = String(text || '').trim()
+  if (!recognized) return
+  input.value = input.value.trim()
+    ? `${input.value.trimEnd()}\n${recognized}`
+    : recognized
+  nextTick(() => textareaRef.value?.focus())
+}
+
+async function startVoiceInput() {
+  if (props.readOnly || voiceRecording.value || voiceTranscribing.value) return
+  voiceError.value = ''
+  voiceStatus.value = '正在录音，点击“停止”后识别'
+  try {
+    voiceRecorder.value = await createWavRecorder({
+      onAutoStop: () => {
+        if (voiceRecording.value) stopVoiceInput()
+      }
+    })
+    voiceRecording.value = true
+  } catch (e) {
+    voiceRecorder.value = null
+    voiceStatus.value = ''
+    voiceError.value = e.message || '无法访问麦克风，请检查浏览器或 APK 权限'
+  }
+}
+
+async function stopVoiceInput() {
+  const recorder = voiceRecorder.value
+  if (!recorder || voiceTranscribing.value) return
+  voiceRecording.value = false
+  voiceTranscribing.value = true
+  voiceError.value = ''
+  voiceStatus.value = '正在识别语音…'
+  voiceRecorder.value = null
+  try {
+    const blob = await recorder.stop()
+    if (!blob || blob.size < 1024) {
+      throw new Error('没有录到有效语音，请靠近麦克风后重试')
+    }
+    const file = new File([blob], `voice-${Date.now()}.wav`, { type: 'audio/wav' })
+    const { data } = await voiceApi.transcribe(file)
+    appendVoiceText(data?.text || '')
+    voiceStatus.value = ''
+  } catch (e) {
+    voiceStatus.value = ''
+    voiceError.value = e.message || '语音识别失败，请稍后重试'
+  } finally {
+    voiceTranscribing.value = false
+  }
+}
+
+function toggleVoiceInput() {
+  if (voiceRecording.value) {
+    stopVoiceInput()
+  } else {
+    startVoiceInput()
+  }
 }
 
 function onFileChange(e) {
@@ -194,5 +343,22 @@ function onFileChange(e) {
   if (file) emit('upload-image', file)
   e.target.value = ''
 }
+
+watch(
+  () => props.imagePreview,
+  (value) => {
+    if (!value) closeImagePreview()
+  }
+)
+
+watch(previewOpen, (open) => {
+  if (open) window.addEventListener('keydown', onWindowKeydown)
+  else window.removeEventListener('keydown', onWindowKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onWindowKeydown)
+  voiceRecorder.value?.cancel()
+})
 
 </script>

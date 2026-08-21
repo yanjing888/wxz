@@ -115,7 +115,7 @@ import StagePanel from './StagePanel.vue'
 import { useAgentTool } from '../../composables/useAgentTool'
 import { sessionApi, studentFileApi, uploadApi } from '../../api'
 import { extractTable, parseStructuredData } from '../../utils/aiTool'
-import { parseSessionRows } from '../../utils/sessionReport'
+import { parseSessionDataResponse } from '../../utils/sessionReport'
 import {
   addColumn,
   addRow,
@@ -160,7 +160,7 @@ async function loadSessionTable() {
   if (!props.sessionId) return
   try {
     const { data } = await sessionApi.getData(props.sessionId)
-    sessionTable.value = tableFromSessionRows(parseSessionRows(data?.byStep))
+    sessionTable.value = tableFromSessionRows(parseSessionDataResponse(data))
   } catch {
     sessionTable.value = null
   }

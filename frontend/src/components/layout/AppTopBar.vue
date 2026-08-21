@@ -11,16 +11,18 @@
 
       <slot name="left-extra" />
 
-      <slot name="center">
-        <p v-if="center" class="header-center">{{ center }}</p>
-      </slot>
-
       <div class="user-area">
         <div class="user-avatar brand-gradient">{{ userInitial }}</div>
         <span class="user-name">{{ auth.displayName || auth.username }}</span>
         <span class="user-sep" aria-hidden="true" />
         <button type="button" class="logout-link" @click="emit('logout')">退出</button>
       </div>
+    </div>
+
+    <div class="header-center-slot">
+      <slot name="center">
+        <p v-if="center" class="header-center-text">{{ center }}</p>
+      </slot>
     </div>
   </header>
 </template>
@@ -47,12 +49,13 @@ const userInitial = computed(() => {
 <style scoped>
 .app-header {
   @apply shrink-0 bg-white border-b border-line-soft px-6;
+  position: relative;
 }
 .header-main {
   @apply flex items-center gap-4 h-14;
 }
 .brand-block {
-  @apply flex items-center gap-3 shrink-0;
+  @apply flex items-center gap-3 shrink-0 relative z-10;
 }
 .jyd-logo {
   @apply h-8 w-auto shrink-0 object-contain;
@@ -66,11 +69,26 @@ const userInitial = computed(() => {
 .brand-sub {
   @apply mt-0.5 text-[12px] text-ink-faint truncate;
 }
-.header-center {
-  @apply flex-1 flex items-center justify-center min-w-0;
+.header-center-slot {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+.header-center-slot > * {
+  pointer-events: auto;
+}
+.header-center-text {
+  @apply text-[14px] text-ink-muted font-medium;
 }
 .user-area {
-  @apply flex items-center gap-2.5 shrink-0 ml-auto;
+  @apply flex items-center gap-2.5 shrink-0 ml-auto relative z-10;
 }
 .user-avatar {
   @apply w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0;

@@ -44,7 +44,7 @@ experiments:
     steps: {}
 
   newton_rings:
-    name: "牛顿环实验"
+    name: "牛顿环法测定平凸透镜曲率半径"
     category: "optics"
     teaching:
       dataset: "teaching"
@@ -56,7 +56,7 @@ experiments:
       sectionKey: "newton_rings"
     steps:
       "1":
-        title: "仪器检查与光路调节"
+        title: "仪器摆放与光路装调"
         correctionMode: "vision"
         guide: "newton_rings/steps/1.md"
         teachingSection: "newton_rings.step.1.teaching"
@@ -67,7 +67,7 @@ experiments:
           - "光路调节"
           - "视觉纠错"
       "2":
-        title: "零级环心定位与视场居中"
+        title: "目镜视度调节与粗调成像"
         correctionMode: "vision"
         guide: "newton_rings/steps/2.md"
         teachingSection: "newton_rings.step.2.teaching"
@@ -75,7 +75,7 @@ experiments:
         retrievalTags:
           - "newton_rings"
           - "step:2"
-          - "环心定位"
+          - "调焦成像"
           - "视觉纠错"
       "3":
         title: "暗环直径测量"
@@ -90,7 +90,7 @@ experiments:
           - "读数"
           - "数据纠错"
       "4":
-        title: "曲率半径或波长计算"
+        title: "曲率半径计算"
         correctionMode: "data"
         guide: "newton_rings/steps/4.md"
         teachingSection: "newton_rings.step.4.teaching"
@@ -99,7 +99,145 @@ experiments:
           - "newton_rings"
           - "step:4"
           - "曲率半径"
-          - "波长计算"
+          - "数据纠错"
+      "5":
+        title: "实验结束整理"
+        correctionMode: "vision"
+        guide: "newton_rings/steps/5.md"
+        teachingSection: "newton_rings.step.5.teaching"
+        rulesSection: "newton_rings.step.5.rules"
+        retrievalTags:
+          - "newton_rings"
+          - "step:5"
+          - "仪器复原"
+          - "视觉纠错"
+
+  air_wedge_thickness:
+    name: "空气劈尖干涉测量薄片厚度"
+    category: "optics"
+    teaching:
+      dataset: "teaching"
+      doc: "air_wedge_thickness/teaching-knowledge.md"
+      sectionKey: "air_wedge_thickness"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "air_wedge_thickness/visual-rules.md"
+      sectionKey: "air_wedge_thickness"
+    steps:
+      "1":
+        title: "器件安放与光路调节"
+        correctionMode: "vision"
+        guide: "air_wedge_thickness/steps/1.md"
+        teachingSection: "air_wedge_thickness.step.1.teaching"
+        rulesSection: "air_wedge_thickness.step.1.rules"
+        retrievalTags:
+          - "air_wedge_thickness"
+          - "step:1"
+          - "劈尖安放"
+          - "光路调节"
+      "2":
+        title: "调焦与条纹校正"
+        correctionMode: "vision"
+        guide: "air_wedge_thickness/steps/2.md"
+        teachingSection: "air_wedge_thickness.step.2.teaching"
+        rulesSection: "air_wedge_thickness.step.2.rules"
+        retrievalTags:
+          - "air_wedge_thickness"
+          - "step:2"
+          - "条纹校正"
+          - "视觉纠错"
+      "3":
+        title: "测量数据采集"
+        correctionMode: "data"
+        guide: "air_wedge_thickness/steps/3.md"
+        teachingSection: "air_wedge_thickness.step.3.teaching"
+        rulesSection: "air_wedge_thickness.step.3.rules"
+        retrievalTags:
+          - "air_wedge_thickness"
+          - "step:3"
+          - "条纹计数"
+          - "L prime"
+          - "数据纠错"
+      "4":
+        title: "薄片厚度计算"
+        correctionMode: "data"
+        guide: "air_wedge_thickness/steps/4.md"
+        teachingSection: "air_wedge_thickness.step.4.teaching"
+        rulesSection: "air_wedge_thickness.step.4.rules"
+        retrievalTags:
+          - "air_wedge_thickness"
+          - "step:4"
+          - "薄片厚度"
+          - "数据纠错"
+      "5":
+        title: "仪器复原"
+        correctionMode: "vision"
+        guide: "air_wedge_thickness/steps/5.md"
+        teachingSection: "air_wedge_thickness.step.5.teaching"
+        rulesSection: "air_wedge_thickness.step.5.rules"
+        retrievalTags:
+          - "air_wedge_thickness"
+          - "step:5"
+          - "仪器复原"
+          - "视觉纠错"
+
+  microscope_length_measurement:
+    name: "读数显微镜微小长度直接测量练习"
+    category: "optics"
+    teaching:
+      dataset: "teaching"
+      doc: "microscope_length_measurement/teaching-knowledge.md"
+      sectionKey: "microscope_length_measurement"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "microscope_length_measurement/visual-rules.md"
+      sectionKey: "microscope_length_measurement"
+    steps:
+      "1":
+        title: "样品安放与照明"
+        correctionMode: "vision"
+        guide: "microscope_length_measurement/steps/1.md"
+        teachingSection: "microscope_length_measurement.step.1.teaching"
+        rulesSection: "microscope_length_measurement.step.1.rules"
+        retrievalTags:
+          - "microscope_length_measurement"
+          - "step:1"
+          - "样品安放"
+          - "照明"
+      "2":
+        title: "调焦与方向校正"
+        correctionMode: "vision"
+        guide: "microscope_length_measurement/steps/2.md"
+        teachingSection: "microscope_length_measurement.step.2.teaching"
+        rulesSection: "microscope_length_measurement.step.2.rules"
+        retrievalTags:
+          - "microscope_length_measurement"
+          - "step:2"
+          - "调焦"
+          - "方向校正"
+      "3":
+        title: "起终点读数"
+        correctionMode: "data"
+        guide: "microscope_length_measurement/steps/3.md"
+        teachingSection: "microscope_length_measurement.step.3.teaching"
+        rulesSection: "microscope_length_measurement.step.3.rules"
+        retrievalTags:
+          - "microscope_length_measurement"
+          - "step:3"
+          - "读数显微镜"
+          - "微小长度"
+          - "数据纠错"
+      "4":
+        title: "重复测量与平均"
+        correctionMode: "data"
+        guide: "microscope_length_measurement/steps/4.md"
+        teachingSection: "microscope_length_measurement.step.4.teaching"
+        rulesSection: "microscope_length_measurement.step.4.rules"
+        retrievalTags:
+          - "microscope_length_measurement"
+          - "step:4"
+          - "重复测量"
+          - "平均值"
           - "数据纠错"
 
   tensile_steel:

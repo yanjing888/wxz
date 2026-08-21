@@ -94,6 +94,24 @@ public class FileStorageService {
         return "/uploads/" + filename;
     }
 
+    public String storeImageBytes(byte[] bytes, String preferredExt) throws IOException {
+        if (bytes == null || bytes.length == 0) {
+            throw new IllegalArgumentException("图片文件为空");
+        }
+        String ext = extensionFromMagic(bytes);
+        if (ext.isEmpty()) {
+            String normalized = preferredExt == null ? "" : preferredExt.toLowerCase(Locale.ROOT).trim();
+            if (!normalized.startsWith(".")) {
+                normalized = "." + normalized;
+            }
+            ext = ALLOWED_EXT.contains(normalized) ? normalized : ".jpg";
+        }
+        String filename = UUID.randomUUID() + ext;
+        Path target = uploadRoot.resolve(filename);
+        Files.write(target, bytes);
+        return "/uploads/" + filename;
+    }
+
     public Path resolve(String urlPath) {
         if (urlPath == null || !urlPath.startsWith("/uploads/")) {
             throw new IllegalArgumentException("Invalid upload path");

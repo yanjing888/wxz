@@ -22,7 +22,7 @@ workflow:
     name: WXZ_BACKEND_BASE_URL
     value: http://127.0.0.1:8082
     value_type: string
-    description: 物小智后端地址，HTTP 节点拉取 /api/experiments/{code}
+    description: 物小智后端地址，HTTP 节点拉取 /api/public/experiments/{code}
   features:
     file_upload:
       allowed_file_extensions:
@@ -54,7 +54,7 @@ workflow:
         - local_file
         - remote_url
       number_limits: 3
-    opening_statement: 你好，我是物小智实验台助教。我会先理解你的问题类型，再结合当前实验步骤与知识库回答；上传图片会做分步视觉纠错并标注问题区域。
+    opening_statement: 你好，我是物小智实验台助教。我会结合你当前的实验与步骤回答问题；上传图片会做视觉纠错并在图上标注问题区域。
     retriever_resource:
       enabled: true
     sensitive_word_avoidance:
@@ -63,8 +63,9 @@ workflow:
       enabled: false
     suggested_questions:
     - 牛顿环实验里为什么要保持同一方向读数？
-    - 我上传一张牛顿环视场照片，请帮我判断环心和十字丝是否对准。
-    - 暗环直径测量时怎样避免把弦长当成直径？
+    - 空气劈尖测量时，L 和 L′ 分别代表什么？
+    - 读数显微镜主尺和鼓轮小数怎么合读？
+    - 我上传一张当前步骤照片，请帮我看看操作有没有问题。
     suggested_questions_after_answer:
       enabled: true
     text_to_speech:
@@ -293,26 +294,15 @@ workflow:
         sourceType: llm
         targetType: code
       zIndex: 0
-    - id: 1781000000001-param
+    - id: 1781000000001-fb
       source: '1781000000001'
-      sourceHandle: source
-      target: '1779960945383'
-      targetHandle: target
-      type: custom
-      data:
-        isInIteration: false
-        sourceType: code
-        targetType: parameter-extractor
-      zIndex: 0
-    - id: 1779960945383-fb
-      source: '1779960945383'
       sourceHandle: source
       target: '1779858712451'
       targetHandle: target
       type: custom
       data:
         isInIteration: false
-        sourceType: parameter-extractor
+        sourceType: code
         targetType: llm
       zIndex: 0
     - id: 1779858712451-pv
@@ -455,101 +445,17 @@ workflow:
           required: false
           max_length: 48
           options: []
-        - label: 教学文档标识
-          variable: teaching_doc
-          type: text-input
-          required: false
-          max_length: 128
-          options: []
-        - label: 纠错文档标识
-          variable: rules_doc
-          type: text-input
-          required: false
-          max_length: 128
-          options: []
-        - label: 教学章节标识
-          variable: teaching_section
-          type: text-input
-          required: false
-          max_length: 128
-          options: []
-        - label: 纠错章节标识
-          variable: rules_section
-          type: text-input
-          required: false
-          max_length: 128
-          options: []
-        - label: 检索标签
-          variable: retrieval_tags
-          type: text-input
-          required: false
-          max_length: 256
-          options: []
-        - label: 后端预检索上下文
-          variable: kb_context
+        - label: 当前步骤教程
+          variable: step_guide
           type: paragraph
           required: false
-          max_length: 8000
+          max_length: 4000
           options: []
-        - label: 重复求助提示
-          variable: repeat_hint
-          type: paragraph
-          required: false
-          max_length: 500
-          options: []
-        - label: 知识类型
-          variable: knowledge_type
+        - label: 步骤纠错模式
+          variable: step_correction_mode
           type: text-input
           required: false
-          max_length: 48
-          options: []
-        - label: 教学文档标识
-          variable: teaching_doc
-          type: text-input
-          required: false
-          max_length: 128
-          options: []
-        - label: 纠错文档标识
-          variable: rules_doc
-          type: text-input
-          required: false
-          max_length: 128
-          options: []
-        - label: 教学章节标识
-          variable: teaching_section
-          type: text-input
-          required: false
-          max_length: 128
-          options: []
-        - label: 纠错章节标识
-          variable: rules_section
-          type: text-input
-          required: false
-          max_length: 128
-          options: []
-        - label: 检索标签
-          variable: retrieval_tags
-          type: text-input
-          required: false
-          max_length: 256
-          options: []
-        - label: 后端预检索上下文
-          variable: kb_context
-          type: paragraph
-          required: false
-          max_length: 8000
-          options: []
-        - label: 重复求助提示
-          variable: repeat_hint
-          type: paragraph
-          required: false
-          max_length: 500
-          options: []
-        - label: 知识类型
-          variable: knowledge_type
-          type: text-input
-          required: false
-          max_length: 48
+          max_length: 16
           options: []
       height: 343
       id: '1779853028414'
@@ -567,21 +473,23 @@ workflow:
     - data:
         code: "def _clean(value):\n    if value is None:\n        return \"\"\n    return str(value).strip()\n\n\ndef main(\n\
           \    query=\"\",\n    image_name=\"\",\n    image_url=\"\",\n    experiment_code=\"\",\n    experiment_type=\"\"\
-          ,\n    category=\"\",\n    step_id=\"\",\n    step_title=\"\",\n    step_desc=\"\",\n    correction_mode=\"\",\n\
-          \    data_json=\"\",\n    teaching_section=\"\",\n    rules_section=\"\",\n    retrieval_tags=\"\",\n    knowledge_type=\"\
-          \",\n):\n    query = _clean(query)\n    experiment_code = _clean(experiment_code) or \"newton_rings\"\n    experiment_type\
-          \ = _clean(experiment_type) or \"牛顿环实验\"\n    category = (_clean(category) or \"auto\").lower()\n    correction_mode\
+          ,\n    category=\"\",\n    step_id=\"\",\n    step_title=\"\",\n    step_desc=\"\",\n    step_guide=\"\",\n    step_correction_mode=\"\
+          \",\n    correction_mode=\"\",\n    data_json=\"\",\n    teaching_section=\"\",\n    rules_section=\"\",\n    retrieval_tags=\"\
+          \",\n    knowledge_type=\"\",\n):\n    query = _clean(query)\n    experiment_code = _clean(experiment_code)\n  \
+          \  experiment_type = _clean(experiment_type)\n    category = (_clean(category) or \"auto\").lower()\n    correction_mode\
           \ = (_clean(correction_mode) or \"auto\").lower()\n    step_id = _clean(step_id)\n    step_title = _clean(step_title)\n\
-          \    step_desc = _clean(step_desc)\n    data_json = _clean(data_json)\n\n    has_image = bool(_clean(image_name)\
-          \ or _clean(image_url))\n    mode = \"vision\" if (has_image or correction_mode == \"vision\" or category == \"\
-          vision\") else \"text\"\n\n    if not query:\n        if mode == \"vision\":\n            query = \"请根据当前实验和当前步骤，对上传图片进行视觉纠错。\"\
-          \n        elif data_json:\n            query = \"请根据当前实验和当前步骤，检查这些实验记录或数据是否合理，并给出指导建议。\"\n        else:\n      \
-          \      query = \"请结合当前实验步骤和知识库，回答我的问题并给出操作指导。\"\n\n    return {\n        \"mode\": mode,\n        \"query\": query,\n\
-          \        \"experiment_code\": experiment_code,\n        \"experiment_type\": experiment_type,\n        \"category\"\
-          : category,\n        \"step_id\": step_id,\n        \"step_title\": step_title,\n        \"step_desc\": step_desc,\n\
-          \        \"data_json\": data_json,\n        \"teaching_section\": _clean(teaching_section),\n        \"rules_section\"\
-          : _clean(rules_section),\n        \"retrieval_tags\": _clean(retrieval_tags),\n        \"knowledge_type\": _clean(knowledge_type),\n\
-          \        \"fetch_url\": f\"/api/experiments/{experiment_code}\" if experiment_code else \"\",\n    }\n"
+          \    step_desc = _clean(step_desc)\n    step_guide = _clean(step_guide)\n    step_correction_mode = _clean(step_correction_mode)\n\
+          \    data_json = _clean(data_json)\n\n    has_image = bool(_clean(image_name) or _clean(image_url))\n    mode =\
+          \ \"vision\" if (has_image or correction_mode == \"vision\" or category == \"vision\") else \"text\"\n\n    if not\
+          \ query:\n        if mode == \"vision\":\n            query = \"请根据当前实验和当前步骤，对上传图片进行视觉纠错。\"\n        elif data_json:\n\
+          \            query = \"请根据当前实验和当前步骤，检查这些实验记录或数据是否合理，并给出指导建议。\"\n        else:\n            query = \"请结合当前实验步骤和知识库，回答我的问题并给出操作指导。\"\
+          \n\n    return {\n        \"mode\": mode,\n        \"query\": query,\n        \"experiment_code\": experiment_code,\n\
+          \        \"experiment_type\": experiment_type,\n        \"category\": category,\n        \"step_id\": step_id,\n\
+          \        \"step_title\": step_title,\n        \"step_desc\": step_desc,\n        \"step_guide\": step_guide,\n \
+          \       \"step_correction_mode\": step_correction_mode,\n        \"data_json\": data_json,\n        \"teaching_section\"\
+          : _clean(teaching_section),\n        \"rules_section\": _clean(rules_section),\n        \"retrieval_tags\": _clean(retrieval_tags),\n\
+          \        \"knowledge_type\": _clean(knowledge_type),\n        \"fetch_url\": f\"/api/public/experiments/{experiment_code}\"\
+          \ if experiment_code else \"\",\n    }\n"
         code_language: python3
         outputs:
           category:
@@ -630,6 +538,12 @@ workflow:
             type: string
             children: null
           knowledge_type:
+            type: string
+            children: null
+          step_guide:
+            type: string
+            children: null
+          step_correction_mode:
             type: string
             children: null
         selected: false
@@ -703,6 +617,14 @@ workflow:
           value_selector:
           - '1779853028414'
           - knowledge_type
+        - variable: step_guide
+          value_selector:
+          - '1779853028414'
+          - step_guide
+        - variable: step_correction_mode
+          value_selector:
+          - '1779853028414'
+          - step_correction_mode
       height: 52
       id: '1779854194447'
       position:
@@ -767,39 +689,54 @@ workflow:
         code: "import json\n\n\ndef _clean(v):\n    if v is None:\n        return \"\"\n    return str(v).strip()\n\n\ndef\
           \ _pick_step(steps, step_id):\n    if not isinstance(steps, dict) or not step_id:\n        return {}\n    if step_id\
           \ in steps:\n        return steps.get(step_id) or {}\n    for key in (step_id, str(int(step_id)) if step_id.isdigit()\
-          \ else step_id):\n        if key in steps:\n            return steps.get(key) or {}\n    return {}\n\n\ndef main(\n\
-          \    mode=\"text\",\n    query=\"\",\n    experiment_code=\"\",\n    experiment_type=\"\",\n    step_id=\"\",\n\
-          \    step_title=\"\",\n    step_desc=\"\",\n    data_json=\"\",\n    teaching_section=\"\",\n    rules_section=\"\
-          \",\n    retrieval_tags=\"\",\n    kb_context=\"\",\n    repeat_hint=\"\",\n    http_body=\"\",\n):\n    mode =\
-          \ _clean(mode) or \"text\"\n    query = _clean(query)\n    experiment_code = _clean(experiment_code) or \"newton_rings\"\
-          \n    experiment_type = _clean(experiment_type) or \"牛顿环实验\"\n    step_id = _clean(step_id)\n    step_title = _clean(step_title)\n\
-          \    step_desc = _clean(step_desc)\n    data_json = _clean(data_json)\n    teaching_section = _clean(teaching_section)\n\
+          \ else step_id):\n        if key in steps:\n            return steps.get(key) or {}\n    return {}\n\n\ndef _format_tut_guide(tut):\n\
+          \    if not isinstance(tut, dict):\n        return \"\"\n    lines = []\n    steps = tut.get(\"steps\") or []\n\
+          \    warnings = tut.get(\"warnings\") or []\n    if steps:\n        lines.append(\"操作要点:\")\n        for item in\
+          \ steps:\n            lines.append(f\"- {item}\")\n    if warnings:\n        lines.append(\"注意:\")\n        for\
+          \ item in warnings:\n            lines.append(f\"- {item}\")\n    return \"\\n\".join(lines)\n\n\ndef main(\n  \
+          \  mode=\"text\",\n    query=\"\",\n    experiment_code=\"\",\n    experiment_type=\"\",\n    step_id=\"\",\n  \
+          \  step_title=\"\",\n    step_desc=\"\",\n    step_guide=\"\",\n    step_correction_mode=\"\",\n    data_json=\"\
+          \",\n    teaching_section=\"\",\n    rules_section=\"\",\n    retrieval_tags=\"\",\n    kb_context=\"\",\n    repeat_hint=\"\
+          \",\n    http_body=\"\",\n):\n    mode = _clean(mode) or \"text\"\n    query = _clean(query)\n    experiment_code\
+          \ = _clean(experiment_code)\n    experiment_type = _clean(experiment_type)\n    step_id = _clean(step_id)\n    step_title\
+          \ = _clean(step_title)\n    step_desc = _clean(step_desc)\n    step_guide = _clean(step_guide)\n    step_correction_mode\
+          \ = _clean(step_correction_mode)\n    data_json = _clean(data_json)\n    teaching_section = _clean(teaching_section)\n\
           \    rules_section = _clean(rules_section)\n    retrieval_tags = _clean(retrieval_tags)\n    kb_context = _clean(kb_context)\n\
-          \    repeat_hint = _clean(repeat_hint)\n\n    step_guide = \"\"\n    correction_mode_step = \"\"\n    body = _clean(http_body)\n\
+          \    repeat_hint = _clean(repeat_hint)\n\n    correction_mode_step = step_correction_mode\n    body = _clean(http_body)\n\
           \    if body:\n        try:\n            cfg = json.loads(body)\n            steps = cfg.get(\"steps\") or {}\n\
           \            step = _pick_step(steps, step_id)\n            if not step_title:\n                step_title = _clean(step.get(\"\
-          title\"))\n            if not step_desc:\n                step_desc = _clean(step.get(\"desc\"))\n            step_guide\
-          \ = _clean(step.get(\"guide\"))\n            correction_mode_step = _clean(step.get(\"correctionMode\"))\n     \
-          \   except Exception:\n            pass\n\n    step_part = \" \".join(x for x in [f\"step:{step_id}\" if step_id\
-          \ else \"\", step_title, step_desc] if x)\n    tag_part = retrieval_tags or experiment_code\n    section_teaching\
-          \ = teaching_section or (f\"{experiment_code}.step.{step_id}.teaching\" if step_id else experiment_code)\n    section_rules\
-          \ = rules_section or (f\"{experiment_code}.step.{step_id}.rules\" if step_id else experiment_code)\n\n    data_part\
-          \ = f\" data:{data_json[:800]}\" if data_json else \"\"\n    base = f\"{experiment_type} {experiment_code} {step_part}\
-          \ {tag_part} {query}{data_part}\"\n\n    if mode == \"vision\":\n        retrieval_query_teaching = f\"{base} 步骤目标\
-          \ 仪器要求 操作背景 {section_teaching}\"\n        retrieval_query_rules = f\"{base} 视觉纠错 rule_id severity evidence fix_instruction\
-          \ {section_rules}\"\n    else:\n        retrieval_query_teaching = f\"{base} 实验原理 操作步骤 数据处理 仪器使用 {section_teaching}\"\
-          \n        retrieval_query_rules = f\"{base} 操作错误 读数方法 记录规范 数据纠错 {section_rules}\"\n\n    context_block = \"\\n\"\
-          .join(\n        x\n        for x in [\n            f\"实验: {experiment_type} ({experiment_code})\",\n           \
-          \ f\"步骤: {step_id} {step_title}\".strip(),\n            f\"步骤说明: {step_desc}\" if step_desc else \"\",\n       \
-          \     f\"步骤纠错模式: {correction_mode_step}\" if correction_mode_step else \"\",\n            f\"步骤教程摘要: {step_guide[:1200]}\"\
+          title\"))\n            if not step_desc:\n                step_desc = _clean(step.get(\"desc\"))\n            if\
+          \ not step_guide:\n                step_guide = _format_tut_guide(step.get(\"tut\") or {})\n            if not correction_mode_step:\n\
+          \                correction_mode_step = _clean(step.get(\"correctionMode\"))\n        except Exception:\n      \
+          \      pass\n\n    step_part = \" \".join(x for x in [f\"step:{step_id}\" if step_id else \"\", step_title, step_desc]\
+          \ if x)\n    tag_part = retrieval_tags or experiment_code\n    section_teaching = teaching_section or (f\"{experiment_code}.step.{step_id}.teaching\"\
+          \ if step_id else experiment_code)\n    section_rules = rules_section or (f\"{experiment_code}.step.{step_id}.rules\"\
+          \ if step_id else experiment_code)\n\n    data_part = f\" data:{data_json[:800]}\" if data_json else \"\"\n    base\
+          \ = f\"{experiment_type} {experiment_code} {step_part} {tag_part} {query}{data_part}\"\n\n    if mode == \"vision\"\
+          :\n        retrieval_query_teaching = f\"{base} 步骤目标 仪器要求 操作背景 {section_teaching}\"\n        retrieval_query_rules\
+          \ = f\"{base} 视觉纠错 rule_id severity evidence fix_instruction {section_rules}\"\n    else:\n        retrieval_query_teaching\
+          \ = f\"{base} 实验原理 操作步骤 数据处理 仪器使用 {section_teaching}\"\n        retrieval_query_rules = f\"{base} 操作错误 读数方法 记录规范\
+          \ 数据纠错 {section_rules}\"\n\n    if experiment_code and step_id and (step_title or step_guide or step_desc):\n  \
+          \      context_quality = \"full\"\n    elif experiment_code or experiment_type:\n        context_quality = \"partial\"\
+          \n    else:\n        context_quality = \"minimal\"\n\n    if context_quality == \"minimal\":\n        fallback_note\
+          \ = (\n            \"【上下文降级】实验/步骤参数未完整传入。\"\n            \"请从用户问题、检索结果识别实验（牛顿环 newton_rings / 空气劈尖 air_wedge_thickness\
+          \ / 读数显微镜 microscope_length_measurement），\"\n            \"按大学物理实验常规给指导；需要步骤细节时提示学生确认当前步骤或上传照片。\"\n        )\n \
+          \   elif context_quality == \"partial\":\n        fallback_note = (\n            \"【上下文部分】已有实验信息但步骤可能不全。\"\n   \
+          \         f\"优先围绕实验 {experiment_type or experiment_code} 回答；\"\n            \"若问题指向具体操作，给该操作指导，并说明「若不在此步骤，请切换到对应步骤后再问」。\"\
+          \n        )\n    else:\n        fallback_note = \"\"\n\n    context_block = \"\\n\".join(\n        x\n        for\
+          \ x in [\n            f\"上下文完整度: {context_quality}\",\n            f\"实验: {experiment_type} ({experiment_code})\"\
+          .strip() if (experiment_type or experiment_code) else \"\",\n            f\"步骤: {step_id} {step_title}\".strip()\
+          \ if (step_id or step_title) else \"\",\n            f\"步骤说明: {step_desc}\" if step_desc else \"\",\n          \
+          \  f\"步骤纠错模式: {correction_mode_step}\" if correction_mode_step else \"\",\n            f\"步骤教程摘要: {step_guide[:1200]}\"\
           \ if step_guide else \"\",\n            f\"后端预检索 kb_context:\\n{kb_context[:2000]}\" if kb_context else \"\",\n\
-          \            f\"重复求助提示: {repeat_hint}\" if repeat_hint else \"\",\n        ]\n        if x\n    )\n\n    return\
-          \ {\n        \"mode\": mode,\n        \"query\": query,\n        \"experiment_code\": experiment_code,\n       \
-          \ \"experiment_type\": experiment_type,\n        \"step_id\": step_id,\n        \"step_title\": step_title,\n  \
-          \      \"step_desc\": step_desc,\n        \"data_json\": data_json,\n        \"retrieval_query_teaching\": retrieval_query_teaching,\n\
-          \        \"retrieval_query_rules\": retrieval_query_rules,\n        \"step_context\": context_block,\n        \"\
-          metadata_experiment_code\": experiment_code,\n        \"metadata_step_id\": step_id or \"0\",\n        \"metadata_teaching_section\"\
-          : section_teaching,\n        \"metadata_rules_section\": section_rules,\n    }\n"
+          \            f\"重复求助提示: {repeat_hint}\" if repeat_hint else \"\",\n            fallback_note,\n        ]\n     \
+          \   if x\n    )\n\n    return {\n        \"mode\": mode,\n        \"query\": query,\n        \"experiment_code\"\
+          : experiment_code,\n        \"experiment_type\": experiment_type,\n        \"step_id\": step_id,\n        \"step_title\"\
+          : step_title,\n        \"step_desc\": step_desc,\n        \"data_json\": data_json,\n        \"retrieval_query_teaching\"\
+          : retrieval_query_teaching,\n        \"retrieval_query_rules\": retrieval_query_rules,\n        \"step_context\"\
+          : context_block,\n        \"context_quality\": context_quality,\n        \"metadata_experiment_code\": experiment_code\
+          \ or \"general\",\n        \"metadata_step_id\": step_id or \"0\",\n        \"metadata_teaching_section\": section_teaching,\n\
+          \        \"metadata_rules_section\": section_rules,\n    }\n"
         outputs:
           mode:
             type: string
@@ -832,6 +769,9 @@ workflow:
             type: string
             children: null
           step_context:
+            type: string
+            children: null
+          context_quality:
             type: string
             children: null
           metadata_experiment_code:
@@ -875,6 +815,14 @@ workflow:
           value_selector:
           - '1779854194447'
           - step_desc
+        - variable: step_guide
+          value_selector:
+          - '1779853028414'
+          - step_guide
+        - variable: step_correction_mode
+          value_selector:
+          - '1779853028414'
+          - step_correction_mode
         - variable: data_json
           value_selector:
           - '1779854194447'
@@ -946,7 +894,8 @@ workflow:
       data:
         title: 问题分类器
         type: question-classifier
-        instruction: 判断用户问题与当前大学物理实验场景的关系。1=与实验无关；2=原理/概念/报告类；3=操作/仪器/读数/数据记录/现场问题。
+        instruction: 你是物小智问题路由器。若 query 无实验线索，可结合用户表述推断是否为大学物理实验。1=与实验无关（闲聊、其他学科、且无法推断为实验问题）；2=原理/概念/公式/报告写法；3=操作/仪器/读数/数据/现象/纠错。问题中出现牛顿环、劈尖、读数显微镜、干涉、空程差等，优先选
+          2 或 3 而非 1。
         instructions: ''
         query_variable_selector:
         - '1790000000001'
@@ -983,7 +932,13 @@ workflow:
       data:
         title: 回复：非实验问题
         type: answer
-        answer: 我主要负责**当前大学物理实验**的现场指导与纠错。请围绕本实验的步骤、仪器、读数、数据或现象提问；如需看操作是否正确，可上传当前步骤照片。
+        answer: '我主要负责**大学物理实验**现场指导与纠错（牛顿环、空气劈尖、读数显微镜等）。
+
+
+          请围绕当前实验的**操作、读数、数据或现象**提问；需要检查操作是否正确，可**上传当前步骤照片**。
+
+
+          若你在做其中某个实验，也可以直接说实验名和你的问题。'
         variables: []
     - id: '1790000000107'
       type: custom
@@ -1012,12 +967,16 @@ workflow:
         prompt_template:
         - id: prompt-1790000000107
           role: system
-          text: "你是物小智检索 query 改写器。根据当前实验步骤和用户问题，输出 JSON（不要 Markdown 代码块）：\n\n{{#1790000000001.step_context#}}\n\n用户问题：{{#1790000000001.query#}}\n\
-            实验数据 JSON：{{#1790000000001.data_json#}}\n\n默认教学检索 query：{{#1790000000001.retrieval_query_teaching#}}\n默认规则检索 query：{{#1790000000001.retrieval_query_rules#}}\n\
-            \n输出格式：\n{\n  \"intent\": \"principle | operation | data_check | off_topic\",\n  \"teaching_query\": \"面向教学知识库的检索句，含实验名、步骤、关键词\"\
-            ,\n  \"rules_query\": \"面向纠错规则库的检索句，含步骤、错误类型、仪器名\"\n}\n\n要求：\n1. teaching_query / rules_query 各 1 句，中文，40–120\
-            \ 字。\n2. 原理类问题 intent=principle，rules_query 可偏「常见误区」。\n3. 有 data_json 时 intent=data_check，rules_query 偏数据/单位/记录。\n\
-            4. 明显与物理实验无关 intent=off_topic。"
+          text: "你是物小智·检索 query 改写器，服务于大学物理实验台（Chatflow 文本分支）。\n\n## 当前上下文\n{{#1790000000001.step_context#}}\n\n## 用户输入\n\
+            - 用户问题：{{#1790000000001.query#}}\n- 实验数据 JSON：{{#1790000000001.data_json#}}\n- 默认教学检索 query：{{#1790000000001.retrieval_query_teaching#}}\n\
+            - 默认规则检索 query：{{#1790000000001.retrieval_query_rules#}}\n\n## 平台实验（上下文缺失时可从问题中匹配）\n- newton_rings：牛顿环法测定平凸透镜曲率半径（JCD-3\
+            \ 读数显微镜、干涉环、暗环直径、曲率半径）\n- air_wedge_thickness：空气劈尖干涉测量薄片厚度（直条纹、L/L′、条纹计数 n′）\n- microscope_length_measurement：读数显微镜微小长度直接测量（主尺+鼓轮合读、空程差）\n\
+            \n## 任务\n输出 JSON（不要 Markdown 代码块），用于双库检索：\n{\n  \"intent\": \"principle | operation | data_check | off_topic\"\
+            ,\n  \"teaching_query\": \"面向教学库的检索句\",\n  \"rules_query\": \"面向纠错规则库的检索句\"\n}\n\n## 改写要求\n1. teaching_query /\
+            \ rules_query 各 1 句中文，40–120 字；必须含实验名或 experiment_code、步骤号/步骤名（若有）、问题核心词。\n2. intent=principle：原理/公式/报告写法；rules_query\
+            \ 偏「常见误区、单位、公式用错」。\n3. intent=operation：操作/仪器/读数/现象；rules_query 偏「操作错误、读数方法、空程差、光路/调焦」。\n4. 有 data_json 或用户在核对数据：intent=data_check；rules_query\
+            \ 偏「数据记录、单位换算、公式代入、合理范围」。\n5. 上下文完整度为 minimal/partial 时：从用户问题推断最可能实验，在两条 query 中显式写出实验中文名与关键词；禁止输出空字符串。\n6. 明显与大学物理实验无关（闲聊、其他学科）：intent=off_topic，两条\
+            \ query 可简短但仍含「大学物理实验」。\n7. 不要输出除 JSON 以外的任何文字。"
         context:
           enabled: false
           variable_selector: []
@@ -1110,9 +1069,6 @@ workflow:
           - name: experiment_code
             comparison_operator: is
             value: '{{#1790000000001.metadata_experiment_code#}}'
-          - name: kb_type
-            comparison_operator: is
-            value: teaching
         selected: false
     - id: '1781000000106'
       type: custom
@@ -1151,9 +1107,6 @@ workflow:
           - name: experiment_code
             comparison_operator: is
             value: '{{#1790000000001.metadata_experiment_code#}}'
-          - name: kb_type
-            comparison_operator: is
-            value: correction_rule
         selected: false
     - id: '1790000000113'
       type: custom
@@ -1234,26 +1187,78 @@ workflow:
         prompt_template:
         - id: prompt-1779858308963
           role: system
-          text: '你是物小智·大学物理实验助教（初稿）。只输出分析草稿，不必过度润色。
+          text: '你是物小智·大学物理实验助教（初稿生成器）。你的输出会被下一节点润色后给学生，请写**分析草稿**而非最终短答。
 
+
+            ## 角色与边界
+
+            - 身份：现场实验助教，同时能做**操作指导**与**数据/操作纠错**（文字侧，无图）。
+
+            - 服务对象：正在做实验的本科生。
+
+            - 禁止：声称看见现场/图片；写「根据知识库/检索结果」；代写完整实验报告；编造未给出的测量数据。
+
+
+            ## 当前上下文与检索材料
 
             {{#1790000000113.output#}}
 
 
-            用户问题：{{#1790000000001.query#}}
+            ## 用户问题
 
-            实验数据 JSON：{{#1790000000001.data_json#}}
+            {{#1790000000001.query#}}
 
 
-            草稿要求：
+            ## 实验数据（若有）
 
-            1. 严格围绕当前实验与步骤。
+            {{#1790000000001.data_json#}}
 
-            2. 结构：【判断】【要点】【下一步】。
 
-            3. 有 data_json 则增加【数据疑点】；无图不得声称看见现场。
+            ## 回答策略（按上下文完整度）
 
-            4. 禁止写「根据知识库」。'
+            - **full**：严格围绕 step_context 中的实验、步骤、纠错模式（vision/data）回答。
+
+            - **partial**：实验已知、步骤不全时，先答用户问题，再提示「请确认当前步骤编号或看左侧步骤条」。
+
+            - **minimal**：从问题+检索片段推断实验（牛顿环/空气劈尖/读数显微镜）；给通用但可执行的指导；明确说明「未收到完整实验步骤参数，以下为根据问题推断的建议」。
+
+
+            ## 意图分支（结合检索意图 intent）
+
+            - principle：讲清原理/公式/符号含义/报告怎么写，联系当前实验。
+
+            - operation：分步骤说明怎么操作、仪器怎么调、读数注意什么；可指出常见错误。
+
+            - data_check：对照 data_json 查单位、公式、数量级、记录格式；列出疑点和改法。
+
+            - 若检索片段为空：仍基于 step_context 与问题给保守指导，不要拒答。
+
+
+            ## 草稿结构（Markdown）
+
+            必须包含：
+
+            1. **【判断】** 一句话：问题类型 + 当前实验/步骤（或推断的实验）
+
+            2. **【要点】** 2–4 条，操作指导或纠错点
+
+            3. **【下一步】** 一条可立即执行的动作
+
+            4. 有 data_json 时增加 **【数据疑点】**
+
+            5. 需要看图才能确认时，写「请上传当前步骤照片以便视觉纠错」
+
+
+            ## 实验纠错要点（文字侧，无图时）
+
+            - 读数：空程差、单向读数、主尺+鼓轮合读、弦长≠直径
+
+            - 光学：光路/调焦顺序（先叉丝后样品）、反光镜、条纹/环纹
+
+            - 数据：单位（nm/mm/μm）、公式漏因子、平均与重复测量
+
+
+            只输出草稿正文，不必过度润色。'
         context:
           enabled: false
           variable_selector: []
@@ -1295,29 +1300,42 @@ workflow:
         prompt_template:
         - id: prompt-1790000000112
           role: system
-          text: '你是物小智·回答质检员。把初稿改成学生现场可直接执行的短答（Markdown）。
+          text: '你是物小智·回答质检员。将初稿改为学生**在实验台边 30 秒内能看完并执行**的 Markdown 短答。
 
+
+            ## 现场上下文
 
             {{#1790000000001.step_context#}}
 
 
-            用户问题：{{#1790000000001.query#}}
+            ## 用户问题
+
+            {{#1790000000001.query#}}
 
 
-            初稿：
+            ## 初稿
 
             {{#1779858308963.text#}}
 
 
-            要求：
+            ## 质检要求
 
-            1. 保留正确内容，删除空话和重复。
+            1. **准确性**：保留初稿正确内容；删除空话、重复、过度原理推导；不与 step_context 中实验/步骤明显矛盾。
 
-            2. 最终 150–350 字为主；列表不超过 4 条。
+            2. **上下文降级**：若上下文完整度为 partial/minimal，保留初稿中的合理推断，但用一句话提醒学生确认实验与步骤；仍要给可执行建议，不要只叫学生「信息不足」。
 
-            3. 必须含一句「下一步」可执行指令。
+            3. **长度**：150–350 字为主；列表 ≤4 条；公式最多 1 个，必要时用 plain 文字解释符号。
 
-            4. 需要看图确认的问题，明确提示上传当前步骤照片。'
+            4. **结构**：必须含 **下一步**（加粗或单独一行），一条动作指令。
+
+            5. **指导 vs 纠错**：操作问题偏「怎么做」；数据/记录问题偏「哪里可能错了+怎么改」；两者可兼有但别写成报告腔。
+
+            6. **无图**：不得写「从图上看」；若需看图，明确说「请上传当前步骤照片」。
+
+            7. **语气**：短句、直接、像助教口头提醒；禁止「根据知识库」。
+
+
+            直接输出最终 Markdown，不要解释质检过程。'
         context:
           enabled: false
           variable_selector: []
@@ -1379,9 +1397,6 @@ workflow:
           - name: experiment_code
             comparison_operator: is
             value: '{{#1790000000001.metadata_experiment_code#}}'
-          - name: kb_type
-            comparison_operator: is
-            value: correction_rule
         selected: false
     - id: '1781000000103'
       type: custom
@@ -1420,9 +1435,6 @@ workflow:
           - name: experiment_code
             comparison_operator: is
             value: '{{#1790000000001.metadata_experiment_code#}}'
-          - name: kb_type
-            comparison_operator: is
-            value: teaching
         selected: false
     - id: '1790000000115'
       type: custom
@@ -1494,12 +1506,17 @@ workflow:
         prompt_template:
         - id: prompt-1779858136115
           role: system
-          text: "你是物小智·视觉纠错专家。只输出 JSON（无 Markdown、无代码块）。\n\n{{#1790000000115.output#}}\n\n用户问题：{{#1790000000001.query#}}\n\
-            \n规则：只判可见问题；无关图 is_step_related=false；issue_id 优先用规则库 rule_id；regions 坐标 0–1000。\n\n输出 JSON：\n{\n  \"experiment\"\
-            : \"{{#1790000000001.experiment_type#}}\",\n  \"experiment_code\": \"{{#1790000000001.experiment_code#}}\",\n\
-            \  \"step_id\": \"{{#1790000000001.step_id#}}\",\n  \"step_title\": \"{{#1790000000001.step_title#}}\",\n  \"\
-            is_step_related\": true,\n  \"summary\": \"\",\n  \"issues\": [],\n  \"regions\": [],\n  \"next_action\": \"\"\
-            \n}"
+          text: "你是物小智·视觉纠错专家（多模态）。根据**上传图片可见内容**、当前实验/步骤上下文与检索规则，输出**纯 JSON**（无 Markdown、无代码块、无解释文字）。\n\n## 检索与步骤上下文\n{{#1790000000115.output#}}\n\
+            \n## 用户问题\n{{#1790000000001.query#}}\n\n## 角色与硬规则\n1. **只判可见**：仅报告图片中能直接看到的操作、仪器状态、读数界面、记录表等问题；看不见的不臆测。\n2. **步骤相关**：图片明显与当前实验/大学物理实验无关\
+            \ → is_step_related=false，issues 为空，regions 为空，summary 说明原因。\n3. **上下文降级**：experiment_code/step 为空时，从图片+问题推断实验（牛顿环/空气劈尖/读数显微镜），在\
+            \ summary 中说明推断；仍只对可见内容判错。\n4. **rule_id**：issues[].issue_id 优先使用检索规则中的 rule_id（如 NR_STEP1_xxx）；无匹配时用「实验缩写_STEP步号_VIS_简述」格式自编。\n\
+            5. **regions**：0–1000 归一化坐标；只框具体错误区域；无法定位则不画框；不得框满整图。\n6. **severity**：高/中/低；**confidence**：0–1。\n\n## issues\
+            \ 每项字段\nissue_id, error_type, severity, description, evidence, fix_instruction, confidence, region_ref（对应 regions\
+            \ 序号，从 1 开始，无框则省略）\n\n## 输出 JSON  schema\n{\n  \"experiment\": \"实验中文名\",\n  \"experiment_code\": \"{{#1790000000001.experiment_code#}}\"\
+            ,\n  \"step_id\": \"{{#1790000000001.step_id#}}\",\n  \"step_title\": \"{{#1790000000001.step_title#}}\",\n  \"\
+            is_step_related\": true,\n  \"summary\": \"一句话概括图内容与总体判断\",\n  \"issues\": [],\n  \"regions\": [\n    {\"topLeftX\"\
+            : 0, \"topLeftY\": 0, \"bottomRightX\": 0, \"bottomRightY\": 0, \"label\": \"问题简述\"}\n  ],\n  \"next_action\"\
+            : \"一条可执行的下一步操作\"\n}\n\n无可见问题时：issues=[]，regions=[]，summary 写「未发现明显可见错误（或图片不足以判断）」，next_action 给继续实验的建议。"
         context:
           enabled: false
           variable_selector: []
@@ -1594,51 +1611,6 @@ workflow:
       targetPosition: left
       type: custom
       width: 242
-    - data:
-        instruction: '从输入的视觉纠错 JSON 中提取 regions 字段。
-
-          要求：
-
-          1. 只返回一个 JSON 对象，形如 {"regions": [...]}。
-
-          2. regions 数组中的每个元素保留 topLeftX、topLeftY、bottomRightX、bottomRightY、label。
-
-          3. 如果 regions 不存在、不是数组或为空，返回 {"regions": []}。
-
-          4. 不要输出 Markdown，不要输出解释文字。'
-        model:
-          completion_params:
-            temperature: 0.7
-          mode: chat
-          name: qwen3.6-plus
-          provider: langgenius/tongyi/tongyi
-        parameters:
-        - description: 视觉纠错区域框，坐标为 0-1000 归一化坐标。
-          name: regions
-          required: false
-          type: array[object]
-        query:
-        - '1781000000001'
-        - vision_json
-        reasoning_mode: prompt
-        selected: false
-        title: 参数提取器：regions
-        type: parameter-extractor
-        vision:
-          enabled: false
-      height: 88
-      id: '1779960945383'
-      position:
-        x: 2160
-        y: 340
-      positionAbsolute:
-        x: 2160
-        y: 340
-      selected: false
-      sourcePosition: right
-      targetPosition: left
-      type: custom
-      width: 242
     - id: '1779858712451'
       type: custom
       width: 242
@@ -1666,15 +1638,40 @@ workflow:
         prompt_template:
         - id: prompt-1779858712451
           role: system
-          text: '把视觉纠错 JSON 转成 Markdown 反馈。
+          text: '你是物小智·视觉纠错反馈撰写员。将视觉 JSON 转为学生可读的 Markdown（不是 JSON）。
 
 
-            步骤：{{#1790000000001.step_id#}} {{#1790000000001.step_title#}}
+            ## 步骤
+
+            {{#1790000000001.step_id#}} {{#1790000000001.step_title#}}
 
 
-            视觉 JSON：
+            ## 步骤上下文
 
-            {{#1781000000001.vision_json#}}'
+            {{#1790000000001.step_context#}}
+
+
+            ## 视觉 JSON
+
+            {{#1781000000001.vision_json#}}
+
+
+            ## 输出结构
+
+            1. **总体判断**（1–2 句，来自 summary；若 is_step_related=false 说明图片与实验关系）
+
+            2. **发现的问题**（每个 issue 一小段：错误类型 + 可见证据 + 改法；severity 高的问题放前面）
+
+            3. **下一步建议**（来自 next_action，单独成段）
+
+
+            ## 要求
+
+            - 用第二人称「你」；不要输出 JSON；不要编造 JSON 中没有的问题。
+
+            - 无 issues 时写「未发现明显可见错误」，仍给 next_action。
+
+            - 上下文 partial/minimal 时，可提示「请确认当前实验步骤是否与图片一致」。'
         context:
           enabled: false
           variable_selector: []
@@ -1708,18 +1705,33 @@ workflow:
         prompt_template:
         - id: prompt-1790000000114
           role: system
-          text: '质检并精简视觉纠错反馈（Markdown）。
+          text: '你是物小智·视觉反馈质检员。精简视觉纠错 Markdown，供实验台现场阅读。
 
+
+            ## 步骤上下文
 
             {{#1790000000001.step_context#}}
 
 
-            反馈初稿：
+            ## 反馈初稿
 
             {{#1779858712451.text#}}
 
 
-            要求：保留问题/证据/改法；无问题则明确写「未发现明显可见错误」；结尾保留「下一步建议」；150–400 字。'
+            ## 要求
+
+            1. 保留：问题描述、可见证据、具体改法、下一步；删除重复和套话。
+
+            2. 长度 150–400 字；问题列表 ≤3 条；每条含「怎么改」。
+
+            3. 无问题时明确写「未发现明显可见错误」，并保留建设性的下一步。
+
+            4. 不要提及 JSON、知识库、模型；语气像现场助教。
+
+            5. 上下文不完整时，加一句提醒确认实验/步骤，但不要因此删掉有效纠错内容。
+
+
+            直接输出最终 Markdown。'
         context:
           enabled: false
           variable_selector: []

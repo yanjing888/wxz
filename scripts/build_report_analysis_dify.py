@@ -8,6 +8,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 OUT_ASCII = ROOT / "docs" / "dify" / "wuxiaozhi-report-analysis-rich.yml"
 OUT_ZH = ROOT / "docs" / "dify" / "物小智学生实验报告分析-丰富节点完整版.yml"
+OUT_BRANCHED = ROOT / "docs" / "dify" / "wuxiaozhi-report-assist-branched.yml"
 
 
 def node(node_id, title, node_type, x, y, **data):
@@ -292,6 +293,227 @@ FINAL_PROMPT = """你是物小智学生实验报告分析总控。请把前面�
 4. 不输出最终成绩，不替学生写思考题完整答案。"""
 
 
+TABLE_PROMPT = """你是大学物理实验报告数据整理助手。
+
+实验：{{#parse.experiment_name#}}
+数据记录 JSON：
+{{#parse.data_logs_json#}}
+
+用户问题：{{#parse.query#}}
+
+请把测量数据整理成 **Markdown 表格**（可直接粘贴进报告）：
+1. 按实验步骤分组，每组一个表
+2. 表头用中文物理量名与单位
+3. 若 JSON 中缺字段，用「—」占位并说明
+4. 表格后附 1–2 句还可补充的计算/不确定度列建议
+禁止虚构测量值。"""
+
+
+GENERAL_PROMPT = """你是大学物理实验报告写作助手。
+
+实验：{{#parse.experiment_name#}}
+用户问题：{{#parse.query#}}
+
+报告草稿：
+{{#parse.full_report#}}
+
+过程数据 JSON：{{#parse.data_logs_json#}}
+纠错 JSON：{{#parse.corrections_json#}}
+风险标记：{{#metrics.risk_flags#}}
+
+请用中文分点回答，结合学生草稿与过程数据，不编造未出现的测量值。"""
+
+
+def _start_variables():
+    return [
+        {"label": "动作", "variable": "action", "type": "text-input", "required": False, "max_length": 32, "options": []},
+        {"label": "实验代码", "variable": "experiment_code", "type": "text-input", "required": False, "max_length": 64, "options": []},
+        {"label": "实验名称", "variable": "experiment_name", "type": "text-input", "required": False, "max_length": 128, "options": []},
+        {"label": "章节 key", "variable": "section", "type": "text-input", "required": False, "max_length": 64, "options": []},
+        {"label": "章节名", "variable": "sectionLabel", "type": "text-input", "required": False, "max_length": 128, "options": []},
+        {"label": "当前段正文", "variable": "text", "type": "paragraph", "required": False, "max_length": 6000, "options": []},
+        {"label": "本地检查摘要", "variable": "localCheckSummary", "type": "paragraph", "required": False, "max_length": 3000, "options": []},
+        *[
+            {"label": label, "variable": key, "type": "paragraph", "required": False, "max_length": 6000, "options": []}
+            for key, label in [
+                ("purpose", "实验目的"),
+                ("principle", "实验原理"),
+                ("apparatus", "实验仪器"),
+                ("procedure", "实验步骤"),
+                ("data", "数据与处理"),
+                ("results", "实验结果"),
+                ("discussion", "分析与讨论"),
+            ]
+        ],
+        {"label": "报告上下文", "variable": "report_context", "type": "paragraph", "required": False, "max_length": 12000, "options": []},
+        {"label": "数据记录 JSON", "variable": "data_logs_json", "type": "paragraph", "required": False, "max_length": 8000, "options": []},
+        {"label": "纠错记录 JSON", "variable": "corrections_json", "type": "paragraph", "required": False, "max_length": 8000, "options": []},
+        {"label": "步骤 JSON", "variable": "step_summaries_json", "type": "paragraph", "required": False, "max_length": 8000, "options": []},
+        {"label": "会话摘要", "variable": "session_summary", "type": "paragraph", "required": False, "max_length": 3000, "options": []},
+        {"label": "已填章节", "variable": "filled_section_keys", "type": "text-input", "required": False, "max_length": 256, "options": []},
+        {"label": "对话历史", "variable": "chat_history", "type": "paragraph", "required": False, "max_length": 4000, "options": []},
+    ]
+
+
+def _parse_node():
+    return node(
+        "parse",
+        "输入解析",
+        "code",
+        360,
+        300,
+        code_language="python3",
+        code=PARSE_CODE,
+        variables=[{"variable": name, "value_selector": ["start", name]} for name in [
+            "action", "experiment_code", "experiment_name", "section", "sectionLabel", "text",
+            "localCheckSummary", "purpose", "principle", "apparatus", "procedure", "data",
+            "results", "discussion", "report_context", "data_logs_json", "corrections_json",
+            "step_summaries_json", "session_summary",
+        ]] + [{"variable": "query", "value_selector": ["sys", "query"]}],
+        outputs={key: {"type": "string", "children": None} for key in [
+            "action", "query", "experiment_code", "experiment_name", "section", "section_label",
+            "target_text", "full_report", "local_check_summary", "report_context_text",
+            "data_logs_json", "corrections_json", "step_summaries_json", "session_summary",
+        ]},
+    )
+
+
+def _metrics_node():
+    return node(
+        "metrics",
+        "报告指标",
+        "code",
+        640,
+        300,
+        code_language="python3",
+        code=METRICS_CODE,
+        variables=[
+            {"variable": "full_report", "value_selector": ["parse", "full_report"]},
+            {"variable": "data_logs_json", "value_selector": ["parse", "data_logs_json"]},
+            {"variable": "corrections_json", "value_selector": ["parse", "corrections_json"]},
+            {"variable": "local_check_summary", "value_selector": ["parse", "local_check_summary"]},
+            {"variable": "target_text", "value_selector": ["parse", "target_text"]},
+        ],
+        outputs={
+            "word_count": {"type": "number", "children": None},
+            "section_count": {"type": "number", "children": None},
+            "data_log_count": {"type": "number", "children": None},
+            "correction_count": {"type": "number", "children": None},
+            "has_uncertainty": {"type": "boolean", "children": None},
+            "has_unit": {"type": "boolean", "children": None},
+            "risk_flags": {"type": "string", "children": None},
+            "local_check_summary": {"type": "string", "children": None},
+        },
+    )
+
+
+def _llm_node(node_id, title, y, prompt):
+    return node(
+        node_id,
+        title,
+        "llm",
+        1500,
+        y,
+        model={"provider": "langgenius/tongyi/tongyi", "name": "qwen-plus", "mode": "chat", "completion_params": {"temperature": 0.25}},
+        prompt_template=llm_prompt(prompt),
+        context={"enabled": False, "variable_selector": []},
+        vision={"enabled": False},
+    )
+
+
+def build_branched():
+    """多分支版：问题分类器 → 4 条互斥 LLM 支路 → 汇总回答。每次只跑一条支路。"""
+    start = node("start", "开始：报告输入", "start", 80, 300, variables=_start_variables())
+    parse = _parse_node()
+    metrics = _metrics_node()
+    classifier = node(
+        "classifier",
+        "报告意图分类",
+        "question-classifier",
+        920,
+        280,
+        instruction=(
+            "你是物小智报告助手路由器。根据用户问题选择最匹配的分支："
+            "1=检查报告完整性、还缺什么章节；"
+            "2=误差分析、不确定度、分析与讨论；"
+            "3=把测量数据整理成表格；"
+            "4=段落润色、写法建议或其他综合问题。"
+            "若同时涉及多项，选最主要的一项。"
+        ),
+        instructions="",
+        query_variable_selector=["parse", "query"],
+        classes=[
+            {"id": "1", "name": "检查报告完整性、还缺什么、遗漏章节"},
+            {"id": "2", "name": "误差分析、不确定度、分析与讨论"},
+            {"id": "3", "name": "整理测量数据为 Markdown 表格"},
+            {"id": "4", "name": "段落润色、写法建议或其他综合问题"},
+        ],
+        model={"provider": "langgenius/tongyi/tongyi", "name": "qwen-plus", "mode": "chat", "completion_params": {"temperature": 0.1}},
+        vision={"enabled": False},
+    )
+    llm_check = _llm_node("llm_check", "分支：完整性检查", 80, COMPLETENESS_PROMPT)
+    llm_error = _llm_node("llm_error", "分支：误差分析", 240, ERROR_PROMPT)
+    llm_table = _llm_node("llm_table", "分支：数据表格", 400, TABLE_PROMPT)
+    llm_general = _llm_node("llm_general", "分支：综合/润色", 560, GENERAL_PROMPT)
+    answer = node(
+        "answer",
+        "回答",
+        "answer",
+        1780,
+        300,
+        answer="{{#llm_check.text#}}{{#llm_error.text#}}{{#llm_table.text#}}{{#llm_general.text#}}",
+        variables=[],
+    )
+
+    nodes = [start, parse, metrics, classifier, llm_check, llm_error, llm_table, llm_general, answer]
+    edges = [
+        edge("start-parse", "start", "parse", "start", "code"),
+        edge("parse-metrics", "parse", "metrics", "code", "code"),
+        edge("metrics-classifier", "metrics", "classifier", "code", "question-classifier"),
+        edge("cls-check", "classifier", "llm_check", "question-classifier", "llm", handle="1"),
+        edge("cls-error", "classifier", "llm_error", "question-classifier", "llm", handle="2"),
+        edge("cls-table", "classifier", "llm_table", "question-classifier", "llm", handle="3"),
+        edge("cls-general", "classifier", "llm_general", "question-classifier", "llm", handle="4"),
+        edge("check-answer", "llm_check", "answer", "llm", "answer"),
+        edge("error-answer", "llm_error", "answer", "llm", "answer"),
+        edge("table-answer", "llm_table", "answer", "llm", "answer"),
+        edge("general-answer", "llm_general", "answer", "llm", "answer"),
+    ]
+
+    return {
+        "app": {
+            "name": "物小智学生实验报告助手-多分支版",
+            "description": "学生端 report-assist：问题分类器路由到完整性/误差/表格/综合四条互斥支路，每次只执行一条 LLM。",
+            "mode": "advanced-chat",
+            "icon_type": "emoji",
+            "icon": "📝",
+            "icon_background": "#E0F2FE",
+            "use_icon_as_answer_icon": False,
+        },
+        "kind": "app",
+        "version": "0.6.0",
+        "workflow": {
+            "conversation_variables": [],
+            "environment_variables": [],
+            "features": {
+                "opening_statement": "你好，我是物小智报告助手。我可以检查报告缺项、整理误差分析、生成数据表格，或润色段落。",
+                "suggested_questions": [
+                    "帮我检查报告还缺什么",
+                    "根据本次实验记录，帮我整理误差分析思路",
+                    "帮我把测量数据整理成表格",
+                ],
+                "suggested_questions_after_answer": {"enabled": True},
+                "speech_to_text": {"enabled": False},
+                "text_to_speech": {"enabled": False, "language": "", "voice": ""},
+                "retriever_resource": {"enabled": True},
+                "sensitive_word_avoidance": {"enabled": False},
+                "file_upload": {"enabled": False, "allowed_file_types": [], "allowed_file_extensions": [], "allowed_file_upload_methods": [], "number_limits": 0},
+            },
+            "graph": {"edges": edges, "nodes": nodes},
+        },
+    }
+
+
 def build():
     start = node(
         "start",
@@ -440,14 +662,19 @@ def build():
 
 
 def main():
-    data = build()
-    dumped = yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=120)
+    rich = build()
+    dumped = yaml.safe_dump(rich, allow_unicode=True, sort_keys=False, width=120)
     for path in (OUT_ASCII, OUT_ZH):
         path.write_text(dumped, encoding="utf-8")
         parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
-        assert parsed["app"]["name"] == data["app"]["name"]
+        assert parsed["app"]["name"] == rich["app"]["name"]
     print(f"wrote {OUT_ASCII}")
     print(f"wrote {OUT_ZH}")
+
+    branched = build_branched()
+    branched_dump = yaml.safe_dump(branched, allow_unicode=True, sort_keys=False, width=120)
+    OUT_BRANCHED.write_text(branched_dump, encoding="utf-8")
+    print(f"wrote {OUT_BRANCHED}")
 
 
 if __name__ == "__main__":

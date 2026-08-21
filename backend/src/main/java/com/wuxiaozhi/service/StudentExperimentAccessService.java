@@ -20,7 +20,11 @@ import java.util.stream.Collectors;
 public class StudentExperimentAccessService {
 
     private static final String DEFAULT_STUDENT_USERNAME = "test01";
-    private static final String DEFAULT_EXPERIMENT = "newton_rings";
+    private static final List<String> DEFAULT_EXPERIMENTS = List.of(
+            "newton_rings",
+            "air_wedge_thickness",
+            "microscope_length_measurement"
+    );
 
     private final StudentExperimentAssignmentRepository assignmentRepository;
     private final UserRepository userRepository;
@@ -34,12 +38,14 @@ public class StudentExperimentAccessService {
     @PostConstruct
     public void ensureDefaultStudentAssignment() {
         userRepository.findByUsername(DEFAULT_STUDENT_USERNAME).ifPresent(user -> {
-            if (!assignmentRepository.existsByUserIdAndExperimentCode(user.getId(), DEFAULT_EXPERIMENT)) {
-                StudentExperimentAssignment assignment = new StudentExperimentAssignment();
-                assignment.setUserId(user.getId());
-                assignment.setExperimentCode(DEFAULT_EXPERIMENT);
-                assignment.setAssignedByUserId(user.getId());
-                assignmentRepository.save(assignment);
+            for (String code : DEFAULT_EXPERIMENTS) {
+                if (!assignmentRepository.existsByUserIdAndExperimentCode(user.getId(), code)) {
+                    StudentExperimentAssignment assignment = new StudentExperimentAssignment();
+                    assignment.setUserId(user.getId());
+                    assignment.setExperimentCode(code);
+                    assignment.setAssignedByUserId(user.getId());
+                    assignmentRepository.save(assignment);
+                }
             }
         });
     }

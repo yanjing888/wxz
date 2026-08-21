@@ -35,6 +35,7 @@
             :src="msg.image"
             :alt="msg.role === 'ai' && msg.annotated ? '纠错标注图' : '用户上传图片'"
             class="max-w-full max-h-48 rounded-xl border border-line-soft object-contain bg-white"
+            @load="onMediaLoad"
             @error="onImageError($event, msg)"
           />
         </div>
@@ -103,7 +104,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { renderChatMarkdown } from '../../utils/markdown'
 import { useLabStore } from '../../stores/lab'
 
@@ -137,6 +138,8 @@ const aiBubbleClass = 'w-[min(78%,680px)] bg-white text-ink-base border-line-sof
 const userBubbleClass = 'max-w-[88%] brand-gradient-soft text-ink-base border-brand-100 rounded-tr-sm text-[12px]'
 
 const hasStreaming = computed(() => props.messages.some(m => m.streaming))
+
+onMounted(() => scrollToBottom(false))
 
 watch(() => props.messages.length, () => scrollToBottom(true))
 
@@ -175,6 +178,10 @@ function onImageError(event, msg) {
     return
   }
   el.alt = '图片无法预览'
+}
+
+function onMediaLoad() {
+  scrollToBottom(false)
 }
 
 function canRate(msg) {

@@ -86,7 +86,13 @@ python scripts/build_step_aware_dify_workflow.py
 |------|--------|--------|
 | general | `docs/visual-rules/general.md` | 待完善 |
 | newton_rings | ✅ 完整 | ✅ 完整 |
+| air_wedge_thickness | ✅ step 章节 | ✅ step 章节 |
+| microscope_length_measurement | ✅ step 章节 | ✅ step 章节 |
 | tensile_steel | 建设中 | 建设中 |
+
+## Dify 工作流导入
+
+详见 [SETUP-GUIDANCE-WORKFLOW.md](../dify/SETUP-GUIDANCE-WORKFLOW.md)
 
 ## 规则 ID 命名
 

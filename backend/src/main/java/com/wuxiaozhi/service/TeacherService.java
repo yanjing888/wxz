@@ -306,6 +306,7 @@ public class TeacherService {
         }
         row.setPriority(priority);
         row.setPriorityReason(reason);
+        row.setCameraActive(labSessionService.isCameraActiveEffective(session));
         return row;
     }
 

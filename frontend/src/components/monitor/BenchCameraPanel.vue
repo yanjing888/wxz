@@ -11,7 +11,7 @@
         <video
           v-show="camUiActive && camReady"
           ref="videoRef"
-          class="absolute inset-0 w-full h-full object-cover"
+          class="absolute inset-0 w-full h-full object-contain object-center bg-black"
           playsinline
           muted
         />
@@ -172,7 +172,7 @@ const props = defineProps({
   benchCamera: { type: Object, default: null }
 })
 
-const emit = defineEmits(['toggle-env', 'env-check'])
+const emit = defineEmits(['toggle-env', 'env-check', 'camera-ui-change'])
 
 const camUiActive = ref(false)
 const camReady = ref(false)
@@ -192,13 +192,13 @@ const configuredCamera = computed(() => {
 })
 
 const displayHint = computed(() => {
-  if (!props.envCheckAvailable) return 'Dify 安全监测服务不可用'
+  if (!props.envCheckAvailable) return '智能安全巡检服务不可用'
   if (!props.envCheckEnabled) return '巡检已暂停，可手动立即检查'
   return briefSummary(props.envHint) || '暂无异常'
 })
 
 const envToggleTitle = computed(() => {
-  if (!props.envCheckAvailable) return 'Dify 安全监测服务不可用，无法开启自动巡检'
+  if (!props.envCheckAvailable) return '智能安全巡检服务不可用，无法开启自动巡检'
   return props.envCheckEnabled ? '已开启自动巡检（约 1 分钟 / 次），点击关闭' : '已关闭自动巡检，点击开启'
 })
 
@@ -283,6 +283,10 @@ function startLiveBufferMonitor(video) {
   }, 500)
 }
 
+function notifyCameraUi(active) {
+  emit('camera-ui-change', { active: !!active })
+}
+
 async function startCamUi() {
   camError.value = ''
   camUiActive.value = true
@@ -301,12 +305,14 @@ async function startConfiguredCamera(camera) {
 
   if (!camera.browserStreamUrl) {
     camUiActive.value = false
-    return
+    notifyCameraUi(false)
     camError.value = '已配置 RTSP 地址，但浏览器不能直接播放 RTSP；请配置 browserStreamUrl 后再预览'
+    return
   }
 
   if (!flvjs.isSupported()) {
     camUiActive.value = false
+    notifyCameraUi(false)
     camError.value = '当前浏览器不支持 FLV 实时预览，请换用 Chrome/Edge 最新版或配置 HLS/WebRTC 播放地址'
     return
   }
@@ -347,10 +353,12 @@ async function startConfiguredCamera(camera) {
     startLiveBufferMonitor(video)
     await waitForVideoFrame(video, 7000)
     camReady.value = true
+    notifyCameraUi(true)
   } catch (e) {
     stopMediaTracks()
     camUiActive.value = false
     camReady.value = false
+    notifyCameraUi(false)
     camError.value = '无法播放实验台摄像头视频流，请确认摄像头在线或检查配置地址'
   }
 }
@@ -360,6 +368,7 @@ async function startLocalCamera() {
   if (!navigator.mediaDevices?.getUserMedia) {
     camError.value = '当前浏览器不支持摄像头，无法抽帧巡检'
     camUiActive.value = false
+    notifyCameraUi(false)
     return
   }
 
@@ -379,10 +388,12 @@ async function startLocalCamera() {
     await video.play()
     await waitForVideoFrame(video)
     camReady.value = true
+    notifyCameraUi(true)
   } catch (e) {
     stopMediaTracks()
     camUiActive.value = false
     camReady.value = false
+    notifyCameraUi(false)
     camError.value = e?.name === 'NotAllowedError'
       ? '请允许摄像头权限后再开启监控'
       : '无法打开摄像头，请检查设备或权限'
@@ -394,6 +405,7 @@ function stopCamUi() {
   stopMediaTracks()
   camUiActive.value = false
   camReady.value = false
+  notifyCameraUi(false)
 }
 
 async function openExpanded() {
@@ -496,5 +508,6 @@ defineExpose({ captureFrame, ensureCameraReady, camUiActive, camReady })
 
 .bench-camera-preview.fixed video {
   object-fit: contain;
+  object-position: center;
 }
 </style>

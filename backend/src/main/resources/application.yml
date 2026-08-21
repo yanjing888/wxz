@@ -37,6 +37,18 @@ wuxiaozhi:
     protocol: rtsp
     rtsp-url: ${BENCH_CAMERA_RTSP_URL:rtsp://admin:admin@${BENCH_CAMERA_IP:188.18.31.195}/live/chn=0}
     browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:/ws/hdl/hlsram/live0.flv}
+  uvc-camera:
+    enabled: ${UVC_CAMERA_ENABLED:true}
+    label: 牛顿环 UVC 成像相机
+    python-command: ${UVC_CAMERA_PYTHON:python}
+    script-path: ${UVC_CAMERA_SCRIPT:scripts/uvc_capture_server.py}
+    host: ${UVC_CAMERA_HOST:127.0.0.1}
+    port: ${UVC_CAMERA_PORT:8765}
+    index: ${UVC_CAMERA_INDEX:1}
+    backend: ${UVC_CAMERA_BACKEND:dshow}
+    width: ${UVC_CAMERA_WIDTH:1920}
+    height: ${UVC_CAMERA_HEIGHT:1080}
+    fps: ${UVC_CAMERA_FPS:30}
   experiments:
     config-dir: classpath:experiments/
   ai-tools:
@@ -174,6 +186,7 @@ wuxiaozhi:
       lab-recap: ${DIFY_WF_LAB_RECAP:${DIFY_WF_REPORT_ASSIST:${DIFY_WF_TEXT_ASSIST:}}}
       lab-brief: ${DIFY_WF_PRE_LAB:${DIFY_WF_TEXT_ASSIST:}}
       instrument-guide: ${DIFY_WF_INSTRUMENT_READING:${DIFY_WF_TEXT_ASSIST:}}
+      voice-input: ${DIFY_VOICE_INPUT_API_KEY:${DIFY_WF_VOICE_INPUT:${DIFY_WF_TEXT_ASSIST:${DIFY_API_KEY:}}}}
       instrument-reading: ${DIFY_WF_INSTRUMENT_READING:}
       data-doctor: ${DIFY_WF_DATA_DOCTOR:${DIFY_WF_DATA_LAB:}}
       error-trace: ${DIFY_WF_ERROR_TRACE:}

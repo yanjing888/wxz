@@ -1,11 +1,27 @@
 import { defineStore } from 'pinia'
 import { experimentApi, feedbackApi, sessionApi, studentFileApi, systemApi, uploadApi } from '../api'
+import { mediaUrl } from '../api/runtime'
 import { sniffImageMime, readFileAsDataUrl } from '../utils/imageFile'
 import { blobToFile, composeMarkedImage } from '../utils/markedImage'
 import { buildComposerDataAttachment, formatDataValuesSummary } from '../utils/composerData'
+import { countSessionDataLogs, normalizeSessionDataByStep } from '../utils/sessionReport'
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function sessionStorageKey(experimentCode) {
+  return `wxz_session_${experimentCode || ''}`
+}
+
+function readStoredSessionId(experimentCode) {
+  const raw = Number(localStorage.getItem(sessionStorageKey(experimentCode)))
+  return Number.isFinite(raw) && raw > 0 ? raw : 0
+}
+
+function persistStoredSessionId(session) {
+  if (!session?.id || !session.experimentCode) return
+  localStorage.setItem(sessionStorageKey(session.experimentCode), String(session.id))
 }
 
 function briefEnvSummary(text, maxLen = 80) {
@@ -23,7 +39,7 @@ const WELCOME_MESSAGE = `<div class="welcome-guide">
   <p class="welcome-guide-title">卡住就直接问我，或拍一张现场照片——不用先选工具。</p>
   <div class="welcome-guide-row"><strong>操作</strong><span>描述现象或拍照，我告诉你下一步怎么做。</span></div>
   <div class="welcome-guide-row"><strong>读数</strong><span>左侧可「拍照获取读数」，确认后再记入。</span></div>
-  <div class="welcome-guide-row"><strong>数据</strong><span>进「数据核验」看提交记录、纠错结果和补测提示。</span></div>
+  <div class="welcome-guide-row"><strong>数据</strong><span>左侧表单或拍照读数提交；右侧「我的数据」查看记录。</span></div>
   <p class="welcome-guide-foot">你也可以点上方推荐问题开始。</p>
 </div>`
 
@@ -126,11 +142,13 @@ export const useLabStore = defineStore('lab', {
     _envEnsureCamFn: null,
     tutViewCount: 0,
     uploadingImage: false,
+    ccdCaptureBusy: false,
     loadingAssist: false,
     assistStreamAbort: null,
     uploadSeq: 0,
     uploadError: '',
     sessionDataByStep: {},
+    sessionDataRevision: 0,
     submittingData: false,
     dataSubmitErrors: [],
     deviceConnected: false,
@@ -202,7 +220,8 @@ export const useLabStore = defineStore('lab', {
       return step?.dataSource === 'device'
     },
     canCaptureCcdImage(state) {
-      return state.experiment?.code === 'newton_rings'
+      return ['newton_rings', 'air_wedge_thickness', 'microscope_length_measurement']
+        .includes(state.experiment?.code)
     },
     composerDataReady(state) {
       return !!state.composerDataAttachment?.values
@@ -218,11 +237,20 @@ export const useLabStore = defineStore('lab', {
     currentDataFields(state) {
       return state.experiment?.steps?.[String(state.activeStep)]?.dataFields || []
     },
-    currentStepDataValues(state) {
-      return state.sessionDataByStep[String(state.activeStep)]?.values || {}
+    currentStepDataRows(state) {
+      return state.sessionDataByStep[String(state.activeStep)]?.rows || []
     },
-    currentStepDataSaved(state) {
-      return !!state.sessionDataByStep[String(state.activeStep)]?.feedback
+    currentStepHasSubmissions(state) {
+      return (state.sessionDataByStep[String(state.activeStep)]?.rows || []).length > 0
+    },
+    sessionDataLogCount(state) {
+      return countSessionDataLogs(state.sessionDataByStep)
+    },
+    currentStepDataValues() {
+      return {}
+    },
+    currentStepDataSaved() {
+      return this.currentStepHasSubmissions
     },
     stepCount(state) {
       return state.experiment?.menuLabels?.length || 5
@@ -253,7 +281,7 @@ export const useLabStore = defineStore('lab', {
   actions: {
     async loadExperiments() {
       const { data } = await experimentApi.list()
-      const order = ['newton_rings', 'tensile_steel', 'general']
+      const order = ['newton_rings', 'air_wedge_thickness', 'microscope_length_measurement']
       this.experiments = [...(data || [])].sort((a, b) => {
         const ia = order.indexOf(a.code)
         const ib = order.indexOf(b.code)
@@ -330,6 +358,32 @@ export const useLabStore = defineStore('lab', {
         throw e
       }
     },
+    async getResumeSession(experimentCode) {
+      try {
+        const { data } = await sessionApi.resume(experimentCode)
+        return data || null
+      } catch (e) {
+        if (e.response?.status === 404) return null
+        throw e
+      }
+    },
+    async restoreSessionForExperiment(experimentCode, { forceNew = false } = {}) {
+      const code = (experimentCode || '').trim()
+      if (!code || forceNew) return null
+
+      const savedId = readStoredSessionId(code)
+      if (savedId) {
+        const ok = await this.resumeSession(savedId)
+        if (ok) return this.session
+      }
+
+      const resumed = await this.getResumeSession(code)
+      if (resumed) {
+        await this.resumeSession(resumed)
+        return this.session
+      }
+      return null
+    },
     async loadBenchCamera() {
       try {
         const { data } = await systemApi.benchCamera()
@@ -337,6 +391,24 @@ export const useLabStore = defineStore('lab', {
       } catch {
         this.benchCamera = null
       }
+    },
+    async reportCameraActive(active) {
+      if (!this.session?.id) return
+      const key = `wxz_monitor_cam_${this.session.id}`
+      if (active) {
+        localStorage.setItem(key, '1')
+      } else {
+        localStorage.removeItem(key)
+      }
+      try {
+        await sessionApi.updateCameraStatus(this.session.id, { active: !!active })
+      } catch {
+        // 上报失败不阻断监控
+      }
+    },
+    shouldRestoreMonitorCamera() {
+      if (!this.session?.id) return false
+      return localStorage.getItem(`wxz_monitor_cam_${this.session.id}`) === '1'
     },
     async loadDifyStatus({ silent = false } = {}) {
       if (this._difyStatusPromise) return this._difyStatusPromise
@@ -388,7 +460,7 @@ export const useLabStore = defineStore('lab', {
       this.stopEnvTimer()
       this.envCheckEnabled = false
       this.envLevel = 'NA'
-      this.envHint = 'Dify 安全监测服务不可用'
+      this.envHint = '智能安全巡检服务不可用'
       this.envSuggestion = ''
     },
     async switchExperiment(experimentCode) {
@@ -416,6 +488,7 @@ export const useLabStore = defineStore('lab', {
       this.session = data
       this.activeStep = 1
       this.resetLabUi()
+      persistStoredSessionId(this.session)
       await this.loadSessionData()
       this.messages = [welcomeChatMessage()]
       if (this.useDeviceData) {
@@ -438,6 +511,7 @@ export const useLabStore = defineStore('lab', {
       this.resetLabUi()
       this.session = session
       this.activeStep = session.activeStep || 1
+      persistStoredSessionId(this.session)
       await this.loadSessionData()
       await this.loadMessages()
       if (this.useDeviceData && session.status === 'ACTIVE') {
@@ -468,6 +542,7 @@ export const useLabStore = defineStore('lab', {
       this.envSuggestion = ''
       this.tutViewCount = 0
       this.sessionDataByStep = {}
+      this.sessionDataRevision = 0
       this.dataSubmitErrors = []
       this.dataPanelOverride = {}
       this.teardownDevice()
@@ -494,6 +569,7 @@ export const useLabStore = defineStore('lab', {
       this.deviceCurve = []
       this.deviceConnecting = false
       this.deviceReading = false
+      this.ccdCaptureBusy = false
       this.deviceAcquireProgress = null
       this._pendingAcquireSnapshot = null
       this._playbackSamples = []
@@ -567,7 +643,8 @@ export const useLabStore = defineStore('lab', {
       if (!this.session?.id) return
       try {
         const { data } = await sessionApi.getData(this.session.id)
-        this.sessionDataByStep = data?.byStep || {}
+        this.sessionDataByStep = normalizeSessionDataByStep(data || {})
+        this.sessionDataRevision += 1
       } catch {
         this.sessionDataByStep = {}
       }
@@ -841,14 +918,7 @@ export const useLabStore = defineStore('lab', {
           this.dataSubmitErrors = data.validation.errors
         }
 
-        const key = String(stepId)
-        this.sessionDataByStep[key] = {
-          stepId,
-          stepTitle,
-          values: data.values || values,
-          validation: data.validation,
-          feedback
-        }
+        await this.loadSessionData()
         this.session = (await sessionApi.get(this.session.id)).data
         this.loadSessionHistory(this.experiment?.code || '').catch(() => {})
         return true
@@ -906,6 +976,33 @@ export const useLabStore = defineStore('lab', {
         }
       }
     },
+    async captureCcdImageIntoComposer() {
+      if (!this.session?.id || this.ccdCaptureBusy) return false
+
+      this.ccdCaptureBusy = true
+      this.uploadError = ''
+      this.clearComposerDataAttachment()
+
+      try {
+        const { data } = await sessionApi.ccdCapture(this.session.id)
+        const url = data?.url || ''
+        if (!url) {
+          throw new Error('没有获取到有效成像图片')
+        }
+        this.composerImageUrl = url
+        this.composerImagePreview = mediaUrl(url)
+        return data
+      } catch (e) {
+        this.composerImageUrl = ''
+        this.composerImagePreview = ''
+        const msg = e.response?.data?.message || e.message || '获取成像失败，请检查 UVC 相机连接后重试'
+        this.uploadError = msg
+        emitAppAlert('获取成像失败', msg)
+        return false
+      } finally {
+        this.ccdCaptureBusy = false
+      }
+    },
     revokeBlobIfUnused(url) {
       if (!url?.startsWith('blob:')) return
       const usedInChat = this.messages.some((m) => m.image === url)
@@ -927,7 +1024,8 @@ export const useLabStore = defineStore('lab', {
       const reading = String(value || '').trim()
       if (!reading) return false
       const fields = this.currentDataFields || []
-      const target = fields.find((f) => f.key === targetFieldKey)
+      const selectedTarget = fields.find((f) => f.key === targetFieldKey)
+      const target = selectedTarget
         || fields.find((f) => /读数|reading|直径|diameter/i.test(`${f.label || ''} ${f.key || ''}`))
         || fields.find((f) => f.required !== false)
         || fields[0]

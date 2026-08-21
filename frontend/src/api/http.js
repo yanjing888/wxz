@@ -3,7 +3,8 @@ import { Capacitor } from '@capacitor/core'
 import { apiBaseUrl } from './runtime'
 
 const http = axios.create({
-  baseURL: Capacitor.isNativePlatform() ? apiBaseUrl : ''
+  baseURL: Capacitor.isNativePlatform() ? apiBaseUrl : '',
+  timeout: 15000
 })
 
 http.interceptors.request.use((config) => {

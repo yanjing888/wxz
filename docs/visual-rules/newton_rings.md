@@ -1,6 +1,6 @@
 ---
 experiment_code: newton_rings
-experiment_name: 牛顿环实验
+experiment_name: 牛顿环法测定平凸透镜曲率半径
 category: optics
 kb_type: correction_rule
 doc: newton_rings/visual-rules.md
@@ -10,7 +10,7 @@ version: v1.0
 coordinate_system: 0-1000 normalized bounding box
 ---
 
-# 牛顿环实验视觉纠错规则
+# 牛顿环法测定平凸透镜曲率半径视觉纠错规则
 
 本文档用于 Dify 知识库召回，也可作为项目内视觉纠错规则源文件。视觉纠错只判断图片中可见的操作、仪器、读数、记录与安全问题；不可见或无法确认的问题不得臆测。
 

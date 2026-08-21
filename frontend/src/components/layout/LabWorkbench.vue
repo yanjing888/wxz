@@ -39,9 +39,15 @@
         @send="$emit('send', $event)"
         @stop="$emit('stop')"
         @upload-image="$emit('upload-image', $event)"
-        @capture-image="$emit('capture-image', $event)"
+        @capture-image="$emit('capture-image')"
         @clear-image="$emit('clear-image')"
         @clear-data="$emit('clear-data')"
+      />
+
+      <LabSessionDataPanel
+        v-else-if="modelValue === 'data'"
+        :session-id="sessionId"
+        :session-data-revision="sessionDataRevision"
       />
 
       <ChatRecordPanel
@@ -56,10 +62,13 @@
 <script setup>
 import RightPanel from './RightPanel.vue'
 import ChatRecordPanel from '../lab/ChatRecordPanel.vue'
+import LabSessionDataPanel from '../lab/LabSessionDataPanel.vue'
 
 defineProps({
   modelValue: { type: String, default: 'guide' },
   dataCount: { type: Number, default: 0 },
+  sessionId: { type: Number, default: 0 },
+  sessionDataRevision: { type: Number, default: 0 },
   experimentCode: { type: String, default: '' },
   experimentName: { type: String, default: '' },
   stepTitle: { type: String, default: '' },
@@ -92,6 +101,7 @@ defineEmits([
 
 const tabs = [
   { key: 'guide', label: '物小智' },
+  { key: 'data', label: '我的数据' },
   { key: 'record', label: '问答记录' }
 ]
 </script>

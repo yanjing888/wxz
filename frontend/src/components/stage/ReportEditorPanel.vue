@@ -101,6 +101,8 @@
             tool-code="report-assist"
             :experiment-code="experimentCode"
             :experiment-name="experimentName"
+            :session-id="sessionId"
+            :report-context-provider="reportContextProvider"
             :suggestions="reportAssistantSuggestions"
           />
         </div>
@@ -170,7 +172,7 @@
                 <div
                   v-if="stripHtml(form[def.key] || '').trim()"
                   class="doc-content"
-                  v-html="form[def.key] || ''"
+                  v-html="formatPreviewSection(form[def.key])"
                 />
                 <p v-else class="doc-empty">（未填写）</p>
               </section>
@@ -191,9 +193,12 @@ import { sessionApi, studentExperimentApi } from '../../api'
 import {
   REPORT_SECTION_DEFS,
   buildReportSections,
+  buildReportAssistContext,
   defaultSections,
+  sectionsToExportPayload,
   sectionsToFullText
 } from '../../utils/sessionReport'
+import { renderMathInMarkdown } from '../../utils/markdown'
 
 const props = defineProps({
   experimentCode: { type: String, default: '' },
@@ -244,6 +249,24 @@ const reportAssistantSuggestions = computed(() => [
 watch(() => props.sessionId, onSessionChange, { immediate: true })
 
 // ===== 工具函数 =====
+
+function formatPreviewSection(html) {
+  if (!html?.trim()) return ''
+  if (html.includes('<table')) return html
+  const withMath = html.replace(
+    /<span class="inline-formula"[^>]*>\$([^<]+)\$<\/span>/gi,
+    (_, tex) => `$${tex}$`
+  )
+  const text = withMath
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+  return renderMathInMarkdown(text).replace(/\n/g, '<br>')
+}
+
+function reportContextProvider() {
+  return JSON.stringify(buildReportAssistContext(sectionDefs, form, stripHtml))
+}
 
 function stripHtml(html) {
   if (!html) return ''
@@ -407,8 +430,15 @@ async function generateFromSession() {
   generating.value = true
   try {
     await loadSourceReport()
-    const built = buildReportSections(sourceReport.value)
-    Object.keys(form).forEach((k) => { form[k] = escapeHtml(built[k] || '').replace(/\n/g, '<br>') })
+    const built = buildReportSections(sourceReport.value, props.experimentCode)
+    Object.keys(form).forEach((k) => {
+      const raw = built[k] || ''
+      if (built._htmlKeys?.includes(k) || raw.includes('<table')) {
+        form[k] = raw
+      } else {
+        form[k] = escapeHtml(raw).replace(/\n/g, '<br>')
+      }
+    })
     await nextTick()
     syncEditorsFromForm()
     saveDraft()
@@ -444,7 +474,7 @@ async function downloadDocx() {
   if (!props.sessionId) return
   exporting.value = true
   try {
-    const sections = sectionDefs.map((def) => ({ label: def.label, content: stripHtml(form[def.key] || '') }))
+    const sections = sectionsToExportPayload(sectionDefs, form, stripHtml)
     const { data } = await sessionApi.studentReportDocx(props.sessionId, { sections })
     const url = URL.createObjectURL(data)
     const a = document.createElement('a')
@@ -550,6 +580,22 @@ async function confirmSubmit() {
   font-size: 0.95em;
   margin: 0 2px;
   user-select: all;
+}
+.rep-editor :deep(table.report-data-table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0;
+  font-size: 12px;
+}
+.rep-editor :deep(table.report-data-table th),
+.rep-editor :deep(table.report-data-table td) {
+  border: 1px solid #cbd5e1;
+  padding: 3px 6px;
+  text-align: center;
+}
+.rep-editor :deep(table.report-data-table th) {
+  background: #f8fafc;
+  font-weight: 700;
 }
 
 /* ===== 右栏：小智辅助 ===== */
@@ -737,6 +783,23 @@ async function confirmSubmit() {
   font-family: "Cambria Math", "Latin Modern Math", serif;
   font-size: 0.95em;
   margin: 0 2px;
+}
+.doc-content :deep(table.report-data-table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 12px;
+  font-size: 12px;
+  text-indent: 0;
+}
+.doc-content :deep(table.report-data-table th),
+.doc-content :deep(table.report-data-table td) {
+  border: 1px solid #333;
+  padding: 4px 8px;
+  text-align: center;
+}
+.doc-content :deep(table.report-data-table th) {
+  background: #f1f5f9;
+  font-weight: 700;
 }
 .doc-empty {
   color: #999;

@@ -24,29 +24,7 @@
 
       <div class="modal-body custom-scroll">
         <div class="input-col">
-          <section>
-            <label class="field-label">仪器类型</label>
-            <div class="chip-row">
-              <button
-                v-for="item in INSTRUMENTS"
-                :key="item.key"
-                type="button"
-                class="chip"
-                :class="{ 'chip--active': instrumentKey === item.key }"
-                @click="selectInstrument(item.key)"
-              >
-                {{ item.label }}
-              </button>
-            </div>
-          </section>
-
-          <section>
-            <label class="field-label">分度值 / 精度</label>
-            <input v-model="precision" class="field-input" placeholder="如 0.02 mm" />
-          </section>
-
-          <section>
-            <label class="field-label">刻度照片</label>
+          <section class="space-y-3">
             <div
               class="upload-zone"
               :class="{ 'upload-zone--filled': previewUrl }"
@@ -57,41 +35,43 @@
               <img v-if="previewUrl" :src="previewUrl" alt="刻度照片" class="preview-img" />
               <template v-else>
                 <span class="upload-icon">+</span>
-                <span class="upload-text">点击拍照或上传</span>
-                <span class="upload-sub">对准刻度、正对镜头，避免反光与倾斜</span>
+                <span class="upload-text">点击拍照识别</span>
+                <span class="upload-sub">对准刻度或数显屏，拍完后右侧自动显示 OCR 结果</span>
               </template>
             </div>
             <input ref="fileInput" type="file" accept="image/*" capture="environment" class="hidden" @change="onFileChange" />
-            <button v-if="previewUrl" type="button" class="link-btn" @click="clearImage">重新选择</button>
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-[11.5px] text-ink-faint leading-relaxed">
+                {{ targetField ? `将回填：${targetField.label || targetField.key}${targetField.unit ? ` / ${targetField.unit}` : ''}` : '拍照后可复制识别结果或确认填入读数区' }}
+              </p>
+              <button v-if="previewUrl" type="button" class="link-btn shrink-0" @click="retake">
+                重拍
+              </button>
+            </div>
           </section>
-
-          <button
-            type="button"
-            class="btn-brand w-full py-2.5 rounded-xl text-sm font-semibold"
-            :disabled="loading || !imageUrl"
-            @click="recognize"
-          >
-            {{ loading ? '识别中…' : '识别读数' }}
-          </button>
           <p v-if="error" class="err-text">{{ error }}</p>
         </div>
 
         <div class="result-col">
-          <template v-if="answer">
+          <div v-if="loading" class="result-empty">
+            <p class="font-semibold text-ink-strong">正在 OCR 识别…</p>
+            <p class="text-[13px] text-ink-muted mt-1 max-w-xs">请稍等，识别结果会显示在这里。</p>
+          </div>
+          <template v-else-if="answer">
             <div class="flex flex-wrap items-center gap-2 mb-3">
-              <h4 class="result-title">识别结果</h4>
+              <h4 class="result-title">OCR 识别结果</h4>
               <span v-if="!fromDify" class="result-tag">AI 服务未接入，以下为提示内容</span>
             </div>
             <div class="chat-md" v-html="renderMd(answer)" />
             <div class="save-row">
-              <input v-model="manualReading" class="field-input flex-1" placeholder="确认后的最终读数，如 12.34" />
+              <input v-model="manualReading" class="field-input flex-1" :placeholder="manualReadingPlaceholder" />
               <button
                 type="button"
                 class="btn-brand px-4 py-2 rounded-lg text-sm shrink-0"
                 :disabled="!manualReading.trim()"
                 @click="applyReading"
               >
-                确认填入对话
+                确认填入读数区
               </button>
               <button
                 type="button"
@@ -103,13 +83,13 @@
               </button>
             </div>
             <p class="text-[12px] text-ink-faint mt-2">
-              AI 识别仅作参考。确认后会把读数放入右侧对话附件，由你发送入库，不会自动改原始数据。
+              AI 识别仅作参考。确认后会先填入左侧读数区，仍需你检查后点击「提交数据并纠错」才会入库。
             </p>
           </template>
           <div v-else class="result-empty">
-            <p class="font-semibold text-ink-strong">识别结果显示在这里</p>
+            <p class="font-semibold text-ink-strong">OCR 识别结果显示在这里</p>
             <p class="text-[13px] text-ink-muted mt-1 max-w-xs">
-              选择仪器类型并上传照片后点击「识别读数」。
+              左侧拍照后会自动识别读数；你确认后再填入读数区。
             </p>
           </div>
         </div>
@@ -119,7 +99,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { aiToolApi, uploadApi } from '../../api'
 import { renderChatMarkdown } from '../../utils/markdown'
 
@@ -136,7 +116,11 @@ const props = defineProps({
   visible: Boolean,
   experimentCode: { type: String, default: '' },
   experimentName: { type: String, default: '' },
-  stepNo: { type: Number, default: 0 }
+  stepNo: { type: Number, default: 0 },
+  stepTitle: { type: String, default: '' },
+  deviceType: { type: String, default: '' },
+  dataFields: { type: Array, default: () => [] },
+  initialTargetFieldKey: { type: String, default: '' }
 })
 const emit = defineEmits(['close', 'apply'])
 
@@ -151,17 +135,84 @@ const loading = ref(false)
 const fromDify = ref(true)
 const manualReading = ref('')
 const copied = ref(false)
+const targetFieldKey = ref('')
+
+const fillableFields = computed(() =>
+  (props.dataFields || []).filter((field) =>
+    field?.key && !field.computed && !field.readOnly && field.type !== 'computed'
+  )
+)
+
+const targetField = computed(() =>
+  fillableFields.value.find((field) => field.key === targetFieldKey.value) || null
+)
+
+const manualReadingPlaceholder = computed(() => {
+  const label = targetField.value?.label || '最终读数'
+  const unit = targetField.value?.unit ? ` ${targetField.value.unit}` : ''
+  return `确认后的${label}，如 12.34${unit}`
+})
 
 watch(() => props.visible, (visible) => {
-  if (!visible) {
+  if (visible) {
+    resetDefaultsForStep()
+    clearImage()
+  } else {
     error.value = ''
     manualReading.value = ''
+    clearImage()
   }
 })
 
-function selectInstrument(key) {
-  instrumentKey.value = key
-  precision.value = INSTRUMENTS.find((i) => i.key === key)?.precision || ''
+watch(
+  () => [
+    props.experimentCode,
+    props.stepNo,
+    props.deviceType,
+    props.initialTargetFieldKey,
+    fillableFields.value.map((f) => f.key).join(',')
+  ],
+  () => resetDefaultsForStep(),
+  { immediate: true }
+)
+
+function resetDefaultsForStep() {
+  applyInstrumentDefaults()
+  if (props.initialTargetFieldKey && fillableFields.value.some((field) => field.key === props.initialTargetFieldKey)) {
+    targetFieldKey.value = props.initialTargetFieldKey
+    return
+  }
+  if (!targetFieldKey.value || !fillableFields.value.some((field) => field.key === targetFieldKey.value)) {
+    targetFieldKey.value = defaultTargetFieldKey()
+  }
+}
+
+function defaultTargetFieldKey() {
+  const fields = fillableFields.value
+  return fields.find((field) => /left|左侧读数|左读数/i.test(`${field.key} ${field.label}`))?.key
+    || fields.find((field) => /读数|reading/i.test(`${field.key} ${field.label}`))?.key
+    || fields.find((field) => field.required !== false)?.key
+    || fields[0]?.key
+    || ''
+}
+
+function applyInstrumentDefaults() {
+  if (props.deviceType === 'reading_microscope' || props.experimentCode === 'newton_rings') {
+    instrumentKey.value = 'microscope'
+  } else {
+    instrumentKey.value = inferInstrumentKey()
+  }
+  precision.value = INSTRUMENTS.find((i) => i.key === instrumentKey.value)?.precision || ''
+}
+
+function inferInstrumentKey() {
+  const text = `${targetField.value?.label || ''} ${targetField.value?.key || ''} ${props.stepTitle || ''}`
+  if (/游标|vernier|卡尺/i.test(text)) return 'vernier'
+  if (/螺旋|micrometer|千分尺/i.test(text)) return 'micrometer'
+  if (/显微镜|microscope|暗环|读数/i.test(text)) return 'microscope'
+  if (/角|分光|spectrometer/i.test(text)) return 'spectrometer'
+  if (/电压|电流|电阻|电表|meter/i.test(text)) return 'meter'
+  return 'ruler'
 }
 
 function onFileChange(event) {
@@ -177,10 +228,18 @@ function onDrop(event) {
 
 async function uploadImage(file) {
   error.value = ''
+  answer.value = ''
+  manualReading.value = ''
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+  }
   previewUrl.value = URL.createObjectURL(file)
   try {
     const { data } = await uploadApi.image(file)
     imageUrl.value = data?.url || ''
+    if (imageUrl.value) {
+      await recognize()
+    }
   } catch (e) {
     error.value = e.message || '图片上传失败'
     previewUrl.value = ''
@@ -189,12 +248,21 @@ async function uploadImage(file) {
 }
 
 function clearImage() {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+  }
   previewUrl.value = ''
   imageUrl.value = ''
   answer.value = ''
 }
 
+function retake() {
+  clearImage()
+  fileInput.value?.click()
+}
+
 async function recognize() {
+  if (!imageUrl.value) return
   answer.value = ''
   error.value = ''
   loading.value = true
@@ -209,7 +277,10 @@ async function recognize() {
         instrumentKey: instrumentKey.value,
         instrumentLabel: label,
         precision: precision.value,
-        stepNo: props.stepNo
+        stepNo: props.stepNo,
+        stepTitle: props.stepTitle,
+        targetFieldKey: targetFieldKey.value,
+        targetFieldLabel: fillableFields.value.find((field) => field.key === targetFieldKey.value)?.label || ''
       }
     })
     answer.value = data.text || ''
@@ -230,7 +301,8 @@ function applyReading() {
     instrumentKey: instrumentKey.value,
     instrumentLabel: label,
     precision: precision.value,
-    stepNo: props.stepNo
+    stepNo: props.stepNo,
+    targetFieldKey: targetFieldKey.value
   })
   emit('close')
 }
@@ -261,16 +333,9 @@ function renderMd(text) {
 .err-text { @apply text-[12px] text-rose-600; }
 .link-btn { @apply text-[12px] text-brand-600 hover:underline mt-2; }
 
-.chip-row { @apply flex flex-wrap gap-2; }
-.chip {
-  @apply px-3 py-1.5 rounded-lg text-[12.5px] border border-line-soft bg-surface-soft
-    hover:border-brand-200 transition-colors;
-}
-.chip--active { @apply border-brand-400 bg-brand-50 text-brand-700 font-semibold; }
-
 .upload-zone {
   @apply flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line-soft
-    bg-surface-soft/60 min-h-[140px] p-3 cursor-pointer hover:border-brand-300 transition-colors text-center;
+    bg-surface-soft/60 min-h-[300px] p-3 cursor-pointer hover:border-brand-300 transition-colors text-center;
 }
 .upload-zone--filled { @apply border-solid p-1.5 bg-white; }
 .upload-icon { @apply w-9 h-9 rounded-full bg-white border border-line-soft flex items-center justify-center text-lg text-ink-faint; }

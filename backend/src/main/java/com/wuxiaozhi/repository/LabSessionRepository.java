@@ -14,9 +14,15 @@ public interface LabSessionRepository extends JpaRepository<LabSession, Long> {
     @Query("""
             select s from LabSession s
             where s.userId = :userId
-              and exists (
-                  select 1 from ChatMessage m
-                  where m.sessionId = s.id
+              and (
+                  exists (
+                      select 1 from ChatMessage m
+                      where m.sessionId = s.id
+                  )
+                  or exists (
+                      select 1 from SessionDataLog d
+                      where d.sessionId = s.id
+                  )
               )
             order by s.startTime desc
             """)
@@ -26,9 +32,15 @@ public interface LabSessionRepository extends JpaRepository<LabSession, Long> {
             select s from LabSession s
             where s.userId = :userId
               and s.experimentCode = :experimentCode
-              and exists (
-                  select 1 from ChatMessage m
-                  where m.sessionId = s.id
+              and (
+                  exists (
+                      select 1 from ChatMessage m
+                      where m.sessionId = s.id
+                  )
+                  or exists (
+                      select 1 from SessionDataLog d
+                      where d.sessionId = s.id
+                  )
               )
             order by s.startTime desc
             """)
@@ -36,6 +48,7 @@ public interface LabSessionRepository extends JpaRepository<LabSession, Long> {
                                                                        @Param("experimentCode") String experimentCode);
 
     Optional<LabSession> findFirstByUserIdAndExperimentCodeAndStatusOrderByStartTimeDesc(Long userId, String experimentCode, String status);
+    Optional<LabSession> findFirstByUserIdAndExperimentCodeOrderByStartTimeDesc(Long userId, String experimentCode);
     Optional<LabSession> findByIdAndUserId(Long id, Long userId);
 
     List<LabSession> findByStatusOrderByStartTimeDesc(String status);

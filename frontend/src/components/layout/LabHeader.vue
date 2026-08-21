@@ -129,9 +129,9 @@ const difyDotClass = computed(() => {
 })
 
 const difyStatusTitle = computed(() => {
-  if (props.difyStatusLoading) return '正在检查 Dify 服务状态'
-  if (!props.difyStatus) return 'Dify 服务状态未知'
-  return difyAvailable.value ? 'Dify 服务可用' : 'Dify 服务不可用'
+  if (props.difyStatusLoading) return '正在检查 AI 服务状态'
+  if (!props.difyStatus) return 'AI 服务状态未知'
+  return difyAvailable.value ? 'AI 服务可用' : 'AI 服务不可用'
 })
 </script>
 

@@ -81,12 +81,10 @@ function isActive(tab) {
 <style scoped>
 .tab-bar {
   display: flex;
-  flex: 1;
   align-items: stretch;
   justify-content: center;
   gap: 4px;
   height: 100%;
-  min-width: 0;
 }
 .tab-item {
   display: flex;

@@ -34,8 +34,9 @@ class DifyServiceTest {
         );
 
         assertThat(response.isFromDify()).isFalse();
-        assertThat(response.getFeedback()).contains("暂时无法连接Dify服务");
+        assertThat(response.getFeedback()).contains("AI 助教暂时不可用");
         assertThat(response.getFeedback()).contains("不能可靠回答");
+        assertThat(response.getFeedback()).doesNotContain("Dify");
         assertThat(response.getFeedback()).doesNotContain("智能体服务暂时不可用");
         assertThat(response.getFeedback()).doesNotContain("检查光路。");
     }
@@ -60,12 +61,14 @@ class DifyServiceTest {
         );
 
         assertThat(response.isFromDify()).isFalse();
-        assertThat(response.getFeedback()).contains("暂时无法连接Dify服务");
+        assertThat(response.getFeedback()).contains("AI 助教暂时不可用");
         assertThat(response.getFeedback()).contains("不能可靠回答");
+        assertThat(response.getFeedback()).doesNotContain("Dify");
         assertThat(response.getFeedback()).doesNotContain("智能体服务暂时不可用");
         assertThat(response.getFeedback()).doesNotContain("检查光路。");
-        assertThat(streamed.toString()).contains("暂时无法连接Dify服务");
+        assertThat(streamed.toString()).contains("AI 助教暂时不可用");
         assertThat(streamed.toString()).contains("不能可靠回答");
+        assertThat(streamed.toString()).doesNotContain("Dify");
         assertThat(streamed.toString()).doesNotContain("智能体服务暂时不可用");
         assertThat(streamed.toString()).doesNotContain("检查光路。");
     }
@@ -78,8 +81,9 @@ class DifyServiceTest {
 
         assertThat(response.isFromDify()).isFalse();
         assertThat(response.getLevel()).isEqualTo("NA");
-        assertThat(response.getSummary()).contains("暂时无法连接Dify服务");
+        assertThat(response.getSummary()).contains("安全巡检暂时不可用");
         assertThat(response.getSummary()).contains("不能完成本次安全巡检");
+        assertThat(response.getSummary()).doesNotContain("Dify");
         assertThat(response.getSummary()).doesNotContain("示意");
     }
 
@@ -154,6 +158,18 @@ class DifyServiceTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void formatStreamWorkflowErrorExplainsLocalhostManifestFailure() {
+        DifyService service = unavailableDifyService();
+        String msg = service.formatStreamWorkflowError(
+                "Reached maximum retries for URL http://127.0.0.1:8082/api/public/experiments/newton_rings");
+        assertThat(msg).contains("AI 助教配置异常");
+        assertThat(msg).contains("无法读取当前实验配置");
+        assertThat(msg).doesNotContain("Dify");
+        assertThat(msg).doesNotContain("127.0.0.1:8082");
+        assertThat(msg).doesNotContain("WXZ_BACKEND_BASE_URL");
     }
 
     @SuppressWarnings("unchecked")

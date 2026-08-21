@@ -28,4 +28,6 @@ public class TeacherClassroomStudentDto {
     private String priority;
     private String priorityReason;
     private LocalDateTime startTime;
+    /** 学生是否在监控页开启了摄像头（近期有心跳） */
+    private boolean cameraActive;
 }

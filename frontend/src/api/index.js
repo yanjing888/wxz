@@ -23,10 +23,12 @@ export const sessionApi = {
   start: (data) => http.post('/api/sessions', data),
   list: (params = {}) => http.get('/api/sessions', { params }),
   latest: (experimentCode) => http.get('/api/sessions/latest', { params: { experimentCode } }),
+  resume: (experimentCode) => http.get('/api/sessions/resume', { params: { experimentCode } }),
   get: (id) => http.get(`/api/sessions/${id}`),
   messages: (id) => http.get(`/api/sessions/${id}/messages`),
   attachLatestAiImage: (id, data) => http.patch(`/api/sessions/${id}/messages/latest-ai-image`, data),
   updateStep: (id, stepId) => http.patch(`/api/sessions/${id}/step?stepId=${stepId}`),
+  updateCameraStatus: (id, data) => http.patch(`/api/sessions/${id}/camera-status`, data),
   assist: (id, data) => http.post(`/api/sessions/${id}/assist`, data),
   assistStream: (id, data, handlers, signal) =>
     postSse(`/api/sessions/${id}/assist/stream`, data, handlers, signal),
@@ -41,6 +43,7 @@ export const sessionApi = {
   deviceAcquire: (id, stepId) => http.post(`/api/sessions/${id}/device/acquire?stepId=${stepId}`),
   deviceStop: (id, stepId) => http.post(`/api/sessions/${id}/device/stop?stepId=${stepId}`),
   deviceSnapshot: (id, stepId) => http.get(`/api/sessions/${id}/device/snapshot?stepId=${stepId}`),
+  ccdCapture: (id) => http.post(`/api/sessions/${id}/ccd-capture`),
   finish: (id) => http.post(`/api/sessions/${id}/finish`),
   report: (id) => http.get(`/api/sessions/${id}/report`),
   reportDocx: (id) => http.get(`/api/sessions/${id}/report/docx`, { responseType: 'blob' }),
@@ -75,6 +78,39 @@ export const uploadApi = {
 
     if (!res.ok) {
       throw new Error(payload.message || `上传失败 (${res.status})`)
+    }
+
+    return { data: payload }
+  }
+}
+
+export const voiceApi = {
+  async transcribe(file) {
+    const fd = new FormData()
+    fd.append('file', file, file.name || 'voice.wav')
+    const token = localStorage.getItem('wxz_token')
+
+    let res
+    try {
+      res = await fetch(apiUrl('/api/voice/transcribe'), {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd
+      })
+    } catch {
+      throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/ports.env）')
+    }
+
+    const text = await res.text()
+    let payload
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      throw new Error(text || `语音识别失败 (${res.status})`)
+    }
+
+    if (!res.ok) {
+      throw new Error(payload.message || `语音识别失败 (${res.status})`)
     }
 
     return { data: payload }

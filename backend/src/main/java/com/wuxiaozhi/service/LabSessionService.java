@@ -3,6 +3,7 @@ package com.wuxiaozhi.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wuxiaozhi.dto.*;
+import com.wuxiaozhi.dto.experiment.DataFieldConfig;
 import com.wuxiaozhi.dto.experiment.ExperimentConfig;
 import com.wuxiaozhi.dto.experiment.ExperimentDifyConfig;
 import com.wuxiaozhi.dto.experiment.MarkDto;
@@ -137,6 +138,28 @@ public class LabSessionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No active session"));
     }
 
+    /**
+     * 恢复实验会话：优先 ACTIVE；否则取该实验下最近一条有问答或数据的会话。
+     * 避免刷新/重启后端后误开新会话导致「我的数据」与问答记录看似丢失。
+     */
+    public LabSession getResumeSession(Long userId, String experimentCode) {
+        if (experimentCode == null || experimentCode.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "experimentCode is required");
+        }
+        String code = experimentCode.trim();
+        Optional<LabSession> active = sessionRepository
+                .findFirstByUserIdAndExperimentCodeAndStatusOrderByStartTimeDesc(userId, code, "ACTIVE");
+        if (active.isPresent()) {
+            return active.get();
+        }
+        List<LabSession> recent = sessionRepository.findConversationSessionsByUserIdAndExperimentCode(userId, code);
+        if (!recent.isEmpty()) {
+            return recent.get(0);
+        }
+        return sessionRepository.findFirstByUserIdAndExperimentCodeOrderByStartTimeDesc(userId, code)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No session"));
+    }
+
     public LabSession getSession(Long sessionId) {
         return sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));
@@ -161,14 +184,42 @@ public class LabSessionService {
         return sessionRepository.save(session);
     }
 
+    public static final long CAMERA_ACTIVE_TTL_SECONDS = 300;
+
+    public boolean isCameraActiveEffective(LabSession session) {
+        if (session == null || !session.isCameraActive()) {
+            return false;
+        }
+        LocalDateTime at = session.getCameraActiveAt();
+        if (at == null) {
+            return false;
+        }
+        return java.time.Duration.between(at, LocalDateTime.now()).getSeconds() <= CAMERA_ACTIVE_TTL_SECONDS;
+    }
+
+    @Transactional
+    public void updateCameraStatus(Long sessionId, Long userId, boolean active) {
+        LabSession session = getSession(sessionId, userId);
+        applyCameraStatus(session, active);
+        sessionRepository.save(session);
+    }
+
+    private void applyCameraStatus(LabSession session, boolean active) {
+        if ("FINISHED".equals(session.getStatus())) {
+            session.setCameraActive(false);
+            session.setCameraActiveAt(null);
+            return;
+        }
+        session.setCameraActive(active);
+        session.setCameraActiveAt(active ? LocalDateTime.now() : null);
+    }
+
     public Map<String, Object> getSessionData(Long sessionId) {
-        getSession(sessionId);
-        return getSessionDataBody(sessionId);
+        return getSessionDataBody(getSession(sessionId));
     }
 
     public Map<String, Object> getSessionData(Long sessionId, Long userId) {
-        getSession(sessionId, userId);
-        return getSessionDataBody(sessionId);
+        return getSessionDataBody(getSession(sessionId, userId));
     }
 
     public List<ChatMessage> getMessages(Long sessionId, Long userId) {
@@ -273,22 +324,118 @@ public class LabSessionService {
         return normalized.substring(0, maxLen - 1) + "…";
     }
 
-    private Map<String, Object> getSessionDataBody(Long sessionId) {
+    private Map<String, Object> getSessionDataBody(LabSession session) {
+        Long sessionId = session.getId();
+        ExperimentConfig exp = experimentConfigService.getByCode(session.getExperimentCode());
+        Map<String, Object> stepSchemas = buildStepDataSchemas(exp);
         List<SessionDataLog> logs = sessionDataLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        List<Map<String, Object>> logEntries = new ArrayList<>();
         Map<String, Object> byStep = new LinkedHashMap<>();
         for (SessionDataLog log : logs) {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("stepId", log.getStepId());
-            entry.put("stepTitle", log.getStepTitle());
-            entry.put("values", readJsonMap(log.getValuesJson()));
-            entry.put("validation", readJsonMap(log.getValidationJson()));
-            entry.put("feedback", log.getFeedback());
-            entry.put("createdAt", log.getCreatedAt() != null ? log.getCreatedAt().toString() : "");
-            byStep.put(String.valueOf(log.getStepId()), entry);
+            Map<String, Object> row = buildSessionDataRow(log);
+            logEntries.add(row);
+
+            String stepKey = String.valueOf(log.getStepId());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> stepBucket = (Map<String, Object>) byStep.get(stepKey);
+            if (stepBucket == null) {
+                stepBucket = new LinkedHashMap<>();
+                stepBucket.put("stepId", log.getStepId());
+                stepBucket.put("stepTitle", log.getStepTitle() != null ? log.getStepTitle() : "");
+                stepBucket.put("rows", new ArrayList<Map<String, Object>>());
+                attachStepFields(stepBucket, stepSchemas.get(stepKey));
+                byStep.put(stepKey, stepBucket);
+            }
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> rows = (List<Map<String, Object>>) stepBucket.get("rows");
+            rows.add(row);
+            stepBucket.put("values", row.get("values"));
+            stepBucket.put("validation", row.get("validation"));
+            stepBucket.put("feedback", row.get("feedback"));
+            stepBucket.put("createdAt", row.get("createdAt"));
         }
         Map<String, Object> body = new LinkedHashMap<>();
+        body.put("experimentCode", session.getExperimentCode());
+        body.put("experimentName", session.getExperimentName());
+        body.put("stepSchemas", stepSchemas);
+        body.put("logs", logEntries);
         body.put("byStep", byStep);
+        body.put("totalCount", logs.size());
         return body;
+    }
+
+    private Map<String, Object> buildStepDataSchemas(ExperimentConfig exp) {
+        Map<String, Object> schemas = new LinkedHashMap<>();
+        if (exp == null || exp.getSteps() == null || exp.getSteps().isEmpty()) {
+            return schemas;
+        }
+        exp.getSteps().entrySet().stream()
+                .sorted(Comparator.comparingInt(e -> parseStepId(e.getKey())))
+                .forEach(entry -> {
+                    StepConfig step = entry.getValue();
+                    if (!isDataStep(exp, step)) {
+                        return;
+                    }
+                    Map<String, Object> schema = new LinkedHashMap<>();
+                    schema.put("stepId", parseStepId(entry.getKey()));
+                    schema.put("stepTitle", step.getTitle() != null ? step.getTitle() : ("步骤 " + entry.getKey()));
+                    schema.put("fields", buildDataFieldColumns(step.getDataFields()));
+                    schemas.put(entry.getKey(), schema);
+                });
+        return schemas;
+    }
+
+    private List<Map<String, Object>> buildDataFieldColumns(List<DataFieldConfig> dataFields) {
+        List<Map<String, Object>> fields = new ArrayList<>();
+        if (dataFields == null) {
+            return fields;
+        }
+        for (DataFieldConfig field : dataFields) {
+            if (field == null || field.getKey() == null || field.getKey().isBlank()) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("key", field.getKey());
+            item.put("label", buildDataFieldLabel(field));
+            item.put("type", field.getType() != null ? field.getType() : "number");
+            if (field.getUnit() != null && !field.getUnit().isBlank()) {
+                item.put("unit", field.getUnit());
+            }
+            fields.add(item);
+        }
+        return fields;
+    }
+
+    private String buildDataFieldLabel(DataFieldConfig field) {
+        String label = field.getLabel() != null && !field.getLabel().isBlank() ? field.getLabel() : field.getKey();
+        String unit = field.getUnit();
+        if (unit == null || unit.isBlank() || label.contains(unit)) {
+            return label;
+        }
+        return label + " (" + unit + ")";
+    }
+
+    @SuppressWarnings("unchecked")
+    private void attachStepFields(Map<String, Object> stepBucket, Object schemaObj) {
+        if (!(schemaObj instanceof Map<?, ?> schemaMap)) {
+            return;
+        }
+        Object fields = schemaMap.get("fields");
+        if (fields instanceof List<?> list && !list.isEmpty()) {
+            stepBucket.put("fields", list);
+        }
+    }
+
+    private Map<String, Object> buildSessionDataRow(SessionDataLog log) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("id", log.getId());
+        entry.put("stepId", log.getStepId());
+        entry.put("stepTitle", log.getStepTitle() != null ? log.getStepTitle() : "");
+        entry.put("values", readJsonMap(log.getValuesJson()));
+        entry.put("validation", readJsonMap(log.getValidationJson()));
+        entry.put("feedback", log.getFeedback());
+        entry.put("createdAt", log.getCreatedAt() != null ? log.getCreatedAt().toString() : "");
+        return entry;
     }
 
     @Transactional
@@ -322,12 +469,7 @@ public class LabSessionService {
         inputs.put("data_json", dataJson);
         putExperimentInputs(inputs, exp.getName(), exp.getCode());
         inputs.put("step_id", String.valueOf(stepId));
-        if (step.getTitle() != null) {
-            inputs.put("step_title", step.getTitle());
-        }
-        if (step.getDesc() != null) {
-            inputs.put("step_desc", step.getDesc());
-        }
+        putStepContextInputs(inputs, step);
         putDifyRoutingInputs(inputs, step, false);
         attachKnowledgeMapInputs(inputs, exp, stepId, false);
         attachKnowledgeContext(inputs, exp, session, step, inputs.get("query").toString(), false);
@@ -575,15 +717,8 @@ public class LabSessionService {
         }
 
         StepConfig step = resolveStep(exp, stepId);
-        if (step != null) {
-            inputs.put("step_id", String.valueOf(stepId));
-            if (step.getTitle() != null) {
-                inputs.put("step_title", step.getTitle());
-            }
-            if (step.getDesc() != null) {
-                inputs.put("step_desc", step.getDesc());
-            }
-        }
+        inputs.put("step_id", String.valueOf(stepId));
+        putStepContextInputs(inputs, step);
         putDifyRoutingInputs(inputs, step, hasImage);
         attachKnowledgeMapInputs(inputs, exp, stepId, hasImage);
         attachRepeatAssistHint(inputs, session.getId(), stepId);
@@ -794,6 +929,8 @@ public class LabSessionService {
     private LabSession finishSession(LabSession session) {
         session.setStatus("FINISHED");
         session.setEndTime(LocalDateTime.now());
+        session.setCameraActive(false);
+        session.setCameraActiveAt(null);
         return sessionRepository.save(session);
     }
 
@@ -816,6 +953,7 @@ public class LabSessionService {
 
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("sessionId", sessionId);
+        report.put("experimentCode", session.getExperimentCode());
         report.put("experimentName", session.getExperimentName());
         report.put("studentName", session.getStudentName());
         report.put("studentClass", session.getStudentClass());
@@ -827,6 +965,7 @@ public class LabSessionService {
         report.put("reportKnowledge", exp.getReportKnowledge());
         report.put("reportPath", exp.getReportPath());
         report.put("stepSummaries", buildStepSummaries(exp));
+        report.put("stepSchemas", buildStepDataSchemas(exp));
         report.put("dataLogEntries", buildDataLogEntries(dataLogs));
         report.put("corrections", corrections);
         report.put("dataLogs", dataLogs);
@@ -860,11 +999,24 @@ public class LabSessionService {
             item.put("stepId", log.getStepId());
             item.put("stepTitle", log.getStepTitle());
             item.put("submittedAt", log.getCreatedAt() != null ? log.getCreatedAt().format(fmt) : "");
+            item.put("values", parseValuesJson(log.getValuesJson()));
             item.put("valuesSummary", summarizeValuesJson(log.getValuesJson()));
             item.put("validationSummary", summarizeValidationJson(log.getValidationJson()));
             entries.add(item);
         }
         return entries;
+    }
+
+    private Map<String, Object> parseValuesJson(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            Map<String, Object> values = objectMapper.readValue(json, new TypeReference<>() {});
+            return values != null ? values : Map.of();
+        } catch (Exception e) {
+            return Map.of();
+        }
     }
 
     private String summarizeValuesJson(String json) {
@@ -922,6 +1074,46 @@ public class LabSessionService {
         inputs.put("experiment_type", experimentType);
         inputs.put("experiment_name", experimentType);
         inputs.put("experiment_code", experimentCode);
+    }
+
+    private void putStepContextInputs(Map<String, Object> inputs, StepConfig step) {
+        if (step == null) {
+            return;
+        }
+        if (step.getTitle() != null && !step.getTitle().isBlank()) {
+            inputs.put("step_title", step.getTitle());
+        }
+        if (step.getDesc() != null && !step.getDesc().isBlank()) {
+            inputs.put("step_desc", step.getDesc());
+        }
+        if (step.getCorrectionMode() != null && !step.getCorrectionMode().isBlank()) {
+            inputs.put("step_correction_mode", step.getCorrectionMode());
+        }
+        String guide = formatStepGuide(step);
+        if (!guide.isBlank()) {
+            inputs.put("step_guide", guide);
+        }
+    }
+
+    private String formatStepGuide(StepConfig step) {
+        if (step == null || step.getTut() == null) {
+            return "";
+        }
+        var tut = step.getTut();
+        StringBuilder sb = new StringBuilder();
+        if (tut.getSteps() != null && !tut.getSteps().isEmpty()) {
+            sb.append("操作要点:\n");
+            for (String item : tut.getSteps()) {
+                sb.append("- ").append(item).append('\n');
+            }
+        }
+        if (tut.getWarnings() != null && !tut.getWarnings().isEmpty()) {
+            sb.append("注意:\n");
+            for (String item : tut.getWarnings()) {
+                sb.append("- ").append(item).append('\n');
+            }
+        }
+        return sb.toString().trim();
     }
 
     /**

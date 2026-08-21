@@ -8,6 +8,7 @@ import com.wuxiaozhi.dto.device.DeviceStatusDto;
 import com.wuxiaozhi.service.DeviceAcquisitionService;
 import com.wuxiaozhi.service.LabSessionService;
 import com.wuxiaozhi.service.ReportService;
+import com.wuxiaozhi.service.UvcCameraCaptureService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -28,13 +29,16 @@ public class SessionController {
     private final LabSessionService labSessionService;
     private final DeviceAcquisitionService deviceAcquisitionService;
     private final ReportService reportService;
+    private final UvcCameraCaptureService uvcCameraCaptureService;
 
     public SessionController(LabSessionService labSessionService,
                              DeviceAcquisitionService deviceAcquisitionService,
-                             ReportService reportService) {
+                             ReportService reportService,
+                             UvcCameraCaptureService uvcCameraCaptureService) {
         this.labSessionService = labSessionService;
         this.deviceAcquisitionService = deviceAcquisitionService;
         this.reportService = reportService;
+        this.uvcCameraCaptureService = uvcCameraCaptureService;
     }
 
     @PostMapping
@@ -54,17 +58,22 @@ public class SessionController {
         return labSessionService.getLatestActiveSession(currentUserId(authentication), experimentCode);
     }
 
-    @GetMapping("/{sessionId}")
+    @GetMapping("/resume")
+    public LabSession resume(@RequestParam String experimentCode, Authentication authentication) {
+        return labSessionService.getResumeSession(currentUserId(authentication), experimentCode);
+    }
+
+    @GetMapping("/{sessionId:\\d+}")
     public LabSession get(@PathVariable Long sessionId, Authentication authentication) {
         return labSessionService.getSession(sessionId, currentUserId(authentication));
     }
 
-    @GetMapping("/{sessionId}/messages")
+    @GetMapping("/{sessionId:\\d+}/messages")
     public List<ChatMessage> messages(@PathVariable Long sessionId, Authentication authentication) {
         return labSessionService.getMessages(sessionId, currentUserId(authentication));
     }
 
-    @PatchMapping("/{sessionId}/messages/latest-ai-image")
+    @PatchMapping("/{sessionId:\\d+}/messages/latest-ai-image")
     public ChatMessage attachLatestAiImage(@PathVariable Long sessionId,
                                            @RequestBody AttachMessageImageRequest req,
                                            Authentication authentication) {
@@ -72,104 +81,118 @@ public class SessionController {
                 sessionId, currentUserId(authentication), req != null ? req.getImageUrl() : null);
     }
 
-    @PatchMapping("/{sessionId}/step")
+    @PatchMapping("/{sessionId:\\d+}/step")
     public LabSession updateStep(@PathVariable Long sessionId, @RequestParam int stepId, Authentication authentication) {
         return labSessionService.updateStep(sessionId, currentUserId(authentication), stepId);
     }
 
-    @GetMapping("/{sessionId}/data")
+    @PatchMapping("/{sessionId:\\d+}/camera-status")
+    public void updateCameraStatus(@PathVariable Long sessionId,
+                                   @RequestBody UpdateCameraStatusRequest req,
+                                   Authentication authentication) {
+        boolean active = req != null && Boolean.TRUE.equals(req.getActive());
+        labSessionService.updateCameraStatus(sessionId, currentUserId(authentication), active);
+    }
+
+    @GetMapping("/{sessionId:\\d+}/data")
     public Map<String, Object> getData(@PathVariable Long sessionId, Authentication authentication) {
         return labSessionService.getSessionData(sessionId, currentUserId(authentication));
     }
 
-    @PostMapping("/{sessionId}/data")
+    @PostMapping("/{sessionId:\\d+}/data")
     public SessionDataSubmitResponse submitData(@PathVariable Long sessionId,
                                                 @Valid @RequestBody SubmitSessionDataRequest req,
                                                 Authentication authentication) {
         return labSessionService.submitSessionData(sessionId, currentUserId(authentication), req);
     }
 
-    @PostMapping("/{sessionId}/device/connect")
+    @PostMapping("/{sessionId:\\d+}/device/connect")
     public DeviceStatusDto deviceConnect(@PathVariable Long sessionId, @RequestParam int stepId, Authentication authentication) {
         labSessionService.getSession(sessionId, currentUserId(authentication));
         return deviceAcquisitionService.connect(sessionId, stepId);
     }
 
-    @GetMapping("/{sessionId}/device/status")
+    @GetMapping("/{sessionId:\\d+}/device/status")
     public DeviceStatusDto deviceStatus(@PathVariable Long sessionId, @RequestParam int stepId, Authentication authentication) {
         labSessionService.getSession(sessionId, currentUserId(authentication));
         return deviceAcquisitionService.status(sessionId, stepId);
     }
 
-    @PostMapping("/{sessionId}/device/read")
+    @PostMapping("/{sessionId:\\d+}/device/read")
     public DeviceStatusDto deviceRead(@PathVariable Long sessionId, @RequestParam int stepId, Authentication authentication) {
         labSessionService.getSession(sessionId, currentUserId(authentication));
         return deviceAcquisitionService.readOnce(sessionId, stepId);
     }
 
-    @PostMapping("/{sessionId}/device/acquire")
+    @PostMapping("/{sessionId:\\d+}/device/acquire")
     public Map<String, Object> deviceAcquire(@PathVariable Long sessionId, @RequestParam int stepId, Authentication authentication) {
         labSessionService.getSession(sessionId, currentUserId(authentication));
         return deviceAcquisitionService.acquireSync(sessionId, stepId);
     }
 
-    @GetMapping(value = "/{sessionId}/device/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @GetMapping(value = "/{sessionId:\\d+}/device/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter deviceStream(@PathVariable Long sessionId, @RequestParam int stepId, Authentication authentication) {
         labSessionService.getSession(sessionId, currentUserId(authentication));
         return deviceAcquisitionService.stream(sessionId, stepId);
     }
 
-    @PostMapping("/{sessionId}/device/stop")
+    @PostMapping("/{sessionId:\\d+}/device/stop")
     public void deviceStop(@PathVariable Long sessionId, @RequestParam int stepId, Authentication authentication) {
         labSessionService.getSession(sessionId, currentUserId(authentication));
         deviceAcquisitionService.stop(sessionId, stepId);
     }
 
-    @GetMapping("/{sessionId}/device/snapshot")
+    @GetMapping("/{sessionId:\\d+}/device/snapshot")
     public Map<String, Object> deviceSnapshot(@PathVariable Long sessionId, @RequestParam int stepId, Authentication authentication) {
         labSessionService.getSession(sessionId, currentUserId(authentication));
         return deviceAcquisitionService.snapshot(sessionId, stepId);
     }
 
-    @PostMapping("/{sessionId}/assist")
+    @PostMapping("/{sessionId:\\d+}/ccd-capture")
+    public Map<String, Object> ccdCapture(@PathVariable Long sessionId, Authentication authentication) {
+        labSessionService.getSession(sessionId, currentUserId(authentication));
+        return uvcCameraCaptureService.captureToUpload();
+    }
+
+    @PostMapping("/{sessionId:\\d+}/assist")
     public AssistResponse assist(@PathVariable Long sessionId, @RequestBody AssistRequest req, Authentication authentication) {
         return labSessionService.assist(sessionId, currentUserId(authentication), req);
     }
 
-    @PostMapping(value = "/{sessionId}/assist/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PostMapping(value = "/{sessionId:\\d+}/assist/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter assistStream(@PathVariable Long sessionId, @RequestBody AssistRequest req, Authentication authentication) {
         return labSessionService.assistStream(sessionId, currentUserId(authentication), req);
     }
 
-    @PostMapping("/{sessionId}/env-check")
+    @PostMapping("/{sessionId:\\d+}/env-check")
     public EnvCheckResponse envCheck(@PathVariable Long sessionId,
                                      @RequestBody(required = false) EnvCheckRequest req,
                                      Authentication authentication) {
         return labSessionService.envCheck(sessionId, currentUserId(authentication), req);
     }
 
-    @GetMapping("/{sessionId}/env-logs")
+    @GetMapping("/{sessionId:\\d+}/env-logs")
     public List<EnvCheckLog> envLogs(@PathVariable Long sessionId, Authentication authentication) {
         currentUserId(authentication);
         return labSessionService.getEnvCheckLogs(sessionId);
     }
 
-    @PostMapping("/{sessionId}/tutorial-view")
+    @PostMapping("/{sessionId:\\d+}/tutorial-view")
     public LabSession tutorialView(@PathVariable Long sessionId, Authentication authentication) {
         return labSessionService.incrementTutView(sessionId, currentUserId(authentication));
     }
 
-    @PostMapping("/{sessionId}/finish")
+    @PostMapping("/{sessionId:\\d+}/finish")
     public LabSession finish(@PathVariable Long sessionId, Authentication authentication) {
         return labSessionService.finishSession(sessionId, currentUserId(authentication));
     }
 
-    @GetMapping("/{sessionId}/report")
+    @GetMapping("/{sessionId:\\d+}/report")
     public Map<String, Object> report(@PathVariable Long sessionId, Authentication authentication) {
         return labSessionService.buildReportData(sessionId, currentUserId(authentication));
     }
 
-    @GetMapping("/{sessionId}/report/docx")
+    @GetMapping("/{sessionId:\\d+}/report/docx")
     public ResponseEntity<byte[]> reportDocx(@PathVariable Long sessionId, Authentication authentication) throws Exception {
         Map<String, Object> data = labSessionService.buildReportData(sessionId, currentUserId(authentication));
         byte[] bytes = reportService.generateDocx(data);
@@ -180,7 +203,7 @@ public class SessionController {
                 .body(bytes);
     }
 
-    @PostMapping("/{sessionId}/report/student-docx")
+    @PostMapping("/{sessionId:\\d+}/report/student-docx")
     public ResponseEntity<byte[]> studentReportDocx(@PathVariable Long sessionId,
                                                     @RequestBody StudentReportDocxRequest request,
                                                     Authentication authentication) throws Exception {

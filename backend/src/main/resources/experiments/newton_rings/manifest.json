@@ -1,65 +1,43 @@
 {
   "code": "newton_rings",
-  "name": "牛顿环实验",
+  "name": "牛顿环法测定平凸透镜曲率半径",
+  "enabled": true,
   "category": "optics",
   "dataCollection": {
     "enabled": true
   },
   "menuLabels": [
-    "仪器检查与光路调节",
-    "零级环心定位与视场居中",
+    "仪器摆放与光路装调",
+    "目镜视度调节与粗调成像",
     "暗环直径测量",
-    "曲率半径或波长计算"
+    "曲率半径计算",
+    "实验结束整理"
   ],
   "steps": {
     "1": {
-      "title": "仪器检查与光路调节",
+      "title": "仪器摆放与光路装调",
       "correctionMode": "vision",
       "assistMock": {
-        "errorType": "光路调节",
-        "detail": "反射镜倾角过大或光源未对准，视场环纹模糊、亮度不均。",
-        "feedback": "**原因分析**：光路未对准会导致环纹对比度差，影响后续读数。\n\n**纠错指导**：\n1. **编号1**：检查反射镜是否使光束落在透镜中心。\n2. **编号2**：重新调焦，先十字丝后环纹。",
+        "errorType": "光路装调",
+        "detail": "牛顿环中心未放到物镜下方、底座反光镜未收起或 45° 半反镜未对准，容易造成视场杂散光和条纹亮度不均。",
+        "feedback": "**原因分析**：牛顿环需要钠光经 45° 半反镜近似垂直照射空气膜；底部杂散光会降低干涉条纹对比度。\n\n**纠错指导**：\n1. **编号1**：确认牛顿环组件位于物镜正下方并已用压片压稳。\n2. **编号2**：将底座反光镜向内收起，微调半反镜使视场亮度均匀。",
         "marks": [
-          {
-            "x": 268,
-            "y": 182,
-            "w": 124,
-            "h": 104,
-            "n": 1
-          },
-          {
-            "x": 518,
-            "y": 252,
-            "w": 110,
-            "h": 92,
-            "n": 2
-          }
+          { "x": 268, "y": 182, "w": 124, "h": 104, "n": 1 },
+          { "x": 518, "y": 252, "w": 110, "h": 92, "n": 2 }
         ]
       },
       "guidePath": "steps/1.md"
     },
     "2": {
-      "title": "零级环心定位与视场居中",
+      "title": "目镜视度调节与粗调成像",
       "correctionMode": "vision",
       "assistMock": {
-        "errorType": "环心定位",
-        "detail": "十字丝未对准环心，或初读数未记录导致后续直径计算基准缺失。",
-        "feedback": "**原因分析**：环心偏移会系统性增大或减小各环直径。\n\n**纠错指导**：\n1. **编号1**：从正面观察十字丝交点是否与暗环中心重合。\n2. **编号2**：确认已记录 D₀ 并写在数据表表头。",
+        "errorType": "调焦成像",
+        "detail": "十字分划板未先调清，或调焦方向错误，导致环纹不清晰并存在撞击玻璃风险。",
+        "feedback": "**原因分析**：读数显微镜应先调清叉丝，再让镜筒由低处向高处抬升寻找牛顿环。\n\n**纠错指导**：\n1. **编号1**：旋节目镜使十字丝清晰。\n2. **编号2**：缓慢上升镜筒并微调半反镜，直到中心暗斑和同心圆环清楚。",
         "marks": [
-          {
-            "x": 302,
-            "y": 168,
-            "w": 118,
-            "h": 100,
-            "n": 1
-          },
-          {
-            "x": 548,
-            "y": 278,
-            "w": 104,
-            "h": 88,
-            "n": 2
-          }
+          { "x": 302, "y": 168, "w": 118, "h": 100, "n": 1 },
+          { "x": 548, "y": 278, "w": 104, "h": 88, "n": 2 }
         ]
       },
       "guidePath": "steps/2.md"
@@ -70,134 +48,58 @@
       "dataSource": "image",
       "deviceType": "reading_microscope",
       "dataFields": [
-        {
-          "key": "ring_m",
-          "label": "暗环序号 m",
-          "type": "number",
-          "required": true,
-          "placeholder": "如 10"
-        },
-        {
-          "key": "reading_left_mm",
-          "label": "左读数",
-          "type": "number",
-          "unit": "mm",
-          "min": 0,
-          "max": 30,
-          "required": true
-        },
-        {
-          "key": "reading_right_mm",
-          "label": "右读数",
-          "type": "number",
-          "unit": "mm",
-          "min": 0,
-          "max": 30,
-          "required": true
-        },
-        {
-          "key": "diameter_D_mm",
-          "label": "直径 Dₘ",
-          "type": "number",
-          "unit": "mm",
-          "min": 0,
-          "max": 20,
-          "required": false,
-          "placeholder": "可由左右读数差求得"
-        }
+        { "key": "ring_m", "label": "暗环级数 m", "type": "number", "required": true, "placeholder": "如 10" },
+        { "key": "ring_n", "label": "暗环级数 n", "type": "number", "required": false, "placeholder": "如 15" },
+        { "key": "reading_left_mm", "label": "左侧读数", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true },
+        { "key": "reading_right_mm", "label": "右侧读数", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true },
+        { "key": "diameter_D_mm", "label": "暗环直径 D", "type": "number", "unit": "mm", "min": 0, "max": 50, "required": false, "computed": "abs(reading_right_mm - reading_left_mm)" }
       ],
       "assistMock": {
         "errorType": "暗环读数",
-        "detail": "左右读数差与直径不一致，或环序号记录混乱。",
-        "feedback": "**原因分析**：读数误差与回程间隙会直接影响 Dₘ² 计算。\n\n**纠错指导**：\n1. **编号1**：复核 D = |右读数 − 左读数|。\n2. **编号2**：检查环序号是否与数据表一一对应。",
+        "detail": "叉丝未与暗环相切、测量方向不是直径方向，或测微鼓轮中途反转。",
+        "feedback": "**原因分析**：弦长会小于直径，空程差会让左右读数不可比。\n\n**纠错指导**：\n1. **编号1**：让竖叉丝与暗环外侧相切，并沿圆环直径方向移动。\n2. **编号2**：全程保持同一转向，按左侧 m 到 n、右侧 n 到 m 的顺序记录。",
         "marks": [
-          {
-            "x": 276,
-            "y": 194,
-            "w": 122,
-            "h": 106,
-            "n": 1
-          },
-          {
-            "x": 532,
-            "y": 264,
-            "w": 108,
-            "h": 90,
-            "n": 2
-          }
+          { "x": 276, "y": 194, "w": 122, "h": 106, "n": 1 },
+          { "x": 532, "y": 264, "w": 108, "h": 90, "n": 2 }
         ]
       },
       "guidePath": "steps/3.md"
     },
     "4": {
-      "title": "曲率半径或波长计算",
+      "title": "曲率半径计算",
       "correctionMode": "data",
       "dataSource": "manual",
       "dataFields": [
-        {
-          "key": "delta_m",
-          "label": "环序差 Δm",
-          "type": "number",
-          "required": true,
-          "placeholder": "如 5"
-        },
-        {
-          "key": "delta_D2_mm2",
-          "label": "Dₘ² − Dₙ²",
-          "type": "number",
-          "unit": "mm²",
-          "min": 0,
-          "required": true
-        },
-        {
-          "key": "lambda_nm",
-          "label": "波长 λ",
-          "type": "number",
-          "unit": "nm",
-          "min": 400,
-          "max": 700,
-          "required": false,
-          "placeholder": "钠光约 589.3"
-        },
-        {
-          "key": "radius_R_mm",
-          "label": "曲率半径 R",
-          "type": "number",
-          "unit": "mm",
-          "min": 100,
-          "max": 10000,
-          "required": false
-        },
-        {
-          "key": "error_pct",
-          "label": "相对误差",
-          "type": "number",
-          "unit": "%",
-          "required": false
-        }
+        { "key": "delta_m", "label": "环序差 |m-n|", "type": "number", "min": 1, "required": true, "placeholder": "建议 ≥ 5" },
+        { "key": "delta_D2_mm2", "label": "Dₘ²-Dₙ²", "type": "number", "unit": "mm²", "min": 0, "required": true },
+        { "key": "lambda_nm", "label": "钠黄光波长 λ", "type": "number", "unit": "nm", "min": 400, "max": 700, "required": false, "placeholder": "589.3" },
+        { "key": "radius_R_mm", "label": "曲率半径 R", "type": "number", "unit": "mm", "min": 100, "max": 10000, "required": false },
+        { "key": "average_R_mm", "label": "平均曲率半径", "type": "number", "unit": "mm", "min": 100, "max": 10000, "required": false }
       ],
       "assistMock": {
-        "errorType": "结果计算",
-        "detail": "公式代换单位不统一，或 λ、R 数量级明显偏离合理范围。",
-        "feedback": "**原因分析**：单位换算错误是光学实验最常见计算失误。\n\n**纠错指导**：\n1. **编号1**：将 D 换算为 m 后再代入公式。\n2. **编号2**：钠光 λ 约为 589 nm，R 通常在米级，请核对结果量级。",
+        "errorType": "公式与单位",
+        "detail": "公式中漏掉 4、把 nm/mm/m 混用，或环序差小于 5 导致结果波动大。",
+        "feedback": "**原因分析**：R = (Dₘ² - Dₙ²) / [4(m - n)λ]，代入时必须统一单位。\n\n**纠错指导**：\n1. **编号1**：若 D 用 mm，λ 也要换成 mm 再计算 R。\n2. **编号2**：优先使用 |m-n| ≥ 5 的数据组并求平均。",
         "marks": [
-          {
-            "x": 288,
-            "y": 176,
-            "w": 120,
-            "h": 102,
-            "n": 1
-          },
-          {
-            "x": 556,
-            "y": 286,
-            "w": 102,
-            "h": 86,
-            "n": 2
-          }
+          { "x": 288, "y": 176, "w": 120, "h": 102, "n": 1 },
+          { "x": 556, "y": 286, "w": 102, "h": 86, "n": 2 }
         ]
       },
       "guidePath": "steps/4.md"
+    },
+    "5": {
+      "title": "实验结束整理",
+      "correctionMode": "vision",
+      "assistMock": {
+        "errorType": "收纳复原",
+        "detail": "光源、CCD 或监视器未关闭，光学器件未盖好，线缆和附件未恢复原位。",
+        "feedback": "**原因分析**：光学实验结束后的清洁与复原会影响下一组观察质量。\n\n**纠错指导**：\n1. **编号1**：关闭钠光灯、监视器与 CCD 电源。\n2. **编号2**：取下牛顿环器件，盖好镜头盖并整理线缆。",
+        "marks": [
+          { "x": 300, "y": 180, "w": 118, "h": 100, "n": 1 },
+          { "x": 540, "y": 260, "w": 110, "h": 90, "n": 2 }
+        ]
+      },
+      "guidePath": "steps/5.md"
     }
   },
   "reportGuidePath": "report-guide.md"

@@ -12,6 +12,7 @@ public class ExperimentConfig {
     private String code;
     private String name;
     private String category;
+    private Boolean enabled = true;
     private List<String> menuLabels;
     private List<String> reportKnowledge;
     private List<String> reportPath;

@@ -5,7 +5,7 @@
     :style="{ '--history-panel-width': `${historyWidth}px` }"
   >
     <aside
-      class="order-2 hidden lg:flex min-w-0 min-h-0 h-full flex-col gap-3 overflow-hidden border-l border-line-soft bg-white"
+      class="history-panel order-2 min-w-0 min-h-0 h-full flex-col gap-3 overflow-hidden border-l border-line-soft bg-white"
       :class="{ '!flex-none !w-0 !overflow-hidden !border-l-0': historyCollapsed }"
       v-show="!historyCollapsed"
     >
@@ -61,7 +61,7 @@
     <button
       v-if="!historyCollapsed"
       type="button"
-      class="history-collapse-btn hidden lg:flex absolute right-1 top-1/2 -translate-y-1/2 z-30 w-5 h-8 rounded-lg border border-line-soft bg-white text-ink-muted hover:text-brand-600 hover:border-brand-300 transition-colors items-center justify-center shadow-card"
+      class="history-collapse-btn absolute right-1 top-1/2 -translate-y-1/2 z-30 w-5 h-8 rounded-lg border border-line-soft bg-white text-ink-muted hover:text-brand-600 hover:border-brand-300 transition-colors items-center justify-center shadow-card"
       title="收起历史对话"
       @click="historyCollapsed = true"
     >
@@ -72,7 +72,7 @@
     <button
       v-if="historyCollapsed"
       type="button"
-      class="history-expand-btn hidden lg:flex absolute right-0 top-0 bottom-0 z-30 w-6 border-l border-line-soft bg-white text-ink-muted hover:text-brand-600 hover:border-brand-300 transition-colors items-center justify-center"
+      class="history-expand-btn absolute right-0 top-0 bottom-0 z-30 w-6 border-l border-line-soft bg-white text-ink-muted hover:text-brand-600 hover:border-brand-300 transition-colors items-center justify-center"
       title="展开历史对话"
       @click="historyCollapsed = false"
     >
@@ -81,7 +81,7 @@
 
     <div
       v-show="!historyCollapsed"
-      class="history-resizer hidden lg:block"
+      class="history-resizer"
       title="拖拽调整会话记录宽度"
       @pointerdown="startResize"
     />
@@ -130,8 +130,8 @@ import Composer from '../chat/Composer.vue'
 
 const HISTORY_WIDTH_KEY = 'wxz_history_panel_width'
 const MIN_HISTORY_WIDTH = 150
-const MAX_HISTORY_WIDTH = 420
-const DEFAULT_HISTORY_WIDTH = 220
+const MAX_HISTORY_WIDTH = 320
+const DEFAULT_HISTORY_WIDTH = 180
 
 const savedHistoryWidth = Number(localStorage.getItem(HISTORY_WIDTH_KEY))
 const historyWidth = ref(
@@ -219,39 +219,31 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 1fr);
 }
 
-@media (min-width: 1024px) {
+.history-panel,
+.history-resizer,
+.history-collapse-btn,
+.history-expand-btn {
+  display: none;
+}
+
+@media (min-width: 860px) {
   .right-panel-shell {
     grid-template-columns: minmax(0, 1fr) var(--history-panel-width);
   }
-}
 
-/* 历史面板收起时 */
-@media (min-width: 1024px) {
   .right-panel-history-collapsed {
     grid-template-columns: minmax(0, 1fr) 24px !important;
   }
-}
 
-@media (max-width: 1366px), (max-height: 820px) {
-  .right-panel-shell {
-    grid-template-columns: minmax(0, 1fr);
+  .history-panel {
+    display: flex;
   }
 
-  .right-panel-shell > aside,
   .history-resizer,
-  .history-collapse-btn {
-    display: none !important;
+  .history-collapse-btn,
+  .history-expand-btn {
+    display: flex;
   }
-}
-
-:global(.native-shell) .right-panel-shell {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-:global(.native-shell) .right-panel-shell > aside,
-:global(.native-shell) .right-panel-shell .history-resizer,
-:global(.native-shell) .right-panel-shell .history-collapse-btn {
-  display: none !important;
 }
 
 .history-resizer {

@@ -15,4 +15,7 @@ public class DataFieldConfig {
     private Double min;
     private Double max;
     private String placeholder;
+    /** Optional formula such as abs(reading_right_mm - reading_left_mm). */
+    private String computed;
+    private boolean readOnly = false;
 }

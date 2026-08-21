@@ -1,6 +1,7 @@
 {
   "code": "tensile_steel",
   "name": "低碳钢拉伸实验",
+  "enabled": false,
   "category": "mechanics",
   "dataCollection": {
     "enabled": true

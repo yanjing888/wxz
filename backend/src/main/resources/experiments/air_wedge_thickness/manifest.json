@@ -1,0 +1,108 @@
+{
+  "code": "air_wedge_thickness",
+  "name": "空气劈尖干涉测量薄片厚度",
+  "enabled": true,
+  "category": "optics",
+  "dataCollection": {
+    "enabled": true
+  },
+  "menuLabels": [
+    "器件安放与光路调节",
+    "调焦与条纹校正",
+    "测量数据采集",
+    "薄片厚度计算",
+    "仪器复原"
+  ],
+  "steps": {
+    "1": {
+      "title": "器件安放与光路调节",
+      "correctionMode": "vision",
+      "assistMock": {
+        "errorType": "劈尖安放",
+        "detail": "空气劈尖未压稳、棱边方向未与叉丝大致平行，或底座反光镜未收起造成杂散光。",
+        "feedback": "**原因分析**：劈尖干涉条纹来自微小空气楔角，装置姿态和照明方向会直接影响条纹方向与对比度。\n\n**纠错指导**：\n1. **编号1**：将空气劈尖装置放在工作台并用压片轻压稳。\n2. **编号2**：保持钠光经 45° 半反镜入射，底座反光镜向内收起。",
+        "marks": [
+          { "x": 260, "y": 180, "w": 126, "h": 106, "n": 1 },
+          { "x": 520, "y": 250, "w": 112, "h": 92, "n": 2 }
+        ]
+      },
+      "guidePath": "steps/1.md"
+    },
+    "2": {
+      "title": "调焦与条纹校正",
+      "correctionMode": "vision",
+      "assistMock": {
+        "errorType": "条纹校正",
+        "detail": "条纹相对水平叉丝倾斜，或反复大幅调焦仍无法获得均匀视场。",
+        "feedback": "**原因分析**：空气劈尖条纹应尽量与水平叉丝平行，条纹略虚属于正常现象。\n\n**纠错指导**：\n1. **编号1**：先调清十字叉丝，再由低到高抬升镜筒找直条纹。\n2. **编号2**：条纹倾斜时调劈尖夹座四颗螺钉，不旋转显微镜主体。",
+        "marks": [
+          { "x": 292, "y": 166, "w": 120, "h": 100, "n": 1 },
+          { "x": 540, "y": 272, "w": 108, "h": 88, "n": 2 }
+        ]
+      },
+      "guidePath": "steps/2.md"
+    },
+    "3": {
+      "title": "测量数据采集",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "dataFields": [
+        { "key": "x1_mm", "label": "区间起点 x₁", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true },
+        { "key": "x2_mm", "label": "区间终点 x₂", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true },
+        { "key": "L_prime_mm", "label": "区间长度 L′", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true, "placeholder": "|x₂-x₁|" },
+        { "key": "fringe_count", "label": "条纹数 n′", "type": "number", "min": 1, "max": 100, "required": true },
+        { "key": "x_edge_mm", "label": "棱边读数 x棱", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": false },
+        { "key": "x_sheet_mm", "label": "薄片读数 x片", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": false },
+        { "key": "L_mm", "label": "棱边到薄片距离 L", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true, "placeholder": "|x片-x棱|" }
+      ],
+      "assistMock": {
+        "errorType": "条纹计数",
+        "detail": "起终点读数差与 L′ 不一致，或暗纹、明纹混数导致 n′ 偏差。",
+        "feedback": "**原因分析**：公式 d = (L/L′)(n′λ/2) 对条纹数和长度读数都很敏感。\n\n**纠错指导**：\n1. **编号1**：统一数暗纹或统一数明纹，起终点落在条纹中间时不计入。\n2. **编号2**：全程保持测微鼓轮同一转向，并复核 L′ = |x₂ - x₁|。",
+        "marks": [
+          { "x": 278, "y": 192, "w": 122, "h": 104, "n": 1 },
+          { "x": 532, "y": 262, "w": 110, "h": 90, "n": 2 }
+        ]
+      },
+      "guidePath": "steps/3.md"
+    },
+    "4": {
+      "title": "薄片厚度计算",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "dataFields": [
+        { "key": "L_mm", "label": "棱边到薄片距离 L", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true },
+        { "key": "L_prime_mm", "label": "区间长度 L′", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true },
+        { "key": "fringe_count", "label": "条纹数 n′", "type": "number", "min": 1, "max": 100, "required": true },
+        { "key": "lambda_nm", "label": "钠黄光波长 λ", "type": "number", "unit": "nm", "min": 400, "max": 700, "required": false, "placeholder": "589.3" },
+        { "key": "thickness_um", "label": "薄片厚度 d", "type": "number", "unit": "μm", "min": 0, "max": 1000, "required": false },
+        { "key": "average_thickness_um", "label": "平均厚度", "type": "number", "unit": "μm", "min": 0, "max": 1000, "required": false }
+      ],
+      "assistMock": {
+        "errorType": "厚度计算",
+        "detail": "公式中的 L、L′ 位置放反，或 λ 单位没有从 nm 换算到与长度一致的单位。",
+        "feedback": "**原因分析**：空气劈尖薄片厚度按 d = (L/L′) · (n′λ/2) 计算，长度单位必须统一。\n\n**纠错指导**：\n1. **编号1**：确认 L 是棱边到薄片的总距离，L′ 是选定条纹区间长度。\n2. **编号2**：将钠黄光 λ = 589.3 nm 换成目标厚度单位后再计算。",
+        "marks": [
+          { "x": 294, "y": 178, "w": 120, "h": 102, "n": 1 },
+          { "x": 552, "y": 286, "w": 104, "h": 86, "n": 2 }
+        ]
+      },
+      "guidePath": "steps/4.md"
+    },
+    "5": {
+      "title": "仪器复原",
+      "correctionMode": "vision",
+      "assistMock": {
+        "errorType": "仪器复原",
+        "detail": "空气劈尖未取下妥善放置，光源和示教设备未关闭，或压片压力过大导致器件状态改变。",
+        "feedback": "**原因分析**：劈尖玻璃表面和夹座状态会影响下一次条纹质量。\n\n**纠错指导**：\n1. **编号1**：关闭光源、CCD 与监视器电源。\n2. **编号2**：取下空气劈尖装置并整理附件、线缆和显微镜。",
+        "marks": [
+          { "x": 300, "y": 180, "w": 118, "h": 100, "n": 1 },
+          { "x": 540, "y": 260, "w": 110, "h": 90, "n": 2 }
+        ]
+      },
+      "guidePath": "steps/5.md"
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

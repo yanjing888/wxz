@@ -68,6 +68,8 @@ public class DataValidationService {
         switch (code) {
             case "tensile_steel" -> validateTensile(step, values, result);
             case "newton_rings" -> validateNewtonRings(step, values, result);
+            case "air_wedge_thickness" -> validateAirWedge(step, values, result);
+            case "microscope_length_measurement" -> validateMicroscopeLength(step, values, result);
             default -> { }
         }
     }
@@ -105,6 +107,46 @@ public class DataValidationService {
             Double lambda = num(values, "lambda_nm");
             if (lambda != null && (lambda < 400 || lambda > 700)) {
                 result.getWarnings().add("波长 λ 数量级偏离可见光常用范围，请核对公式与单位");
+            }
+        }
+    }
+
+    private void validateAirWedge(StepConfig step, Map<String, Object> values, DataValidationResult result) {
+        String title = step.getTitle() != null ? step.getTitle() : "";
+        if (title.contains("条纹") || title.contains("数据")) {
+            Double x1 = num(values, "x1_mm");
+            Double x2 = num(values, "x2_mm");
+            Double interval = num(values, "L_prime_mm");
+            if (x1 != null && x2 != null && interval != null) {
+                double expected = Math.abs(x2 - x1);
+                if (Math.abs(interval - expected) > 0.05) {
+                    result.getWarnings().add("选定区间长度 L′ 与起终点读数差不一致，请复核读数");
+                }
+            }
+            Double count = num(values, "fringe_count");
+            if (count != null && count < 3) {
+                result.getWarnings().add("条纹数 n′ 偏少，建议选择更长且清晰的条纹区间");
+            }
+        }
+        if (title.contains("厚度") || title.contains("计算")) {
+            Double d = num(values, "thickness_um");
+            if (d != null && (d <= 0 || d > 1000)) {
+                result.getWarnings().add("薄片厚度 d 的数量级异常，请核对 L、L′、n′ 与单位换算");
+            }
+        }
+    }
+
+    private void validateMicroscopeLength(StepConfig step, Map<String, Object> values, DataValidationResult result) {
+        String title = step.getTitle() != null ? step.getTitle() : "";
+        if (title.contains("读数") || title.contains("长度")) {
+            Double start = num(values, "start_reading_mm");
+            Double end = num(values, "end_reading_mm");
+            Double length = num(values, "length_mm");
+            if (start != null && end != null && length != null) {
+                double expected = Math.abs(end - start);
+                if (Math.abs(length - expected) > 0.02) {
+                    result.getWarnings().add("长度 L 与两次读数差不一致，请检查主尺和测微鼓轮读数");
+                }
             }
         }
     }

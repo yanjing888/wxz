@@ -11,6 +11,12 @@
           @experiment-change="onExperimentChange"
         />
       </div>
+      <div class="head-right">
+        <div class="user-avatar brand-gradient">{{ userInitial }}</div>
+        <span class="user-name">{{ auth.displayName || auth.username }}</span>
+        <span class="user-sep" aria-hidden="true" />
+        <button type="button" class="logout-link" @click="logout">退出</button>
+      </div>
       <nav class="terminal-nav">
         <button
           v-for="tab in navTabs"
@@ -29,12 +35,6 @@
           <span v-if="tab.badge" class="tab-badge">{{ tab.badge }}</span>
         </button>
       </nav>
-      <div class="head-right">
-        <div class="user-avatar brand-gradient">{{ userInitial }}</div>
-        <span class="user-name">{{ auth.displayName || auth.username }}</span>
-        <span class="user-sep" aria-hidden="true" />
-        <button type="button" class="logout-link" @click="logout">退出</button>
-      </div>
     </header>
 
     <!-- ====== 加载/空 ====== -->
@@ -277,17 +277,11 @@
             class="camera-card"
             @click="openCameraModal(row.userId)"
           >
-            <div class="cam-preview-mini">
-              <span class="cam-badge" :class="benchCameraConfig?.enabled ? 'online' : 'offline'">
-                {{ benchCameraConfig?.enabled ? '在线' : '离线' }}
-              </span>
-              <div class="cam-placeholder">
-                <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                  <rect x="3" y="6" width="18" height="14" rx="2.5" />
-                  <circle cx="12" cy="13" r="3.5" />
-                </svg>
-              </div>
-            </div>
+            <TeacherCameraCardPreview
+              :live="!!row.cameraActive && benchCameraConfigured"
+              :browser-stream-url="benchCameraStreamUrl"
+              :camera-configured="benchCameraConfigured"
+            />
             <div class="cam-info">
               <strong>{{ row.studentName }}</strong>
               <span>{{ row.status === 'ACTIVE' ? row.stepTitle || '实验中' : '未开始' }}</span>
@@ -301,8 +295,8 @@
             <div ref="camLargeRef" class="cam-large-preview">
               <video v-show="camReady" ref="camVideoRef" class="cam-video" playsinline muted />
               <div v-if="!camReady" class="cam-loading">
-                <div class="spinner" />
-                <p>{{ camError || '连接中…' }}</p>
+                <div v-if="cameraSelectedStudent?.cameraActive && benchCameraConfigured" class="spinner" />
+                <p>{{ camError || (cameraSelectedStudent?.cameraActive ? '连接中…' : '学生尚未在监控页开启摄像头') }}</p>
               </div>
               <div v-if="camReady" class="cam-overlay-tl">
                 <span class="rec-dot" />
@@ -325,7 +319,13 @@
             </div>
             <div class="cam-modal-bar">
               <div class="cam-modal-actions">
-                <button type="button" @click="startCameraStream" :disabled="camReady">开启画面</button>
+                <button
+                  type="button"
+                  @click="startCameraStream"
+                  :disabled="camReady || !cameraSelectedStudent?.cameraActive || !benchCameraConfigured"
+                >
+                  开启画面
+                </button>
                 <button type="button" @click="stopCameraStream" :disabled="!camReady">关闭画面</button>
               </div>
               <button type="button" class="cam-modal-close" @click="closeCameraModal">关闭</button>
@@ -462,11 +462,12 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import flvjs from 'flv.js'
 import { experimentApi, teacherApi, systemApi } from '../api'
 import { useAuthStore } from '../stores/auth'
 import ReportModal from '../components/modals/ReportModal.vue'
 import ExperimentSelect from '../components/layout/ExperimentSelect.vue'
+import TeacherCameraCardPreview from '../components/monitor/TeacherCameraCardPreview.vue'
+import { useFlvLivePlayer } from '../composables/useFlvLivePlayer'
 
 const CURRENT_EXP_KEY = 'wxz_teacher_current_exp'
 const auth = useAuthStore()
@@ -507,13 +508,19 @@ const reviewFromDify = ref(true)
 const reviewError = ref('')
 
 const cameraSelectedId = ref(null)
-const camReady = ref(false)
-const camError = ref('')
 const camExpanded = ref(false)
 const camLargeRef = ref(null)
 const camVideoRef = ref(null)
 const cameraModalOpen = ref(false)
-let flvPlayer = null
+const flv = useFlvLivePlayer()
+const camReady = flv.ready
+const camError = flv.error
+let cameraPollTimer = null
+
+const benchCameraStreamUrl = computed(() => benchCameraConfig.value?.browserStreamUrl || '')
+const benchCameraConfigured = computed(() =>
+  !!benchCameraConfig.value?.enabled && !!benchCameraStreamUrl.value
+)
 
 const experimentOptions = computed(() => {
   if (experiments.value.length) return experiments.value
@@ -570,7 +577,8 @@ const cameraStudents = computed(() => {
       studentName: s.displayName || s.username,
       studentClass: s.studentClass,
       status: 'NOT_STARTED',
-      stepTitle: ''
+      stepTitle: '',
+      cameraActive: false
     }))
 })
 
@@ -669,7 +677,12 @@ watch(activeTab, (tab) => {
   if (tab === 'report' && !selectedReportId.value && sortedReports.value.length) {
     selectedReportId.value = sortedReports.value[0].sessionId
   }
-  if (tab !== 'camera') stopCameraStream()
+  if (tab !== 'camera') {
+    stopCameraStream()
+    stopCameraPoll()
+  } else {
+    startCameraPoll()
+  }
 })
 
 watch(
@@ -685,7 +698,31 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopCameraStream()
+  stopCameraPoll()
 })
+
+async function refreshClassroomForCamera() {
+  if (!selectedExpCode.value) return
+  try {
+    const { data } = await teacherApi.classroom({ experimentCode: selectedExpCode.value })
+    classroom.value = data
+  } catch {
+    // 轮询失败不阻断界面
+  }
+}
+
+function startCameraPoll() {
+  stopCameraPoll()
+  refreshClassroomForCamera()
+  cameraPollTimer = setInterval(refreshClassroomForCamera, 5000)
+}
+
+function stopCameraPoll() {
+  if (cameraPollTimer) {
+    clearInterval(cameraPollTimer)
+    cameraPollTimer = null
+  }
+}
 
 async function loadInitial() {
   loading.value = true
@@ -756,9 +793,17 @@ function selectReportItem(sessionId) {
 function openCameraModal(userId) {
   cameraSelectedId.value = userId
   cameraModalOpen.value = true
-  camReady.value = false
   camError.value = ''
-  nextTick(() => startCameraStream())
+  nextTick(() => {
+    const student = cameraStudents.value.find((s) => s.userId === userId)
+    if (student?.cameraActive && benchCameraConfigured.value) {
+      startCameraStream()
+    } else if (!student?.cameraActive) {
+      camError.value = '学生尚未在监控页开启摄像头'
+    } else if (!benchCameraConfigured.value) {
+      camError.value = '摄像头未配置或不可用'
+    }
+  })
 }
 
 function closeCameraModal() {
@@ -856,94 +901,30 @@ async function loadBenchCameraConfig() {
   }
 }
 
-function resolveStreamUrl(url) {
-  if (url?.startsWith('/ws/')) {
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    return `${protocol}://${window.location.host}${url}`
-  }
-  return url
-}
-
 async function startCameraStream() {
   stopCameraStream()
   camError.value = ''
-  camReady.value = false
+  const student = cameraSelectedStudent.value
+  if (!student?.cameraActive) {
+    camError.value = '学生尚未在监控页开启摄像头'
+    return
+  }
   const cfg = benchCameraConfig.value
   if (!cfg?.enabled || !cfg.browserStreamUrl) {
     camError.value = '摄像头未配置或不可用'
     return
   }
-  if (!flvjs.isSupported()) {
-    camError.value = '当前浏览器不支持 FLV 实时预览'
-    return
-  }
   await nextTick()
   const video = camVideoRef.value
   if (!video) return
-  video.muted = true
-  try {
-    flvPlayer = flvjs.createPlayer({
-      type: 'flv',
-      url: resolveStreamUrl(cfg.browserStreamUrl),
-      isLive: true,
-      cors: true
-    }, {
-      enableWorker: false,
-      enableStashBuffer: false,
-      stashInitialSize: 32,
-      maxBufferLength: 0.3,
-      liveBufferLatencyChasing: true,
-      autoCleanupSourceBuffer: true,
-      autoplay: true,
-      muted: true
-    })
-    flvPlayer.attachMediaElement(video)
-    flvPlayer.load()
-    await video.play()
-    await waitForVideoFrame(video, 7000)
-    camReady.value = true
-  } catch {
+  const ok = await flv.start(video, cfg.browserStreamUrl)
+  if (!ok && !camError.value) {
     camError.value = '无法播放摄像头视频流，请确认摄像头在线'
-    cleanupFlv()
-  }
-}
-
-function waitForVideoFrame(video, timeoutMs = 5000) {
-  return new Promise((resolve, reject) => {
-    if (video.readyState >= 2 && video.videoWidth > 0) { resolve(); return }
-    const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')) }, timeoutMs)
-    const onReady = () => { if (video.videoWidth > 0) { cleanup(); resolve() } }
-    const cleanup = () => {
-      clearTimeout(timer)
-      video.removeEventListener('loadeddata', onReady)
-      video.removeEventListener('playing', onReady)
-    }
-    video.addEventListener('loadeddata', onReady)
-    video.addEventListener('playing', onReady)
-  })
-}
-
-function cleanupFlv() {
-  if (flvPlayer) {
-    try {
-      flvPlayer.pause()
-      flvPlayer.unload()
-      flvPlayer.detachMediaElement()
-      flvPlayer.destroy()
-    } catch { /* noop */ }
-    flvPlayer = null
-  }
-  const video = camVideoRef.value
-  if (video) {
-    video.srcObject = null
-    video.removeAttribute('src')
-    video.load()
   }
 }
 
 function stopCameraStream() {
-  cleanupFlv()
-  camReady.value = false
+  flv.stop(camVideoRef.value)
   camExpanded.value = false
 }
 
@@ -1002,8 +983,9 @@ function logout() {
   background: #fff;
   border-bottom: 1px solid #e4e9f3;
   flex-shrink: 0;
+  position: relative;
 }
-.head-left, .head-right { display: flex; align-items: center; gap: 10px; }
+.head-left, .head-right { display: flex; align-items: center; gap: 10px; position: relative; z-index: 10; }
 .head-left img { height: 32px; width: auto; object-fit: contain; }
 .head-sep {
   width: 1px; height: 22px; background: #e4e9f3; flex-shrink: 0;
@@ -1030,8 +1012,17 @@ function logout() {
 
 /* ====== Tab 导航（嵌入顶栏） ====== */
 .terminal-nav {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
   display: flex; align-items: stretch; justify-content: center; gap: 4px;
-  flex: 1; min-width: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.terminal-nav > * {
+  pointer-events: auto;
 }
 .nav-tab {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -1359,7 +1350,7 @@ function logout() {
 }
 .cam-modal.expanded { width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
 .cam-large-preview { flex: 1; position: relative; background: #0a0e1a; overflow: hidden; }
-.cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; background: #000; }
 .cam-loading {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px;
@@ -1540,7 +1531,7 @@ function logout() {
 @media (max-width: 768px) {
   .teacher-terminal { height: auto; min-height: 100vh; overflow-y: auto; }
   .terminal-head { flex-wrap: wrap; gap: 8px; padding: 12px; height: auto; }
-  .terminal-nav { padding: 0 8px; overflow-x: auto; flex-basis: 100%; order: 3; }
+  .terminal-nav { position: relative; left: auto; top: auto; bottom: auto; transform: none; flex-basis: 100%; order: 3; padding: 0 8px; overflow-x: auto; pointer-events: auto; }
   .nav-tab { padding: 3px 12px; }
   .tab-icon { width: 22px; height: 22px; }
   .tab-panel { height: auto; }

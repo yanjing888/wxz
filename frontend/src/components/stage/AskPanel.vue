@@ -42,6 +42,8 @@ const props = defineProps({
   desc: { type: String, default: '围绕实验原理、公式推导与仪器结构提问，回答会结合本实验讲义。' },
   experimentCode: { type: String, default: '' },
   experimentName: { type: String, default: '' },
+  sessionId: { type: [Number, String], default: null },
+  reportContextProvider: { type: Function, default: null },
   suggestions: { type: Array, default: () => [] }
 })
 
@@ -111,7 +113,12 @@ async function sendMessage(text) {
   try {
     await postSse(
       `/api/ai/conversations/${conversationId.value}/chat/stream`,
-      { userMessage: prompt, experimentCode: props.experimentCode || null },
+      {
+        userMessage: prompt,
+        experimentCode: props.experimentCode || null,
+        sessionId: props.sessionId ? Number(props.sessionId) : null,
+        reportSectionsJson: props.reportContextProvider?.() || null
+      },
       {
         onChunk: (chunk) => { messages.value[aiIndex].text += chunk },
         onAnswerEnd: () => { messages.value[aiIndex].streaming = false },

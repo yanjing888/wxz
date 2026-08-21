@@ -6,6 +6,7 @@ import com.wuxiaozhi.dto.AssistResponse;
 import com.wuxiaozhi.dto.EnvCheckResponse;
 import com.wuxiaozhi.dto.experiment.ExperimentConfig;
 import com.wuxiaozhi.dto.experiment.StepConfig;
+import com.wuxiaozhi.dto.experiment.TutorialConfig;
 import com.wuxiaozhi.entity.ChatMessage;
 import com.wuxiaozhi.entity.EnvCheckLog;
 import com.wuxiaozhi.entity.LabSession;
@@ -96,7 +97,7 @@ class LabSessionServiceTest {
         EnvCheckResponse response = new EnvCheckResponse();
         response.setFromDify(false);
         response.setLevel("NA");
-        response.setSummary("暂时无法连接Dify服务");
+        response.setSummary("安全巡检暂时不可用");
         response.setSuggestion("");
 
         when(sessionRepository.findById(12L)).thenReturn(Optional.of(session));
@@ -146,6 +147,10 @@ class LabSessionServiceTest {
         step.setTitle("仪器检查与光路调节");
         step.setDesc("检查光路。");
         step.setCorrectionMode("vision");
+        TutorialConfig tut = new TutorialConfig();
+        tut.setSteps(List.of("将牛顿环器件置于物镜正下方"));
+        tut.setWarnings(List.of("不要触摸光学表面"));
+        step.setTut(tut);
 
         ExperimentConfig experiment = new ExperimentConfig();
         experiment.setCode("newton_rings");
@@ -208,5 +213,7 @@ class LabSessionServiceTest {
         assertThat(inputs).containsEntry("rules_section", "newton_rings.step.1.rules");
         assertThat(String.valueOf(inputs.get("retrieval_tags"))).contains("newton_rings", "step:1", "光路调节");
         assertThat((List<String>) inputs.get("retrieval_tags_list")).contains("newton_rings", "step:1", "光路调节");
+        assertThat(inputs).containsKey("step_guide");
+        assertThat(String.valueOf(inputs.get("step_guide"))).contains("操作要点");
     }
 }

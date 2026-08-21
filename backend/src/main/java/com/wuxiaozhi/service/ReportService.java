@@ -19,6 +19,9 @@ public class ReportService {
 
     private static final DateTimeFormatter LOG_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter REPORT_TIME = DateTimeFormatter.ofPattern("yyyy年MM月dd日 HH:mm:ss");
+    private static final DateTimeFormatter REPORT_DATE = DateTimeFormatter.ofPattern("yyyy年MM月dd日");
+
+    private final ReportHtmlDocxWriter htmlDocxWriter = new ReportHtmlDocxWriter();
 
     public byte[] generateDocx(Map<String, Object> report) throws Exception {
         try (XWPFDocument doc = new XWPFDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -47,29 +50,29 @@ public class ReportService {
     public byte[] generateStudentReportDocx(Map<String, Object> meta, List<Map<String, String>> sections)
             throws Exception {
         try (XWPFDocument doc = new XWPFDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            addCenterTitle(doc, str(meta.get("experimentName")) + " 实验报告");
+            addCenterTitle(doc, str(meta.get("experimentName")));
+            addCenterSubtitle(doc, "大学物理实验报告");
 
-            XWPFTable table = doc.createTable(3, 2);
+            XWPFTable table = doc.createTable(2, 4);
             setTableWidth(table, 9000);
-            fillRow(table, 0, "学生姓名", str(meta.get("studentName")));
-            fillRow(table, 1, "班级", str(meta.get("studentClass")));
-            fillRow(table, 2, "撰写时间", LocalDateTime.now().format(REPORT_TIME));
-            styleLabelValueTable(table);
+            fillInfoRow(table, 0, "姓名", str(meta.get("studentName")), "班级", str(meta.get("studentClass")));
+            fillInfoRow(table, 1, "实验名称", str(meta.get("experimentName")), "日期",
+                    LocalDateTime.now().format(REPORT_DATE));
+            styleInfoTable(table);
             doc.createParagraph();
 
-            int index = 1;
             for (Map<String, String> section : sections) {
                 String label = section.getOrDefault("label", "");
+                String contentHtml = section.getOrDefault("contentHtml", "");
                 String content = section.getOrDefault("content", "");
-                addHeading(doc, label.isBlank() ? (index + ".") : label);
-                if (content.isBlank()) {
-                    addBody(doc, "（待补充）");
+                addSectionHeading(doc, label);
+                if (!contentHtml.isBlank()) {
+                    htmlDocxWriter.writeSectionContent(doc, contentHtml);
+                } else if (!content.isBlank()) {
+                    htmlDocxWriter.writeSectionContent(doc, content);
                 } else {
-                    for (String line : content.split("\\r?\\n")) {
-                        addBody(doc, line);
-                    }
+                    addBody(doc, "（待补充）");
                 }
-                index += 1;
             }
 
             doc.createParagraph();
@@ -78,6 +81,43 @@ public class ReportService {
             doc.write(out);
             return out.toByteArray();
         }
+    }
+
+    private void addCenterSubtitle(XWPFDocument doc, String text) {
+        XWPFParagraph p = doc.createParagraph();
+        p.setAlignment(ParagraphAlignment.CENTER);
+        p.setSpacingAfter(200);
+        XWPFRun run = p.createRun();
+        run.setFontFamily("黑体");
+        run.setFontSize(14);
+        run.setText(text);
+    }
+
+    private void fillInfoRow(XWPFTable table, int rowIdx, String k1, String v1, String k2, String v2) {
+        XWPFTableRow row = table.getRow(rowIdx);
+        setCellText(row.getCell(0), k1, true);
+        setCellText(row.getCell(1), v1);
+        setCellText(row.getCell(2), k2, true);
+        setCellText(row.getCell(3), v2);
+    }
+
+    private void styleInfoTable(XWPFTable table) {
+        for (XWPFTableRow row : table.getRows()) {
+            for (int i = 0; i < row.getTableCells().size(); i += 2) {
+                setCellText(row.getCell(i), row.getCell(i).getText(), true);
+            }
+        }
+    }
+
+    private void addSectionHeading(XWPFDocument doc, String text) {
+        XWPFParagraph p = doc.createParagraph();
+        p.setSpacingBefore(240);
+        p.setSpacingAfter(120);
+        XWPFRun run = p.createRun();
+        run.setFontFamily("黑体");
+        run.setBold(true);
+        run.setFontSize(14);
+        run.setText(text != null ? text : "");
     }
 
     private void addCoverTable(XWPFDocument doc, Map<String, Object> report) {

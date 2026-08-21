@@ -14,8 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 KB_FILES: list[tuple[str, str, str, str]] = [
     ("visual-rules/general.md", "experiments/general/visual-rules.md", "correction_rules", "general"),
     ("visual-rules/newton_rings.md", "experiments/newton_rings/visual-rules.md", "correction_rules", "newton_rings"),
+    ("visual-rules/air_wedge_thickness.md", "experiments/air_wedge_thickness/visual-rules.md", "correction_rules", "air_wedge_thickness"),
+    ("visual-rules/microscope_length_measurement.md", "experiments/microscope_length_measurement/visual-rules.md", "correction_rules", "microscope_length_measurement"),
     ("visual-rules/tensile_steel.md", "experiments/tensile_steel/visual-rules.md", "correction_rules", "tensile_steel"),
     ("teaching-knowledge/newton_rings.md", "experiments/newton_rings/teaching-knowledge.md", "teaching", "newton_rings"),
+    ("teaching-knowledge/air_wedge_thickness.md", "experiments/air_wedge_thickness/teaching-knowledge.md", "teaching", "air_wedge_thickness"),
+    ("teaching-knowledge/microscope_length_measurement.md", "experiments/microscope_length_measurement/teaching-knowledge.md", "teaching", "microscope_length_measurement"),
     ("teaching-knowledge/tensile_steel.md", "experiments/tensile_steel/teaching-knowledge.md", "teaching", "tensile_steel"),
     ("teaching-knowledge/general.md", "experiments/general/teaching-knowledge.md", "teaching", "general"),
 ]

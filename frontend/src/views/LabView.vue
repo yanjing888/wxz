@@ -24,7 +24,7 @@
     />
 
     <!-- 主体：嵌入式工作台 — 贴顶栏底、贴左右边、贴底，仅保留顶部圆角 -->
-    <div class="lab-main flex-1 flex flex-row overflow-hidden min-h-0 h-full px-3">
+    <div class="lab-main flex-1 flex flex-row overflow-hidden min-h-0 px-3">
       <div
         ref="workspaceFrame"
         class="flex-1 workspace-frame workspace-frame-resizable min-h-0 h-full overflow-hidden"
@@ -51,7 +51,7 @@
           </span>
         </div>
         <!-- 展开状态 -->
-        <template v-else>
+        <div v-else class="left-workzone-scroll custom-scroll">
           <StepPanel
             :menu-labels="lab.experiment?.menuLabels || []"
             :active-step="lab.activeStep"
@@ -64,19 +64,37 @@
           />
           <div class="workzone-divider" />
           <DeviceReadBar
-            :busy="lab.deviceReadBusy"
+            :busy="lab.deviceReadBusy || lab.ccdCaptureBusy"
             :disabled="currentSessionReadOnly"
             :data-ready="lab.composerDataReady"
             :can-read-device="lab.canReadDeviceData"
             :can-capture-ccd="lab.canCaptureCcdImage"
             @read="onReadDevice"
-            @photo-read="showReadingAssist = true"
+            @photo-read="openReadingAssist()"
             @ccd-capture="onCaptureCcdImage"
           />
-          <div class="workzone-middle">
-            <StepWorkPanel :step="lab.stepConfig" />
-          </div>
-        </template>
+          <DataCollectionSection
+            v-if="lab.hasDataPanel"
+            :open="lab.dataPanelOpen"
+            :mode="lab.useDeviceData ? 'device' : 'manual'"
+            @toggle="lab.toggleDataPanel()"
+          >
+            <DataCollectionPanel
+              :fields="lab.currentDataFields"
+              :step-title="lab.stepConfig?.title || ''"
+              :values="dataFormValues"
+              :submission-count="lab.currentStepDataRows.length"
+              :last-saved="lab.currentStepHasSubmissions"
+              :submitting="lab.submittingData"
+              :validation-errors="lab.dataSubmitErrors"
+              :read-only="currentSessionReadOnly"
+              @update:values="dataFormValues = $event"
+              @recognize-field="openReadingAssist"
+              @submit="onSubmitStepData"
+            />
+          </DataCollectionSection>
+          <StepWorkPanel :step="lab.stepConfig" />
+        </div>
       </aside>
 
       <div
@@ -94,6 +112,8 @@
         <LabWorkbench
           v-model="workbenchTab"
           :data-count="sessionDataCount"
+          :session-data-revision="lab.sessionDataRevision"
+          :session-id="lab.session?.id || 0"
           :experiment-code="lab.experiment?.code || ''"
           :experiment-name="lab.experiment?.name || ''"
           :step-title="lab.stepConfig?.title || ''"
@@ -159,6 +179,7 @@
       :step-desc="lab.stepConfig?.desc || ''"
       :device-type="lab.stepConfig?.deviceType || lab.deviceType || ''"
       :data-fields="lab.stepConfig?.dataFields || []"
+      :initial-target-field-key="selectedReadingFieldKey"
       @close="showReadingAssist = false"
       @apply="onApplyReading"
     />
@@ -193,6 +214,8 @@ import LabWorkbench from '../components/layout/LabWorkbench.vue'
 import StepPanel from '../components/step/StepPanel.vue'
 import StepWorkPanel from '../components/step/StepWorkPanel.vue'
 import DeviceReadBar from '../components/data/DeviceReadBar.vue'
+import DataCollectionSection from '../components/data/DataCollectionSection.vue'
+import DataCollectionPanel from '../components/data/DataCollectionPanel.vue'
 import TabletCameraCapture from '../components/camera/TabletCameraCapture.vue'
 import TutorialModal from '../components/modals/TutorialModal.vue'
 import QuickStatsModal from '../components/modals/QuickStatsModal.vue'
@@ -224,10 +247,12 @@ watch(
   () => lab.submittingData,
   (busy, wasBusy) => {
     if (wasBusy && !busy && sessionDataCount.value > 0) {
-      workbenchTab.value = 'record'
+      workbenchTab.value = 'data'
     }
   }
 )
+
+const sessionDataCount = computed(() => lab.sessionDataLogCount)
 
 const showTutorial = ref(false)
 const showQuickStats = ref(false)
@@ -254,12 +279,22 @@ const workspaceLeftWidth = ref(readStoredWorkspaceWidth())
 const workbenchTab = ref('guide')
 const stepPanelCollapsed = ref(false)
 const fileCount = ref(0)
+const dataFormValues = ref({})
+const selectedReadingFieldKey = ref('')
 let viewActive = true
+
+watch(
+  () => lab.activeStep,
+  () => {
+    dataFormValues.value = {}
+    lab.dataSubmitErrors = []
+  }
+)
 
 watch(
   () => [route.query.tab, route.query.agent],
   ([tab, agent]) => {
-    const allowed = ['guide', 'record']
+    const allowed = ['guide', 'record', 'data']
     if (typeof tab === 'string' && allowed.includes(tab)) {
       workbenchTab.value = tab
     }
@@ -279,8 +314,6 @@ watch(queryExperimentCode, async (code, previous) => {
     await showAppAlert('切换失败', e.response?.data?.message || e.message || '切换实验失败')
   }
 })
-
-const sessionDataCount = computed(() => Object.keys(lab.sessionDataByStep || {}).length)
 
 const workspaceColumns = computed(() => ({
   '--workspace-left-width': `${workspaceLeftWidth.value}px`
@@ -338,10 +371,8 @@ async function bootstrap() {
       const name = auth.displayName || localStorage.getItem('wxz_displayName') || '学生'
       await lab.loadExperiment(code)
       const restart = route.query.restart === '1'
-      const latest = restart ? null : await lab.getLatestActiveSession(code)
-      if (latest) {
-        await lab.resumeSession(latest)
-      } else {
+      const restored = restart ? null : await lab.restoreSessionForExperiment(code)
+      if (!restored) {
         await lab.startSession(code, name, auth.studentClass || '')
       }
     }
@@ -482,6 +513,11 @@ function onComposerCapture() {
   tabletCameraOpen.value = true
 }
 
+function openReadingAssist(field = null) {
+  selectedReadingFieldKey.value = field?.key || ''
+  showReadingAssist.value = true
+}
+
 async function onTabletCameraCaptured(file) {
   tabletCameraOpen.value = false
   return uploadTo(file)
@@ -507,36 +543,17 @@ async function onCaptureCcdImage() {
     return
   }
   try {
-    const ensureCam = lab.envEnsureCamFn
-    const captureFn = lab.envCaptureFn
-    if (!ensureCam || !captureFn) {
-      await showAppAlert(
-        '摄像头未就绪',
-        '请先到「监控」页面开启摄像头画面，再返回实验台使用 CCD 成像功能。'
-      )
-      return
-    }
-    const ready = await ensureCam()
-    if (!ready) {
-      await showAppAlert('CCD 相机未就绪', '请到「监控」页面确认相机在线并开启实时画面。')
-      return
-    }
-    const blob = await captureFn()
-    if (!blob) {
-      await showAppAlert('获取失败', '没有获取到有效 CCD 成像画面，请检查相机视频流。')
-      return
-    }
-    const file = new File([blob], `ccd-newton-rings-${Date.now()}.jpg`, { type: 'image/jpeg' })
-    await uploadTo(file)
+    const captured = await lab.captureCcdImageIntoComposer()
+    if (!captured?.url) return
     await lab.archiveSessionFile({
-      url: lab.readyImageUrl,
+      url: captured.url,
       category: 'photo',
-      fileName: file.name,
+      fileName: captured.fileName || `ccd-newton-rings-${Date.now()}.jpg`,
       note: `步骤「${lab.stepConfig?.title || ''}」CCD 成像`
     })
     workbenchTab.value = 'guide'
   } catch (e) {
-    await showAppAlert('获取 CCD 成像失败', e.response?.data?.message || e.message || '请检查相机连接后重试')
+    await showAppAlert('获取成像失败', e.response?.data?.message || e.message || '请检查 UVC 相机连接后重试')
   }
 }
 
@@ -546,8 +563,26 @@ function onApplyReading(payload) {
     return
   }
   const ok = lab.applyPhotoReadingToComposer(payload)
+  if (!ok) return
+  if (lab.hasDataPanel && lab.composerDataAttachment?.values) {
+    dataFormValues.value = {
+      ...dataFormValues.value,
+      ...lab.composerDataAttachment.values
+    }
+    lab.clearComposerDataAttachment()
+    return
+  }
+  workbenchTab.value = 'guide'
+}
+
+async function onSubmitStepData(values) {
+  if (currentSessionReadOnly.value) {
+    await showAppAlert('历史会话仅供查看', '已完成的历史会话不能提交数据，请新建会话后再操作。')
+    return
+  }
+  const ok = await lab.submitStepData(values, false)
   if (ok) {
-    workbenchTab.value = 'guide'
+    dataFormValues.value = {}
   }
 }
 
@@ -598,6 +633,16 @@ async function openReport() {
 </script>
 
 <style scoped>
+.left-workzone-scroll {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
 @media (max-width: 980px), (max-height: 760px) {
   .lab-main {
     padding-left: 8px;

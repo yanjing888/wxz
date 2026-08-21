@@ -1,6 +1,7 @@
 {
   "code": "general",
   "name": "物小智智能助手",
+  "enabled": false,
   "category": "general",
   "menuLabels": [],
   "steps": {},

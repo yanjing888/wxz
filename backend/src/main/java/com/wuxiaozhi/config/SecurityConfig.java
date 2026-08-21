@@ -48,6 +48,7 @@ public class SecurityConfig {
                                 "/ai/**", "/experiment/**", "/experiments/**", "/data/**", "/after/**",
                                 "/agents/**", "/prep/**", "/monitor", "/files", "/profile").permitAll()
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/password",
+                                "/api/public/experiments/**",
                                 "/api/system/**", "/uploads/**", "/download/**", "/app/**", "/assets/**", "/images/**", "/h2-console/**").permitAll()
                         .anyRequest().authenticated())
                 .headers(h -> h.frameOptions(f -> f.sameOrigin()))

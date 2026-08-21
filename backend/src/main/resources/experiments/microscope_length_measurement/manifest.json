@@ -1,0 +1,88 @@
+{
+  "code": "microscope_length_measurement",
+  "name": "读数显微镜微小长度直接测量练习",
+  "enabled": true,
+  "category": "optics",
+  "dataCollection": {
+    "enabled": true
+  },
+  "menuLabels": [
+    "样品安放与照明",
+    "调焦与方向校正",
+    "起终点读数",
+    "重复测量与平均"
+  ],
+  "steps": {
+    "1": {
+      "title": "样品安放与照明",
+      "correctionMode": "vision",
+      "assistMock": {
+        "errorType": "样品安放",
+        "detail": "刻尺、小孔样板或待测样品未压牢，或照明方式与样品观察不匹配。",
+        "feedback": "**原因分析**：样品晃动会直接改变起终点位置；普通长度观察时可打开底座反光镜作为底部照明。\n\n**纠错指导**：\n1. **编号1**：将样品放在工作台上并用压片压紧。\n2. **编号2**：根据样品透光情况调整底部照明和观察角度。",
+        "marks": [
+          { "x": 260, "y": 184, "w": 124, "h": 104, "n": 1 },
+          { "x": 520, "y": 252, "w": 110, "h": 90, "n": 2 }
+        ]
+      },
+      "guidePath": "steps/1.md"
+    },
+    "2": {
+      "title": "调焦与方向校正",
+      "correctionMode": "vision",
+      "assistMock": {
+        "errorType": "方向校正",
+        "detail": "被测长度方向未与显微镜移动导轨平行，导致测得斜向长度。",
+        "feedback": "**原因分析**：只有被测长度方向与显微镜移动方向平行，A′ - A 才代表真实长度。\n\n**纠错指导**：\n1. **编号1**：先看清十字叉丝，再调清样品像。\n2. **编号2**：旋转工作台或样品方向，使被测边与移动方向严格平行。",
+        "marks": [
+          { "x": 290, "y": 168, "w": 120, "h": 100, "n": 1 },
+          { "x": 548, "y": 272, "w": 108, "h": 88, "n": 2 }
+        ]
+      },
+      "guidePath": "steps/2.md"
+    },
+    "3": {
+      "title": "起终点读数",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "dataFields": [
+        { "key": "sample_id", "label": "样品编号", "type": "text", "required": false, "placeholder": "如 K-01" },
+        { "key": "start_reading_mm", "label": "起点读数 A", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true },
+        { "key": "end_reading_mm", "label": "终点读数 A′", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true },
+        { "key": "length_mm", "label": "被测长度 L", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": false, "placeholder": "A′-A" }
+      ],
+      "assistMock": {
+        "errorType": "显微镜读数",
+        "detail": "主尺整数和测微鼓轮小数合读错误，或长度 L 与 A′ - A 不一致。",
+        "feedback": "**原因分析**：JCD-3 读数显微镜需要主尺读整数毫米、测微鼓轮读小数部分，鼓轮最小刻度为 0.01 mm。\n\n**纠错指导**：\n1. **编号1**：用竖叉丝分别对准起点和终点。\n2. **编号2**：保持鼓轮转向不变，并复核 L = A′ - A。",
+        "marks": [
+          { "x": 276, "y": 194, "w": 122, "h": 106, "n": 1 },
+          { "x": 532, "y": 264, "w": 108, "h": 90, "n": 2 }
+        ]
+      },
+      "guidePath": "steps/3.md"
+    },
+    "4": {
+      "title": "重复测量与平均",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "dataFields": [
+        { "key": "trial_count", "label": "测量次数", "type": "number", "min": 1, "max": 20, "required": true, "placeholder": "建议 6" },
+        { "key": "average_length_mm", "label": "平均长度", "type": "number", "unit": "mm", "min": 0, "max": 100, "required": true },
+        { "key": "max_deviation_mm", "label": "最大偏差", "type": "number", "unit": "mm", "min": 0, "max": 10, "required": false },
+        { "key": "reading_resolution_mm", "label": "鼓轮最小分度", "type": "number", "unit": "mm", "min": 0.001, "max": 0.1, "required": false, "placeholder": "0.01" }
+      ],
+      "assistMock": {
+        "errorType": "重复测量",
+        "detail": "重复次数不足、未求平均，或没有说明空程差对读数稳定性的影响。",
+        "feedback": "**原因分析**：本实验的重点是形成稳定的单向读数习惯，并通过重复测量检查读数离散程度。\n\n**纠错指导**：\n1. **编号1**：同一位置重复测量 6 次并求平均值。\n2. **编号2**：若离散过大，检查样品是否压牢、被测方向是否平行、鼓轮是否反向。",
+        "marks": [
+          { "x": 292, "y": 176, "w": 120, "h": 102, "n": 1 },
+          { "x": 552, "y": 286, "w": 104, "h": 86, "n": 2 }
+        ]
+      },
+      "guidePath": "steps/4.md"
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

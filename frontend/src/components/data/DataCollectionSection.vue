@@ -2,7 +2,7 @@
   <div class="flex flex-col min-h-0" :class="open ? 'flex-1' : 'shrink-0'">
     <div class="flex items-center justify-between px-5 pt-3" :class="open ? 'pb-1' : 'pb-3'">
       <div class="flex items-center gap-2 min-w-0">
-        <span class="workzone-eyebrow">数据采集</span>
+        <span class="workzone-eyebrow">读数填写</span>
         <span class="text-[10px] text-ink-faint">· {{ mode === 'device' ? '仪器自动' : '手动填写' }}</span>
       </div>
       <button

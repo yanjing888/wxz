@@ -18,6 +18,8 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -40,6 +42,7 @@ public class DifyService {
     private static final Logger log = LoggerFactory.getLogger(DifyService.class);
     private static final int STATUS_CHECK_TIMEOUT_MS = 5_000;
     private static final long STATUS_CACHE_TTL_MS = 30_000;
+    private static final long MAX_AUDIO_BYTES = 30L * 1024 * 1024;
 
     private final DifyProperties difyProperties;
     private final ObjectMapper objectMapper;
@@ -92,21 +95,24 @@ public class DifyService {
                 body.put("response_mode", "streaming");
                 String apiKey = difyProperties.resolveApiKey(workflowKey);
                 String url = difyProperties.getBaseUrl().replaceAll("/$", "") + "/chat-messages";
-                StringBuilder full = new StringBuilder();
-                List<MarkDto> streamMarks = new ArrayList<>();
+                StreamCapture capture = new StreamCapture();
                 AtomicBoolean answerEnded = new AtomicBoolean(false);
                 streamChatSse(url, apiKey, body, node -> {
                     notifyAnswerComplete(node, answerEnded, onAnswerComplete);
-                    absorbStreamMeta(node, streamMarks, onMarks);
+                    absorbStreamMeta(node, capture.marks, onMarks);
+                    absorbStreamAnswer(node, capture, onDelta);
+                    absorbStreamFailure(node, capture);
                     String delta = extractStreamDelta(node);
                     if (!delta.isEmpty()) {
-                        full.append(delta);
+                        capture.full.append(delta);
                         onDelta.accept(delta);
                     }
                 });
-                log.info("Dify stream ok, workflowKey={}, length={}, marks={}",
-                        workflowKey, full.length(), streamMarks.size());
-                return buildStreamAssistResponse(full.toString(), streamMarks, hasImage);
+                finalizeEmptyStreamAnswer(capture, onDelta);
+                log.info("Dify stream ok, workflowKey={}, length={}, marks={}, workflowError={}",
+                        workflowKey, capture.full.length(), capture.marks.size(),
+                        capture.workflowError.isBlank() ? "none" : capture.workflowError);
+                return buildStreamAssistResponse(capture.full.toString(), capture.marks, hasImage);
             } catch (Throwable e) {
                 log.warn("Dify stream failed: {}", e.getMessage());
             }
@@ -219,6 +225,8 @@ public class DifyService {
         List<MarkDto> parsed = List.of();
         if ("parameter-extractor".equals(nodeType) || title.contains("参数提取")) {
             parsed = DifyRegionParser.fromOutputs(outputs, objectMapper);
+        } else if ("code".equals(nodeType) && title.contains("视觉 JSON")) {
+            parsed = DifyRegionParser.fromOutputs(outputs, objectMapper);
         } else if ("llm".equals(nodeType) && (title.contains("多模态") || title.contains("理解"))) {
             parsed = DifyRegionParser.fromOutputs(outputs, objectMapper);
         }
@@ -300,10 +308,117 @@ public class DifyService {
         if ("message".equals(event) || "agent_message".equals(event)) {
             return node.path("answer").asText("");
         }
+        if ("message_replace".equals(event)) {
+            return node.path("answer").asText("");
+        }
         if ("text_chunk".equals(event)) {
             return node.path("data").path("text").asText("");
         }
         return "";
+    }
+
+    private void absorbStreamFailure(JsonNode node, StreamCapture capture) {
+        String event = node.path("event").asText("");
+        if ("error".equals(event)) {
+            capture.workflowError = node.path("message").asText("Dify stream error");
+            return;
+        }
+        if ("workflow_finished".equals(event)) {
+            JsonNode data = node.path("data");
+            if ("failed".equalsIgnoreCase(data.path("status").asText(""))) {
+                String err = data.path("error").asText("");
+                if (err.isBlank()) {
+                    err = data.path("message").asText("");
+                }
+                if (!err.isBlank()) {
+                    capture.workflowError = err;
+                }
+            }
+            return;
+        }
+        if (!"node_finished".equals(event)) {
+            return;
+        }
+        JsonNode data = node.path("data");
+        if ("failed".equalsIgnoreCase(data.path("status").asText(""))) {
+            String err = data.path("error").asText("");
+            if (!err.isBlank()) {
+                capture.workflowError = err;
+            }
+        }
+    }
+
+    /** Chatflow 的 Answer 节点可能只在 node_finished 输出正文，而不发 message 流。 */
+    private void absorbStreamAnswer(JsonNode node, StreamCapture capture, Consumer<String> onDelta) {
+        if (!"node_finished".equals(node.path("event").asText(""))) {
+            return;
+        }
+        JsonNode data = node.path("data");
+        if (!"succeeded".equalsIgnoreCase(data.path("status").asText(""))) {
+            return;
+        }
+        if (!"answer".equals(data.path("node_type").asText(""))) {
+            return;
+        }
+        appendStreamAnswerIfMissing(capture, extractAnswerFromOutputs(data.path("outputs")), onDelta);
+    }
+
+    private void finalizeEmptyStreamAnswer(StreamCapture capture, Consumer<String> onDelta) {
+        if (capture.full.length() > 0) {
+            return;
+        }
+        if (capture.workflowError.isBlank()) {
+            return;
+        }
+        String feedback = formatStreamWorkflowError(capture.workflowError);
+        capture.full.append(feedback);
+        onDelta.accept(feedback);
+    }
+
+    private void appendStreamAnswerIfMissing(StreamCapture capture, String answer, Consumer<String> onDelta) {
+        if (answer == null || answer.isBlank() || capture.full.length() > 0) {
+            return;
+        }
+        capture.full.append(answer);
+        onDelta.accept(answer);
+    }
+
+    private String extractAnswerFromOutputs(JsonNode outputs) {
+        if (outputs == null || outputs.isMissingNode() || outputs.isNull()) {
+            return "";
+        }
+        for (String key : List.of("answer", "text", "output", "result")) {
+            String value = outputs.path(key).asText("");
+            if (!value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    String formatStreamWorkflowError(String rawError) {
+        String err = rawError != null ? rawError.trim() : "";
+        if (err.contains("127.0.0.1:8082") || err.contains("WXZ_BACKEND_BASE_URL")) {
+            log.warn("AI workflow could not load experiment config: {}", err);
+            return "**AI 助教配置异常**\n\n"
+                    + "智能助教暂时无法读取当前实验配置，因此本次无法可靠回复。请稍后再试。\n\n"
+                    + "如果多次出现，请联系管理员检查 AI 助教服务配置。";
+        }
+        if (err.contains("/api/public/experiments/")) {
+            log.warn("AI workflow could not load experiment manifest: {}", err);
+            return "**AI 助教配置异常**\n\n"
+                    + "智能助教暂时无法读取当前实验信息，因此本次无法可靠回复。请稍后再试。\n\n"
+                    + "如果多次出现，请联系管理员检查 AI 助教服务配置。";
+        }
+        log.warn("AI workflow failed: {}", err);
+        return "**AI 助教暂时不可用**\n\n"
+                + "智能助教服务开小差了，本次无法可靠回复。请稍后再试。";
+    }
+
+    private static final class StreamCapture {
+        private final StringBuilder full = new StringBuilder();
+        private final List<MarkDto> marks = new ArrayList<>();
+        private String workflowError = "";
     }
 
     private void streamChatSse(String url, String apiKey, Map<String, Object> body,
@@ -368,6 +483,72 @@ public class DifyService {
 
     public boolean isConfigured() {
         return difyProperties.isConfigured();
+    }
+
+    public String transcribeAudio(MultipartFile file, String userId) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("请先录制一段语音");
+        }
+        if (file.getSize() > MAX_AUDIO_BYTES) {
+            throw new IllegalArgumentException("语音文件超过 30MB 限制，请缩短录音后重试");
+        }
+        if (!difyProperties.canRun("voice-input")) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "语音识别服务暂时不可用，请联系管理员检查 AI 服务配置"
+            );
+        }
+
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new IllegalArgumentException("读取录音失败，请重新录制");
+        }
+        if (bytes.length == 0) {
+            throw new IllegalArgumentException("录音内容为空，请重新录制");
+        }
+
+        String uploadName = audioUploadFilename(file);
+        String url = difyProperties.getBaseUrl().replaceAll("/$", "") + "/audio-to-text";
+
+        ByteArrayResource audioResource = new ByteArrayResource(bytes) {
+            @Override
+            public String getFilename() {
+                return uploadName;
+            }
+        };
+        HttpHeaders fileHeaders = new HttpHeaders();
+        fileHeaders.setContentType(resolveAudioMediaType(uploadName));
+
+        MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+        form.add("file", new HttpEntity<>(audioResource, fileHeaders));
+        form.add("user", userId != null && !userId.isBlank() ? userId : "anonymous");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        headers.setBearerAuth(difyProperties.resolveApiKey("voice-input"));
+
+        HttpEntity<MultiValueMap<String, Object>> entity = new HttpEntity<>(form, headers);
+        try {
+            ResponseEntity<JsonNode> response = restTemplate.exchange(url, HttpMethod.POST, entity, JsonNode.class);
+            JsonNode root = response.getBody();
+            String text = root != null ? root.path("text").asText("").trim() : "";
+            if (text.isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.UNPROCESSABLE_ENTITY,
+                        "语音识别没有返回文字，请检查浏览器麦克风权限、输入设备是否选对，并尽量靠近麦克风后重试"
+                );
+            }
+            return text;
+        } catch (HttpStatusCodeException ex) {
+            String msg = ex.getResponseBodyAsString();
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    formatAudioTranscriptionError(ex, msg),
+                    ex
+            );
+        }
     }
 
     public String getAppMode() {
@@ -617,6 +798,48 @@ public class DifyService {
         return "wxz-upload" + ext;
     }
 
+    private String audioUploadFilename(MultipartFile file) {
+        String name = file.getOriginalFilename();
+        if (name != null) {
+            String lower = name.toLowerCase(Locale.ROOT);
+            for (String ext : List.of(".wav", ".mp3", ".m4a", ".amr", ".mpga")) {
+                if (lower.endsWith(ext)) {
+                    return "wxz-voice" + ext;
+                }
+            }
+        }
+        String type = file.getContentType() != null ? file.getContentType().toLowerCase(Locale.ROOT) : "";
+        if (type.contains("mpeg") || type.contains("mp3")) return "wxz-voice.mp3";
+        if (type.contains("mp4") || type.contains("m4a")) return "wxz-voice.m4a";
+        if (type.contains("amr")) return "wxz-voice.amr";
+        if (type.contains("mpga")) return "wxz-voice.mpga";
+        return "wxz-voice.wav";
+    }
+
+    private MediaType resolveAudioMediaType(String uploadName) {
+        String lower = uploadName != null ? uploadName.toLowerCase(Locale.ROOT) : "";
+        if (lower.endsWith(".mp3") || lower.endsWith(".mpga")) return MediaType.parseMediaType("audio/mp3");
+        if (lower.endsWith(".m4a")) return MediaType.parseMediaType("audio/m4a");
+        if (lower.endsWith(".amr")) return MediaType.parseMediaType("audio/amr");
+        return MediaType.parseMediaType("audio/wav");
+    }
+
+    private String formatAudioTranscriptionError(HttpStatusCodeException ex, String rawBody) {
+        String body = rawBody != null ? rawBody.trim() : "";
+        if (ex.getStatusCode().value() == 404 || body.contains("资源不存在") || body.contains("not_found")) {
+            log.warn("Voice transcription endpoint unavailable: {}", body.isBlank() ? ex.getMessage() : body);
+            return "语音识别服务暂时不可用，请联系管理员检查 AI 服务配置";
+        }
+        if (body.contains("unsupported_audio_type")) {
+            return "语音识别不支持当前录音格式，请使用 WAV、MP3、M4A、AMR 或 MPGA";
+        }
+        if (body.contains("unauthorized") || ex.getStatusCode().value() == 401) {
+            log.warn("Voice transcription authorization failed: {}", body.isBlank() ? ex.getMessage() : body);
+            return "语音识别服务暂时不可用，请联系管理员检查 AI 服务配置";
+        }
+        return body.isBlank() ? ex.getMessage() : body;
+    }
+
     private JsonNode postJson(String url, String apiKey, Map<String, Object> body) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -740,7 +963,7 @@ public class DifyService {
         AssistResponse resp = new AssistResponse();
         resp.setFromDify(false);
         resp.setType(hasImage ? "vision_correction" : "text_assist");
-        resp.setFeedback("**暂时无法连接Dify服务**\n\n我现在连接不上 Dify 服务，因此不能可靠回答这个问题。为避免给出不准确的信息，请稍后再试。\n\n如果多次出现，请联系Dify管理员检查 Dify 服务配置。");
+        resp.setFeedback("**AI 助教暂时不可用**\n\n我现在连接不上智能助教服务，因此不能可靠回答这个问题。为避免给出不准确的信息，请稍后再试。\n\n如果多次出现，请联系管理员检查 AI 助教服务配置。");
         resp.setMarks(List.of());
         return resp;
     }
@@ -749,7 +972,7 @@ public class DifyService {
         EnvCheckResponse resp = new EnvCheckResponse();
         resp.setFromDify(false);
         resp.setLevel("NA");
-        resp.setSummary("**暂时无法连接Dify服务**\n\n我现在连接不上 Dify 服务，因此不能完成本次安全巡检。为避免给出不准确的等级判断，请稍后再试。\n\n如果多次出现，请联系Dify管理员检查 Dify 服务配置。");
+        resp.setSummary("**安全巡检暂时不可用**\n\n我现在连接不上智能安全巡检服务，因此不能完成本次安全巡检。为避免给出不准确的等级判断，请稍后再试。\n\n如果多次出现，请联系管理员检查 AI 助教服务配置。");
         resp.setSuggestion("");
         return resp;
     }

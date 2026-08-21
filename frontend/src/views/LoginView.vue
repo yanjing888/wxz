@@ -357,7 +357,7 @@ async function submitLogin() {
       localStorage.removeItem('wxz_remember_user')
     }
     if (Capacitor.isNativePlatform() && auth.isStudent) {
-      await openTabletHome()
+      await enterDefaultNativeLab()
       return
     }
     await router.replace(auth.homeRoute())
@@ -439,6 +439,20 @@ async function openTabletHome() {
   }
 }
 
+async function enterDefaultNativeLab() {
+  const { data } = await experimentApi.list()
+  const items = data || []
+  const saved = localStorage.getItem('wxz_exp')
+  const code = items.some((item) => item.code === saved)
+    ? saved
+    : items[0]?.code
+  if (!code) {
+    showTip('当前账号还没有分配实验，请先在教师端分配实验。')
+    return
+  }
+  await router.replace({ name: 'lab', query: { exp: code } })
+}
+
 async function enterLab() {
   if (!selectedCode.value) return
   loading.value = true
@@ -464,7 +478,7 @@ function logout() {
 
 onMounted(() => {
   if (Capacitor.isNativePlatform() && auth.token && auth.isStudent) {
-    openTabletHome()
+    enterDefaultNativeLab()
   }
 })
 </script>

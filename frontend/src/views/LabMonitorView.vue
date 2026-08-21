@@ -38,7 +38,7 @@
       </div>
     </div>
 
-    <!-- Dify 服务不可用提示 -->
+    <!-- AI service unavailable notice -->
     <div
       v-if="!lab.envCheckAvailable && !bootstrapping"
       class="shrink-0 px-4 py-1.5 bg-amber-50 border-b border-amber-200 flex items-center gap-2"
@@ -64,6 +64,7 @@
           :bench-camera="lab.benchCamera"
           @toggle-env="lab.toggleEnvCheck"
           @env-check="(blob) => lab.runEnvCheck(blob)"
+          @camera-ui-change="onCameraUiChange"
         />
       </div>
 
@@ -105,7 +106,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, onActivated, onDeactivated, ref } from 'vue'
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 import { useLabStore } from '../stores/lab'
 import { useAuthStore } from '../stores/auth'
 import BenchCameraPanel from '../components/monitor/BenchCameraPanel.vue'
@@ -117,6 +118,18 @@ const auth = useAuthStore()
 const benchCam = ref(null)
 const bootstrapping = ref(false)
 let didInit = false
+let cameraHeartbeatTimer = null
+
+function onCameraUiChange({ active }) {
+  lab.reportCameraActive(active)
+  if (cameraHeartbeatTimer) {
+    clearInterval(cameraHeartbeatTimer)
+    cameraHeartbeatTimer = null
+  }
+  if (active) {
+    cameraHeartbeatTimer = setInterval(() => lab.reportCameraActive(true), 30_000)
+  }
+}
 
 const experimentName = computed(() => lab.experiment?.name || '实验台监控')
 
@@ -136,10 +149,8 @@ const envLevelTextColor = computed(() => {
 })
 
 const difyUnavailableReason = computed(() => {
-  const reason = lab.envCheckDifyStatus?.reason
   if (!lab.difyStatus) return '正在检测安全监测服务状态…'
-  if (reason) return `安全监测服务不可用：${reason}。请检查 Dify 服务是否正常运行。`
-  return '安全监测服务不可用，请检查 Dify 服务是否正常运行。'
+  return '安全监测服务暂时不可用，请稍后再试；如果多次出现，请联系管理员检查 AI 服务配置。'
 })
 
 const levelClass = computed(() => {
@@ -187,16 +198,23 @@ async function ensureSession() {
       : lab.experiments[0].code
     await lab.loadExperiment(code)
     const name = auth.displayName || localStorage.getItem('wxz_displayName') || '学生'
-    const latest = await lab.getLatestActiveSession(code)
-    if (latest) {
-      await lab.resumeSession(latest)
-    } else {
+    const restored = await lab.restoreSessionForExperiment(code)
+    if (!restored) {
       await lab.startSession(code, name, auth.studentClass || '')
     }
   } catch {
     // 会话加载失败不阻断摄像头功能
   } finally {
     bootstrapping.value = false
+  }
+}
+
+async function restoreMonitorCameraIfNeeded() {
+  if (!lab.shouldRestoreMonitorCamera()) return
+  await nextTick()
+  const restored = await benchCam.value?.ensureCameraReady?.()
+  if (restored) {
+    onCameraUiChange({ active: true })
   }
 }
 
@@ -218,9 +236,10 @@ onMounted(async () => {
         lab.startEnvTimer()
       })
   }
+  await restoreMonitorCameraIfNeeded()
 })
 
-onActivated(() => {
+onActivated(async () => {
   lab.setEnvCaptureFn(() => benchCam.value?.captureFrame?.())
   lab.setEnvEnsureCamFn(() => benchCam.value?.ensureCameraReady?.())
   lab.loadDifyStatus({ silent: true })
@@ -230,14 +249,23 @@ onActivated(() => {
       lab.applyEnvDifyStatus()
       lab.startEnvTimer()
     })
+  await restoreMonitorCameraIfNeeded()
 })
 
 onDeactivated(() => {
   lab.stopDifyStatusTimer()
   lab.stopEnvTimer()
+  if (cameraHeartbeatTimer) {
+    clearInterval(cameraHeartbeatTimer)
+    cameraHeartbeatTimer = null
+  }
 })
 
 onUnmounted(() => {
+  if (cameraHeartbeatTimer) {
+    clearInterval(cameraHeartbeatTimer)
+    cameraHeartbeatTimer = null
+  }
   lab.setEnvCaptureFn(null)
   lab.setEnvEnsureCamFn(null)
   lab.stopDifyStatusTimer()
@@ -282,7 +310,9 @@ onUnmounted(() => {
 }
 
 .monitor-stage :deep(.bench-camera-preview video) {
-  object-fit: cover !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  background: #000;
 }
 
 /* 放大"开启"按钮 */

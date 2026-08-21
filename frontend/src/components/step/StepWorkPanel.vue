@@ -1,6 +1,6 @@
 <template>
-  <section class="flex-1 min-h-0 flex flex-col overflow-hidden">
-    <div class="flex-1 min-h-0 overflow-y-auto custom-scroll px-5 pt-3 pb-4 space-y-3">
+  <section class="step-work-panel">
+    <div class="px-5 pt-3 pb-8 space-y-3">
       <TutorialImageGallery
         v-if="tutorialImages.length"
         :images="tutorialImages"
@@ -65,3 +65,9 @@ const warnings = computed(() => {
   return Array.isArray(items) ? items.filter(Boolean) : []
 })
 </script>
+
+<style scoped>
+.step-work-panel {
+  min-height: 0;
+}
+</style>

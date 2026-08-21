@@ -122,7 +122,6 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   if (to.name === 'login' && auth.token) {
-    if (Capacitor.isNativePlatform() && auth.isStudent) return true
     return auth.homeRoute()
   }
   if (role === 'TEACHER' && !auth.isTeacher) {

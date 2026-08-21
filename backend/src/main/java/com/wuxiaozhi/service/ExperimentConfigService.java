@@ -16,6 +16,12 @@ import java.util.*;
 @Service
 public class ExperimentConfigService {
 
+    private static final List<String> DISPLAY_ORDER = List.of(
+            "newton_rings",
+            "air_wedge_thickness",
+            "microscope_length_measurement"
+    );
+
     private final ObjectMapper objectMapper;
     private final Map<String, ExperimentConfig> byCode = new LinkedHashMap<>();
 
@@ -112,7 +118,13 @@ public class ExperimentConfigService {
     }
 
     public List<ExperimentConfig> listAll() {
-        return new ArrayList<>(byCode.values());
+        return byCode.values().stream()
+                .filter(cfg -> cfg.getEnabled() == null || cfg.getEnabled())
+                .sorted(Comparator.comparingInt(cfg -> {
+                    int index = DISPLAY_ORDER.indexOf(cfg.getCode());
+                    return index >= 0 ? index : DISPLAY_ORDER.size();
+                }))
+                .toList();
     }
 
     public ExperimentConfig getByCode(String code) {
