@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -47,7 +48,7 @@ public class DifyService {
     private final DifyProperties difyProperties;
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = buildRestTemplate();
     private volatile Map<String, Object> cachedStatus;
     private volatile long cachedStatusAt;
 
@@ -56,6 +57,13 @@ public class DifyService {
         this.difyProperties = difyProperties;
         this.objectMapper = objectMapper;
         this.fileStorageService = fileStorageService;
+    }
+
+    private static RestTemplate buildRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(30_000);
+        factory.setReadTimeout(180_000);
+        return new RestTemplate(factory);
     }
 
     public AssistResponse assist(String workflowKey, Map<String, Object> inputs, String userId,
@@ -109,6 +117,9 @@ public class DifyService {
                     }
                 });
                 finalizeEmptyStreamAnswer(capture, onDelta);
+                if (!answerEnded.get() && onAnswerComplete != null && capture.full.length() > 0) {
+                    onAnswerComplete.run();
+                }
                 log.info("Dify stream ok, workflowKey={}, length={}, marks={}, workflowError={}",
                         workflowKey, capture.full.length(), capture.marks.size(),
                         capture.workflowError.isBlank() ? "none" : capture.workflowError);
@@ -184,20 +195,107 @@ public class DifyService {
         if (text == null || text.isBlank()) {
             return;
         }
-        String trimmed = text.trim();
-        if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+        JsonNode json = extractJsonObject(text);
+        if (json == null || !json.isObject()) {
             return;
         }
         try {
-            JsonNode json = objectMapper.readTree(trimmed);
+            resp.setData(objectMapper.convertValue(json, new TypeReference<Map<String, Object>>() {}));
+        } catch (Exception ignored) {
+            return;
+        }
+        applyReviewFields(resp, json);
+    }
+
+    private JsonNode extractJsonObject(String text) {
+        String trimmed = text == null ? "" : text.trim();
+        if (trimmed.isBlank()) {
+            return null;
+        }
+        String candidate = trimmed;
+        if (candidate.startsWith("```")) {
+            int start = candidate.indexOf('\n');
+            int end = candidate.lastIndexOf("```");
+            if (start > 0 && end > start) {
+                candidate = candidate.substring(start + 1, end).trim();
+            }
+        }
+        try {
+            JsonNode json = objectMapper.readTree(candidate);
             if (json.isObject()) {
-                resp.setData(objectMapper.convertValue(json, new TypeReference<Map<String, Object>>() {}));
+                return json;
             }
         } catch (Exception ignored) {
         }
+        int from = candidate.indexOf('{');
+        int to = candidate.lastIndexOf('}');
+        if (from >= 0 && to > from) {
+            try {
+                JsonNode json = objectMapper.readTree(candidate.substring(from, to + 1));
+                if (json.isObject()) {
+                    return json;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
     }
 
-    /** Dify 正文流结束后仍会跑知识库等节点；在 message_end 时通知前端收起光标。 */
+    private void applyReviewFields(AiToolInvokeResponse resp, JsonNode json) {
+        Double score = firstNumber(json, "score", "score10", "suggestedScore");
+        if (score == null) {
+            Double score100 = firstNumber(json, "score100");
+            if (score100 != null) {
+                score = Math.round(score100 / 10.0 * 10.0) / 10.0;
+            }
+        }
+        if (score != null) {
+            resp.setScore(score);
+        }
+        Double maxScore = firstNumber(json, "maxScore", "scoreMax");
+        resp.setMaxScore(maxScore != null ? maxScore : 10.0);
+        String comment = firstText(json, "comment", "评语", "feedback", "summary");
+        if (comment != null && !comment.isBlank()) {
+            resp.setComment(comment);
+        }
+        String band = firstText(json, "gradeBand", "band");
+        if (band != null && !band.isBlank()) {
+            resp.setGradeBand(band);
+        }
+        if (json.has("needsTeacherConfirm")) {
+            resp.setNeedsTeacherConfirm(json.path("needsTeacherConfirm").asBoolean(true));
+        } else if (resp.getScore() != null) {
+            resp.setNeedsTeacherConfirm(true);
+        }
+    }
+
+    private Double firstNumber(JsonNode json, String... keys) {
+        for (String key : keys) {
+            JsonNode node = json.get(key);
+            if (node != null && node.isNumber()) {
+                return node.asDouble();
+            }
+            if (node != null && node.isTextual()) {
+                try {
+                    return Double.parseDouble(node.asText().trim());
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return null;
+    }
+
+    private String firstText(JsonNode json, String... keys) {
+        for (String key : keys) {
+            String value = json.path(key).asText("").trim();
+            if (!value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /** Dify 正文流结束后仍会跑知识库等节点；Answer 节点完成或 message_end 时通知前端收起光标。 */
     private void notifyAnswerComplete(JsonNode node, AtomicBoolean answerEnded, Runnable onAnswerComplete) {
         if (onAnswerComplete == null || answerEnded.get()) {
             return;
@@ -206,6 +304,15 @@ public class DifyService {
         if ("message_end".equals(event) || "agent_message_end".equals(event)) {
             answerEnded.set(true);
             onAnswerComplete.run();
+            return;
+        }
+        if ("node_finished".equals(event)) {
+            JsonNode data = node.path("data");
+            if ("answer".equals(data.path("node_type").asText(""))
+                    && "succeeded".equalsIgnoreCase(data.path("status").asText(""))) {
+                answerEnded.set(true);
+                onAnswerComplete.run();
+            }
         }
     }
 
@@ -740,6 +847,19 @@ public class DifyService {
         return root;
     }
 
+    public String uploadDocument(byte[] bytes, String filename, String userId, String workflowKey) {
+        String apiKey = difyProperties.resolveApiKey(workflowKey);
+        return uploadBytesToDify(bytes, filename, userId, apiKey);
+    }
+
+    public Map<String, Object> documentFileRef(String uploadFileId) {
+        Map<String, Object> fileRef = new LinkedHashMap<>();
+        fileRef.put("type", "document");
+        fileRef.put("transfer_method", "local_file");
+        fileRef.put("upload_file_id", uploadFileId);
+        return fileRef;
+    }
+
     private Map<String, Object> difyFileRef(String uploadFileId) {
         Map<String, Object> fileRef = new LinkedHashMap<>();
         fileRef.put("type", "image");
@@ -753,7 +873,6 @@ public class DifyService {
         if (!Files.exists(path)) {
             throw new IllegalStateException("Image file not found: " + imageUrl);
         }
-
         byte[] bytes;
         try {
             bytes = Files.readAllBytes(path);
@@ -762,9 +881,12 @@ public class DifyService {
         }
         String uploadName = buildDifyUploadFilename(path.getFileName().toString(), bytes);
         log.info("Uploading image to Dify, stored={}, uploadName={}, bytes={}", path.getFileName(), uploadName, bytes.length);
+        return uploadBytesToDify(bytes, uploadName, userId, apiKey);
+    }
 
+    private String uploadBytesToDify(byte[] bytes, String filename, String userId, String apiKey) {
         String uploadUrl = difyProperties.getBaseUrl().replaceAll("/$", "") + "/files/upload";
-
+        String uploadName = filename == null || filename.isBlank() ? "wxz-upload.bin" : filename;
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
         form.add("file", new ByteArrayResource(bytes) {
             @Override

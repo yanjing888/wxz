@@ -16,6 +16,7 @@ public class TeacherFeedbackItemDto {
     private String experimentName;
     private int stepId;
     private String rating;
+    private String studentRating;
     private String userQuestion;
     private String aiReply;
     private boolean processed;

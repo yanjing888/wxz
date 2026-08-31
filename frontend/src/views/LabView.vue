@@ -18,7 +18,7 @@
       :env-level="lab.envLevel"
       :dify-status="lab.difyStatus"
       :dify-status-loading="lab.difyStatusLoading"
-      :session-finished="currentSessionReadOnly"
+      :session-finished="labQaLocked"
       @quick-stats="showQuickStats = true"
       @report="openReport"
     />
@@ -65,12 +65,8 @@
           <div class="workzone-divider" />
           <DeviceReadBar
             :busy="lab.deviceReadBusy || lab.ccdCaptureBusy"
-            :disabled="currentSessionReadOnly"
+            :disabled="labQaLocked"
             :data-ready="lab.composerDataReady"
-            :can-read-device="lab.canReadDeviceData"
-            :can-capture-ccd="lab.canCaptureCcdImage"
-            @read="onReadDevice"
-            @photo-read="openReadingAssist()"
             @ccd-capture="onCaptureCcdImage"
           />
           <DataCollectionSection
@@ -87,10 +83,11 @@
               :last-saved="lab.currentStepHasSubmissions"
               :submitting="lab.submittingData"
               :validation-errors="lab.dataSubmitErrors"
-              :read-only="currentSessionReadOnly"
+              :read-only="labQaLocked"
               @update:values="dataFormValues = $event"
               @recognize-field="openReadingAssist"
-              @submit="onSubmitStepData"
+              @submit-check="onCheckStepData"
+              @save-official="onSaveOfficialData"
             />
           </DataCollectionSection>
           <StepWorkPanel :step="lab.stepConfig" />
@@ -126,18 +123,21 @@
           :image-ready="!!lab.readyImageUrl"
           :data-attachment="lab.composerDataAttachment"
           :suggestions="quickSuggestions"
-          :read-only="currentSessionReadOnly"
+          :read-only="labQaLocked"
+          :qa-locked="labQaLocked"
           :session-history="lab.sessionHistory"
           :current-session-id="lab.session?.id || 0"
           :session-history-loading="lab.sessionHistoryLoading"
           @new-session="startNewSession"
           @select-session="onSelectSession"
+          @archive-session="onArchiveSession"
           @send="onSendMessage"
           @stop="lab.stopAssist()"
           @upload-image="onComposerUpload"
           @capture-image="onComposerCapture"
           @clear-image="lab.clearComposerImage()"
           @clear-data="lab.clearComposerDataAttachment()"
+          @data-deleted="lab.loadSessionData()"
         />
       </section>
       </div>
@@ -167,7 +167,7 @@
       :step-title="lab.stepConfig?.title || ''"
       :step-desc="lab.stepConfig?.desc || ''"
       :device-type="lab.stepConfig?.deviceType || lab.deviceType || ''"
-      :data-fields="lab.stepConfig?.dataFields || []"
+      :data-fields="lab.currentDataFields"
       @close="showInstrumentGuide = false"
     />
     <ReadingAssistModal
@@ -178,9 +178,15 @@
       :step-title="lab.stepConfig?.title || ''"
       :step-desc="lab.stepConfig?.desc || ''"
       :device-type="lab.stepConfig?.deviceType || lab.deviceType || ''"
-      :data-fields="lab.stepConfig?.dataFields || []"
+      :data-fields="lab.currentDataFields"
       :initial-target-field-key="selectedReadingFieldKey"
       @close="showReadingAssist = false"
+      @apply="onApplyReading"
+    />
+    <ScaleReadingModal
+      :visible="showScaleReading"
+      :field="selectedScaleField"
+      @close="showScaleReading = false"
       @apply="onApplyReading"
     />
     <TabletCameraCapture
@@ -221,6 +227,7 @@ import TutorialModal from '../components/modals/TutorialModal.vue'
 import QuickStatsModal from '../components/modals/QuickStatsModal.vue'
 import InstrumentGuideModal from '../components/modals/InstrumentGuideModal.vue'
 import ReadingAssistModal from '../components/modals/ReadingAssistModal.vue'
+import ScaleReadingModal from '../components/modals/ScaleReadingModal.vue'
 import AppConfirmDialog from '../components/modals/AppConfirmDialog.vue'
 import { rememberVisit } from '../utils/experimentFlow'
 import { studentFileApi } from '../api'
@@ -258,6 +265,7 @@ const showTutorial = ref(false)
 const showQuickStats = ref(false)
 const showInstrumentGuide = ref(false)
 const showReadingAssist = ref(false)
+const showScaleReading = ref(false)
 const booting = ref(true)
 const bootError = ref('')
 const tabletCameraOpen = ref(false)
@@ -281,6 +289,7 @@ const stepPanelCollapsed = ref(false)
 const fileCount = ref(0)
 const dataFormValues = ref({})
 const selectedReadingFieldKey = ref('')
+const selectedScaleField = ref(null)
 let viewActive = true
 
 watch(
@@ -319,7 +328,7 @@ const workspaceColumns = computed(() => ({
   '--workspace-left-width': `${workspaceLeftWidth.value}px`
 }))
 
-const currentSessionReadOnly = computed(() => lab.session?.status === 'FINISHED')
+const labQaLocked = computed(() => lab.labQaLocked)
 
 const quickSuggestions = computed(() => {
   const stepTitle = lab.stepConfig?.title
@@ -370,13 +379,18 @@ async function bootstrap() {
       }
       const name = auth.displayName || localStorage.getItem('wxz_displayName') || '学生'
       await lab.loadExperiment(code)
-      const restart = route.query.restart === '1'
+      await lab.loadLabProgress(code)
+      const restart = route.query.restart === '1' && !lab.labCompleted
       const restored = restart ? null : await lab.restoreSessionForExperiment(code)
-      if (!restored) {
+      if (!restored && !lab.labCompleted) {
         await lab.startSession(code, name, auth.studentClass || '')
+      } else if (!restored) {
+        await lab.loadSessionHistory(code)
       }
+    } else {
+      await lab.loadLabProgress(lab.experiment?.code || queryExperimentCode.value)
     }
-    lab.startEnvTimer()
+    if (!lab.labQaLocked) lab.startEnvTimer()
     await refreshFileCount()
   } catch (e) {
     bootError.value = e.response?.data?.message || e.message || '无法连接后端，请先启动 backend（mvn spring-boot:run）'
@@ -514,6 +528,12 @@ function onComposerCapture() {
 }
 
 function openReadingAssist(field = null) {
+  if (field?.scaleReading) {
+    selectedScaleField.value = field
+    showScaleReading.value = true
+    showReadingAssist.value = false
+    return
+  }
   selectedReadingFieldKey.value = field?.key || ''
   showReadingAssist.value = true
 }
@@ -529,17 +549,9 @@ async function onSendMessage(text) {
   return ok
 }
 
-async function onReadDevice() {
-  if (currentSessionReadOnly.value) {
-    await showAppAlert('历史会话仅供查看', '已完成的历史会话不能读取仪器数据，请新建会话后再操作。')
-    return
-  }
-  await lab.loadDeviceDataIntoComposer()
-}
-
 async function onCaptureCcdImage() {
-  if (currentSessionReadOnly.value) {
-    await showAppAlert('历史会话仅供查看', '已完成的历史会话不能获取新的 CCD 成像，请新建会话后再操作。')
+  if (labQaLocked.value) {
+    await showAppAlert('实验已结束', '结束实验后不能再获取新的 CCD 成像，仅可查看历史记录。')
     return
   }
   try {
@@ -558,8 +570,8 @@ async function onCaptureCcdImage() {
 }
 
 function onApplyReading(payload) {
-  if (currentSessionReadOnly.value) {
-    showAppAlert('历史会话仅供查看', '已完成的历史会话不能填入读数，请新建会话后再操作。')
+  if (labQaLocked.value) {
+    showAppAlert('实验已结束', '结束实验后不能再填入读数，仅可查看历史记录。')
     return
   }
   const ok = lab.applyPhotoReadingToComposer(payload)
@@ -575,12 +587,23 @@ function onApplyReading(payload) {
   workbenchTab.value = 'guide'
 }
 
-async function onSubmitStepData(values) {
-  if (currentSessionReadOnly.value) {
-    await showAppAlert('历史会话仅供查看', '已完成的历史会话不能提交数据，请新建会话后再操作。')
+async function onCheckStepData(values) {
+  if (labQaLocked.value) {
+    await showAppAlert('实验已结束', '结束实验后不能再检查数据，仅可查看历史记录。')
     return
   }
-  const ok = await lab.submitStepData(values, false)
+  const ok = lab.attachStepDataForCorrection(values)
+  if (ok) {
+    workbenchTab.value = 'guide'
+  }
+}
+
+async function onSaveOfficialData(values) {
+  if (labQaLocked.value) {
+    await showAppAlert('实验已结束', '结束实验后不能再保存数据，仅可查看历史记录。')
+    return
+  }
+  const ok = await lab.submitStepData(values, { officialData: true, runCorrection: false, fromDevice: false })
   if (ok) {
     dataFormValues.value = {}
   }
@@ -588,14 +611,39 @@ async function onSubmitStepData(values) {
 
 async function onSelectSession(item) {
   await lab.resumeSession(item)
-  if (item.status === 'ACTIVE') {
+  if (item.status === 'ACTIVE' && !lab.labQaLocked) {
     lab.startEnvTimer()
   } else {
     lab.stopEnvTimer()
   }
 }
 
+async function onArchiveSession(item) {
+  if (!item?.id) return
+  const isCurrent = item.id === lab.session?.id
+  try {
+    await lab.archiveSession(item)
+  } catch (e) {
+    await showAppAlert('归档失败', e.response?.data?.message || e.message || '无法归档这条对话')
+    return
+  }
+  if (isCurrent && !lab.labQaLocked) {
+    try {
+      const code = lab.experiment?.code || lab.experiments[0]?.code || localStorage.getItem('wxz_exp') || ''
+      const name = auth.displayName || localStorage.getItem('wxz_displayName') || lab.session?.studentName || '学生'
+      await lab.startSession(code, name, auth.studentClass || '')
+      lab.startEnvTimer()
+    } catch (e) {
+      await showAppAlert('无法开始新会话', e.response?.data?.message || e.message || '对话已归档，请再点一次「新建对话」')
+    }
+  }
+}
+
 async function startNewSession() {
+  if (lab.labQaLocked) {
+    await showAppAlert('实验已结束', '结束实验后不能再新建问答，仅可查看历史对话。')
+    return
+  }
   const code = lab.experiment?.code || lab.experiments[0]?.code || localStorage.getItem('wxz_exp') || ''
   const name = auth.displayName || localStorage.getItem('wxz_displayName') || lab.session?.studentName || '学生'
   if (lab.session?.status === 'ACTIVE') {

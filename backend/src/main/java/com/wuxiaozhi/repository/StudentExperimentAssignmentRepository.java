@@ -11,6 +11,8 @@ public interface StudentExperimentAssignmentRepository extends JpaRepository<Stu
 
     List<StudentExperimentAssignment> findByUserIdIn(Collection<Long> userIds);
 
+    List<StudentExperimentAssignment> findByExperimentCode(String experimentCode);
+
     boolean existsByUserIdAndExperimentCode(Long userId, String experimentCode);
 
     void deleteByUserId(Long userId);

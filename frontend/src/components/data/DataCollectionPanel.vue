@@ -29,16 +29,17 @@
         />
         <span class="field-unit">{{ field.unit || '' }}</span>
         <button
-          v-if="!isComputedField(field) && !field.readOnly"
+          v-if="canUsePhotoAssist(field)"
           type="button"
           class="field-photo-btn"
           :disabled="readOnly || submitting"
-          title="拍照识别该读数"
+          :title="field.scaleReading ? '拍摄机械刻度并自动识别' : '读数助手：拍刻度识别该字段'"
           @click="$emit('recognize-field', field)"
         >
-          拍照识别
+          {{ field.scaleReading ? '拍刻度' : '读数助手' }}
         </button>
-        <span v-else class="field-computed-label">自动计算</span>
+        <span v-else-if="isComputedField(field) || field.readOnly" class="field-computed-label">自动计算</span>
+        <span v-else class="field-empty-label" />
       </div>
 
       <p v-if="!fields.length" class="text-[11px] text-ink-faint text-center py-6">本步骤暂无需要采集的数据。</p>
@@ -48,14 +49,22 @@
       </div>
     </div>
 
-    <div class="shrink-0 px-5 pb-4 pt-1">
+    <div class="submit-row">
       <button
         type="button"
-        class="btn-brand w-full py-2.5 rounded-xl text-xs font-bold btn-active-scale disabled:opacity-50"
-        :disabled="readOnly || submitting || !fields.length"
-        @click="onSubmit"
+        class="btn-ghost data-action-btn border border-line-soft text-ink-base bg-white hover:border-brand-200 hover:bg-brand-50/50"
+        :disabled="readOnly || submitting || !fields.length || !hasAnyValue"
+        @click="onCheck"
       >
-        {{ submitting ? '分析中…' : '提交数据并纠错' }}
+        {{ submitting ? '检查中…' : '检查并纠错' }}
+      </button>
+      <button
+        type="button"
+        class="btn-brand data-action-btn"
+        :disabled="readOnly || submitting || !fields.length || !hasAnyValue"
+        @click="onSaveOfficial"
+      >
+        保存为实验数据
       </button>
     </div>
   </section>
@@ -75,12 +84,15 @@ const props = defineProps({
   readOnly: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['submit', 'recognize-field', 'update:values'])
+const emit = defineEmits(['submit-check', 'save-official', 'recognize-field', 'update:values'])
 
 const localValues = ref({})
 let syncingFromProps = false
 
 const fieldKeys = computed(() => props.fields.map((f) => f.key).join(','))
+const hasAnyValue = computed(() =>
+  Object.values(payloadFromValues(withComputedValues(localValues.value))).some((v) => String(v).trim() !== '')
+)
 
 watch(
   () => [fieldKeys.value, props.values],
@@ -114,6 +126,10 @@ watch(
 
 function isComputedField(field) {
   return !!String(field?.computed || '').trim()
+}
+
+function canUsePhotoAssist(field) {
+  return !isComputedField(field) && !field?.readOnly && field?.photoAssist !== false
 }
 
 function withComputedValues(values) {
@@ -162,12 +178,30 @@ function payloadFromValues(values) {
   return payload
 }
 
-function onSubmit() {
-  emit('submit', payloadFromValues(withComputedValues(localValues.value)))
+function currentPayload() {
+  return payloadFromValues(withComputedValues(localValues.value))
+}
+
+function onCheck() {
+  emit('submit-check', currentPayload())
+}
+
+function onSaveOfficial() {
+  emit('save-official', currentPayload())
 }
 </script>
 
 <style scoped>
+.submit-row {
+  @apply shrink-0 px-5 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-2;
+}
+.data-action-btn {
+  @apply w-full py-2.5 rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+.data-action-btn:not(:disabled):active {
+  transform: scale(0.98);
+}
 .field-photo-btn {
   flex-shrink: 0;
   padding: 4px 8px;
@@ -196,5 +230,9 @@ function onSubmit() {
   color: var(--text-faint);
   font-size: 11px;
   font-weight: 600;
+}
+.field-empty-label {
+  flex-shrink: 0;
+  min-width: 52px;
 }
 </style>

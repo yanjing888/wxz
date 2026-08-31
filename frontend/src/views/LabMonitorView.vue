@@ -200,7 +200,10 @@ async function ensureSession() {
     const name = auth.displayName || localStorage.getItem('wxz_displayName') || '学生'
     const restored = await lab.restoreSessionForExperiment(code)
     if (!restored) {
-      await lab.startSession(code, name, auth.studentClass || '')
+      await lab.loadLabProgress(code)
+      if (!lab.labCompleted) {
+        await lab.startSession(code, name, auth.studentClass || '')
+      }
     }
   } catch {
     // 会话加载失败不阻断摄像头功能

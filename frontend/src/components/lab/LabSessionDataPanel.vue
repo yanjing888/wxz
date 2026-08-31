@@ -6,7 +6,7 @@
       <div v-else-if="!entries.length" class="empty-box">
         <p class="font-semibold text-ink-strong">还没有数据记录</p>
         <p class="text-[13px] text-ink-muted mt-2 leading-relaxed">
-          在数据步骤左侧填写表单并提交，或使用「拍照读数」识别后提交。
+          在数据步骤左侧填写表单，确认后保存为实验数据。
         </p>
       </div>
 
@@ -31,15 +31,26 @@
                     {{ field.label }}
                   </th>
                   <th class="col-time">提交时间</th>
+                  <th v-if="!readOnly" class="col-action">操作</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in table.rows" :key="`${table.stepId}-${row.index}`">
+                <tr v-for="row in table.rows" :key="row.id || `${table.stepId}-${row.index}`">
                   <td class="col-idx">{{ row.index }}</td>
                   <td v-for="field in table.fields" :key="field.key" class="col-val">
                     {{ formatCell(row.values, field.key) }}
                   </td>
                   <td class="col-time">{{ formatTime(row.createdAt) }}</td>
+                  <td v-if="!readOnly" class="col-action">
+                    <button
+                      type="button"
+                      class="delete-btn"
+                      :disabled="deletingId === row.id || !row.id"
+                      @click="deleteRow(row)"
+                    >
+                      {{ deletingId === row.id ? '删除中…' : '删除' }}
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -61,10 +72,13 @@ import {
 
 const props = defineProps({
   sessionId: { type: Number, default: 0 },
-  sessionDataRevision: { type: Number, default: 0 }
+  sessionDataRevision: { type: Number, default: 0 },
+  readOnly: { type: Boolean, default: false }
 })
+const emit = defineEmits(['deleted'])
 
 const loading = ref(false)
+const deletingId = ref(0)
 const sessionData = ref(null)
 
 const entries = computed(() => parseSessionDataResponse(sessionData.value))
@@ -115,6 +129,22 @@ function formatTime(raw) {
   })
 }
 
+async function deleteRow(row) {
+  if (!row?.id || deletingId.value) return
+  const ok = window.confirm('确定删除这条实验数据记录吗？删除后实验报告将不再引用它。')
+  if (!ok) return
+  deletingId.value = row.id
+  try {
+    await sessionApi.deleteData(props.sessionId, row.id)
+    await load()
+    emit('deleted')
+  } catch (e) {
+    window.alert(e.response?.data?.message || e.message || '删除失败')
+  } finally {
+    deletingId.value = 0
+  }
+}
+
 defineExpose({ reload: load })
 </script>
 
@@ -156,4 +186,9 @@ defineExpose({ reload: load })
 }
 .col-val { @apply tabular-nums font-medium; }
 .col-time { @apply text-ink-muted text-[11.5px] min-w-[5.5rem]; }
+.col-action { @apply text-right w-16; }
+.delete-btn {
+  @apply px-2 py-1 rounded-md text-[11px] font-semibold text-rose-600 hover:bg-rose-50
+    disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+}
 </style>

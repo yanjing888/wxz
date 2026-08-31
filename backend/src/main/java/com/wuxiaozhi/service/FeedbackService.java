@@ -78,7 +78,9 @@ public class FeedbackService {
         feedback.setStudentClass(firstNonBlank(session.getStudentClass(), user.getStudentClass(), ""));
         feedback.setUserQuestion(findPreviousUserQuestion(sessionId, message));
         feedback.setAiReply(message.getText() != null ? message.getText() : "");
-        if (feedback.getId() == null) {
+        feedback.setStudentRating(rating);
+        if (feedback.getId() == null || !feedback.isProcessed()) {
+            feedback.setRating(rating);
             feedback.setProcessed(false);
         }
         return feedbackRepository.save(feedback);
@@ -93,10 +95,14 @@ public class FeedbackService {
     }
 
     @Transactional
-    public TeacherFeedbackItemDto markProcessed(Long feedbackId, User teacher) {
+    public TeacherFeedbackItemDto markProcessed(Long feedbackId, User teacher, String rating) {
         MessageFeedback feedback = feedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "反馈不存在"));
         assertTeacherCanView(teacher, feedback.getStudentClass());
+        if (feedback.getStudentRating() == null || feedback.getStudentRating().isBlank()) {
+            feedback.setStudentRating(feedback.getRating());
+        }
+        feedback.setRating(normalizeRating(rating));
         feedback.setProcessed(true);
         return toFeedbackItem(feedbackRepository.save(feedback));
     }
@@ -118,6 +124,7 @@ public class FeedbackService {
         dto.setExperimentName(feedback.getExperimentName());
         dto.setStepId(feedback.getStepId());
         dto.setRating(feedback.getRating());
+        dto.setStudentRating(firstNonBlank(feedback.getStudentRating(), feedback.getRating()));
         dto.setUserQuestion(feedback.getUserQuestion());
         dto.setAiReply(feedback.getAiReply());
         dto.setProcessed(feedback.isProcessed());

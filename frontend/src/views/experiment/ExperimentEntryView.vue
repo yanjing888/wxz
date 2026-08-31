@@ -20,6 +20,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { studentExperimentApi } from '../../api'
 import { lastExperiment } from '../../utils/experimentFlow'
+import { syncSubmittedReportDrafts } from '../../utils/reportDraftSync'
 
 const router = useRouter()
 const loading = ref(true)
@@ -38,6 +39,7 @@ async function resolveEntry() {
     const { data } = await studentExperimentApi.listProgress()
     const rows = data || []
     if (!rows.length) return
+    syncSubmittedReportDrafts()
 
     const remembered = lastExperiment()
     const row = rows.find((r) => r.experimentCode === remembered) || rows[0]

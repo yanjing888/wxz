@@ -127,7 +127,7 @@ public class AiToolService {
                 inputs.put("sessionId", req.getSessionId());
             }
             enrichReportAssistInputs(userId, inputs);
-            attachReportDraftSections(inputs, req.getReportSectionsJson());
+            attachStudentReport(inputs, req.getReportSectionsJson());
         }
         String difyUser = "ai-tool-" + userId + "-" + conversation.getId();
 
@@ -265,6 +265,16 @@ public class AiToolService {
         inputs.put("finished_count", sessions.size());
     }
 
+    private static final List<Map.Entry<String, String>> REPORT_SECTION_LABELS = List.of(
+            Map.entry("purpose", "实验目的"),
+            Map.entry("principle", "实验原理"),
+            Map.entry("apparatus", "实验仪器"),
+            Map.entry("procedure", "实验步骤"),
+            Map.entry("data", "数据与处理"),
+            Map.entry("results", "实验结果"),
+            Map.entry("discussion", "分析与讨论")
+    );
+
     private void enrichReportAssistInputs(Long userId, Map<String, Object> inputs) {
         Long sessionId = parseLong(inputs.get("sessionId"));
         if (sessionId == null) {
@@ -272,49 +282,57 @@ public class AiToolService {
         }
         try {
             Map<String, Object> report = labSessionService.buildReportData(sessionId, userId);
-            inputs.put("report_context", report);
             inputs.put("experiment_name", stringValue(report.get("experimentName")));
             inputs.put("experiment_code", stringValue(report.get("experimentCode")));
             if (report.get("dataLogEntries") != null) {
                 inputs.put("data_logs_json", writeJson(report.get("dataLogEntries")));
             }
-            if (report.get("corrections") != null) {
-                inputs.put("corrections_json", writeJson(report.get("corrections")));
+            String experimentCode = stringValue(report.get("experimentCode"));
+            if (!experimentCode.isBlank()) {
+                try {
+                    ExperimentConfig exp = experimentConfigService.getByCode(experimentCode);
+                    String guide = experimentConfigService.buildExperimentGuide(exp);
+                    if (!guide.isBlank()) {
+                        inputs.put("experiment_guide", guide);
+                    }
+                } catch (RuntimeException ignored) {
+                    // unknown experiment code
+                }
             }
-            if (report.get("reportKnowledge") != null) {
-                inputs.put("report_knowledge", writeJson(report.get("reportKnowledge")));
-            }
-            if (report.get("reportPath") != null) {
-                inputs.put("report_path", writeJson(report.get("reportPath")));
-            }
-            sessionRepository.findByIdAndUserId(sessionId, userId).ifPresent(session -> {
-                inputs.put("session_summary", formatSessionSummary(session));
-            });
         } catch (ResponseStatusException ignored) {
             // session not accessible
         }
     }
 
-    private void attachReportDraftSections(Map<String, Object> inputs, String reportSectionsJson) {
+    /** 报告助手：把前端各章草稿拼成一份完整 student_report，Dify 开始节点只需这一字段 */
+    private void attachStudentReport(Map<String, Object> inputs, String reportSectionsJson) {
         if (reportSectionsJson == null || reportSectionsJson.isBlank()) {
             return;
         }
-        inputs.put("report_sections_json", reportSectionsJson);
         try {
             Map<String, Object> draft = objectMapper.readValue(reportSectionsJson, new TypeReference<>() {});
             Object sections = draft.get("sections");
             if (sections instanceof Map<?, ?> map) {
-                map.forEach((key, value) -> inputs.put(String.valueOf(key), stringValue(value)));
-            }
-            if (draft.get("filledKeys") != null) {
-                inputs.put("filled_section_keys", writeJson(draft.get("filledKeys")));
-            }
-            if (draft.get("wordCounts") != null) {
-                inputs.put("section_word_counts", writeJson(draft.get("wordCounts")));
+                inputs.put("student_report", buildStudentReportText(stringValue(inputs.get("experiment_name")), map));
             }
         } catch (Exception ignored) {
             // draft parse failed
         }
+    }
+
+    private String buildStudentReportText(String experimentName, Map<?, ?> sections) {
+        StringBuilder sb = new StringBuilder();
+        if (experimentName != null && !experimentName.isBlank()) {
+            sb.append(experimentName.trim()).append(" — 实验报告\n\n");
+        }
+        for (Map.Entry<String, String> entry : REPORT_SECTION_LABELS) {
+            String text = stringValue(sections.get(entry.getKey())).trim();
+            if (!text.isBlank()) {
+                sb.append("## ").append(entry.getValue()).append("\n\n")
+                        .append(text).append("\n\n");
+            }
+        }
+        return sb.toString().trim();
     }
 
     /** 误差溯源：把整场实验的操作、数据与环境记录一起交给模型反推误差来源 */
@@ -610,6 +628,10 @@ public class AiToolService {
             inputs.put("experiment_type", exp.getName());
             if (exp.getReportKnowledge() != null && !exp.getReportKnowledge().isEmpty()) {
                 inputs.put("experiment_knowledge", String.join("\n", exp.getReportKnowledge()));
+            }
+            String guide = experimentConfigService.buildExperimentGuide(exp);
+            if (!guide.isBlank()) {
+                inputs.putIfAbsent("experiment_guide", guide);
             }
             attachKnowledgeContext(inputs, exp, userMessage);
         }

@@ -17,4 +17,8 @@ public class TeacherReportItemDto {
     private LocalDateTime endTime;
     private int helpCount;
     private int errorPointCount;
+    private boolean reportCompleted;
+    private Double aiReviewScore;
+    private Double teacherScore;
+    private boolean gradingCompleted;
 }

@@ -61,7 +61,7 @@ public class StudentProfileService {
             int corrections = correctionLogRepository.findBySessionIdOrderByCreatedAtAsc(session.getId()).size();
             dto.setCorrectionCount(dto.getCorrectionCount() + corrections);
 
-            List<SessionDataLog> logs = dataLogRepository.findBySessionIdOrderByCreatedAtAsc(session.getId());
+            List<SessionDataLog> logs = dataLogRepository.findOfficialBySessionIdOrderByCreatedAtAsc(session.getId());
             dto.setDataSubmitCount(dto.getDataSubmitCount() + logs.size());
             for (SessionDataLog log : logs) {
                 validationTotal += 1;

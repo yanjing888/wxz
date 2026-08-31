@@ -182,7 +182,7 @@ wuxiaozhi:
       pre-lab: ${DIFY_WF_PRE_LAB:}
       data-lab: ${DIFY_WF_DATA_LAB:}
       report-assist: ${DIFY_WF_REPORT_ASSIST:${DIFY_WF_REPORT_GENERATE:${DIFY_WF_TEXT_ASSIST:}}}
-      report-review: ${DIFY_WF_REPORT_REVIEW:${DIFY_WF_REPORT_ASSIST:${DIFY_WF_TEXT_ASSIST:}}}
+      report-review: ${DIFY_WF_REPORT_REVIEW:}
       lab-recap: ${DIFY_WF_LAB_RECAP:${DIFY_WF_REPORT_ASSIST:${DIFY_WF_TEXT_ASSIST:}}}
       lab-brief: ${DIFY_WF_PRE_LAB:${DIFY_WF_TEXT_ASSIST:}}
       instrument-guide: ${DIFY_WF_INSTRUMENT_READING:${DIFY_WF_TEXT_ASSIST:}}

@@ -7,6 +7,7 @@ import java.util.Map;
 @Data
 public class SessionDataSubmitResponse {
     private int stepId;
+    private boolean officialData;
     private Map<String, Object> values;
     private DataValidationResult validation;
     private AssistResponse assist;

@@ -8,6 +8,7 @@ import com.wuxiaozhi.dto.device.DeviceStatusDto;
 import com.wuxiaozhi.service.DeviceAcquisitionService;
 import com.wuxiaozhi.service.LabSessionService;
 import com.wuxiaozhi.service.ReportService;
+import com.wuxiaozhi.service.StudentExperimentService;
 import com.wuxiaozhi.service.UvcCameraCaptureService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -30,15 +31,18 @@ public class SessionController {
     private final DeviceAcquisitionService deviceAcquisitionService;
     private final ReportService reportService;
     private final UvcCameraCaptureService uvcCameraCaptureService;
+    private final StudentExperimentService studentExperimentService;
 
     public SessionController(LabSessionService labSessionService,
                              DeviceAcquisitionService deviceAcquisitionService,
                              ReportService reportService,
-                             UvcCameraCaptureService uvcCameraCaptureService) {
+                             UvcCameraCaptureService uvcCameraCaptureService,
+                             StudentExperimentService studentExperimentService) {
         this.labSessionService = labSessionService;
         this.deviceAcquisitionService = deviceAcquisitionService;
         this.reportService = reportService;
         this.uvcCameraCaptureService = uvcCameraCaptureService;
+        this.studentExperimentService = studentExperimentService;
     }
 
     @PostMapping
@@ -104,6 +108,14 @@ public class SessionController {
                                                 @Valid @RequestBody SubmitSessionDataRequest req,
                                                 Authentication authentication) {
         return labSessionService.submitSessionData(sessionId, currentUserId(authentication), req);
+    }
+
+    @DeleteMapping("/{sessionId:\\d+}/data/{dataLogId:\\d+}")
+    public Map<String, Object> deleteData(@PathVariable Long sessionId,
+                                          @PathVariable Long dataLogId,
+                                          Authentication authentication) {
+        labSessionService.deleteSessionData(sessionId, currentUserId(authentication), dataLogId);
+        return Map.of("ok", true);
     }
 
     @PostMapping("/{sessionId:\\d+}/device/connect")
@@ -187,6 +199,11 @@ public class SessionController {
         return labSessionService.finishSession(sessionId, currentUserId(authentication));
     }
 
+    @PostMapping("/{sessionId:\\d+}/archive")
+    public LabSession archive(@PathVariable Long sessionId, Authentication authentication) {
+        return labSessionService.archiveFromHistory(sessionId, currentUserId(authentication));
+    }
+
     @GetMapping("/{sessionId:\\d+}/report")
     public Map<String, Object> report(@PathVariable Long sessionId, Authentication authentication) {
         return labSessionService.buildReportData(sessionId, currentUserId(authentication));
@@ -208,6 +225,16 @@ public class SessionController {
                                                     @RequestBody StudentReportDocxRequest request,
                                                     Authentication authentication) throws Exception {
         Map<String, Object> data = labSessionService.buildReportData(sessionId, currentUserId(authentication));
+        try {
+            String experimentCode = String.valueOf(data.getOrDefault("experimentCode", ""));
+            studentExperimentService.saveReportBody(
+                    currentUserId(authentication),
+                    experimentCode,
+                    sessionId,
+                    StudentExperimentService.sectionsFromDocxItems(request.getSections()));
+        } catch (Exception ignored) {
+            // 导出仍继续，正文补存失败不阻断下载
+        }
         Map<String, Object> meta = Map.of(
                 "experimentName", String.valueOf(data.getOrDefault("experimentName", "实验")),
                 "studentName", String.valueOf(data.getOrDefault("studentName", "")),

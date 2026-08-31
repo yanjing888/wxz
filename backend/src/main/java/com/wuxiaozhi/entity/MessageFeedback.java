@@ -53,6 +53,10 @@ public class MessageFeedback {
     @Column(columnDefinition = "LONGTEXT")
     private String aiReply;
 
+    /** 学生提交时的评价：HELPFUL | NOT_HELPFUL */
+    @Column(length = 16)
+    private String studentRating;
+
     @Column(nullable = false)
     private boolean processed = false;
 

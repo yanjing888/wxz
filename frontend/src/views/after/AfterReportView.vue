@@ -23,6 +23,7 @@ import { useRoute } from 'vue-router'
 import { experimentApi, studentExperimentApi } from '../../api'
 import AfterClassHeader from '../../components/layout/AfterClassHeader.vue'
 import ReportEditorPanel from '../../components/stage/ReportEditorPanel.vue'
+import { syncSubmittedReportDrafts } from '../../utils/reportDraftSync'
 
 const route = useRoute()
 const code = computed(() => String(route.params.code || ''))
@@ -41,6 +42,7 @@ onMounted(async () => {
       (cfgRes.status === 'fulfilled' ? cfgRes.value.data?.name : '') || code.value
     const prog = progRes.status === 'fulfilled' ? progRes.value.data : null
     sessionId.value = prog?.finishedSessionId || prog?.activeSessionId || null
+    syncSubmittedReportDrafts()
   } finally {
     ready.value = true
   }

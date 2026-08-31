@@ -186,20 +186,24 @@
         <!-- 列表视图 -->
         <template v-if="!selectedFeedbackId">
           <div class="fb-tabs">
+            <button type="button" class="fb-tab" :class="{ active: feedbackFilter === 'PENDING' }" @click="feedbackFilter = 'PENDING'">
+              待审核 ({{ unprocessedCount }})
+            </button>
             <button type="button" class="fb-tab" :class="{ active: feedbackFilter === 'HELPFUL' }" @click="feedbackFilter = 'HELPFUL'">
-              有帮助 ({{ helpfulCount }})
+              有帮助 ({{ helpfulReviewedCount }})
             </button>
             <button type="button" class="fb-tab" :class="{ active: feedbackFilter === 'NOT_HELPFUL' }" @click="feedbackFilter = 'NOT_HELPFUL'">
-              无帮助 ({{ notHelpfulCount }})
+              无帮助 ({{ notHelpfulReviewedCount }})
             </button>
           </div>
 
-          <div v-if="!filteredFeedback.length" class="empty-state">暂无{{ feedbackFilter === 'HELPFUL' ? '有帮助' : '无帮助' }}反馈。</div>
+          <div v-if="!filteredFeedback.length" class="empty-state">{{ feedbackEmptyHint }}</div>
           <div v-else class="fb-list-wrap custom-scroll">
             <div class="fb-list-head">
               <span class="fb-col-student">学生</span>
               <span class="fb-col-step">步骤</span>
               <span class="fb-col-question">提问内容</span>
+              <span class="fb-col-reply">回复内容</span>
               <span class="fb-col-time">时间</span>
               <span class="fb-col-status">状态</span>
             </div>
@@ -207,7 +211,7 @@
               v-for="item in filteredFeedback"
               :key="item.id"
               class="fb-list-row"
-              :class="{ unprocessed: !item.processed }"
+              :class="{ unprocessed: !isFeedbackProcessed(item) }"
               @click="selectedFeedbackId = item.id"
             >
               <span class="fb-col-student">
@@ -215,11 +219,15 @@
                 <strong>{{ item.studentName }}</strong>
               </span>
               <span class="fb-col-step">{{ item.stepId || '—' }}</span>
-              <span class="fb-col-question">{{ item.userQuestion || '（学生未输入问题文本）' }}</span>
+              <span class="fb-col-question" :title="item.userQuestion || ''">{{ item.userQuestion || '（学生未输入问题文本）' }}</span>
+              <span class="fb-col-reply" :title="replyPreview(item.aiReply)">{{ replyPreview(item.aiReply) || '（暂无 AI 回复内容）' }}</span>
               <span class="fb-col-time">{{ formatTime(item.createdAt) }}</span>
               <span class="fb-col-status">
-                <span class="fb-badge" :class="item.processed ? 'fb-badge--done' : 'fb-badge--pending'">
-                  {{ item.processed ? '已处理' : '待处理' }}
+                <span v-if="!isFeedbackProcessed(item)" class="fb-badge fb-badge--pending">
+                  学生：{{ ratingLabel(studentRatingOf(item)) }}
+                </span>
+                <span v-else class="fb-badge" :class="item.rating === 'HELPFUL' ? 'fb-badge--ok' : 'fb-badge--bad'">
+                  {{ ratingLabel(item.rating) }}
                 </span>
               </span>
             </div>
@@ -244,6 +252,13 @@
               <span>步骤 {{ selectedFeedbackDetail.stepId || '—' }} · {{ selectedFeedbackDetail.experimentName || '—' }}</span>
             </div>
 
+            <div class="fb-student-mark">
+              学生标记为「{{ ratingLabel(studentRatingOf(selectedFeedbackDetail)) }}」
+              <span v-if="isFeedbackProcessed(selectedFeedbackDetail) && studentRatingOf(selectedFeedbackDetail) !== selectedFeedbackDetail.rating">
+                ，教师已改判为「{{ ratingLabel(selectedFeedbackDetail.rating) }}」
+              </span>
+            </div>
+
             <div class="fb-detail-block fb-detail-q">
               <span class="fb-detail-role">学生提问</span>
               <p>{{ selectedFeedbackDetail.userQuestion || '（学生未输入问题文本）' }}</p>
@@ -255,8 +270,27 @@
             </div>
 
             <div class="fb-detail-footer">
-              <span v-if="selectedFeedbackDetail.processed" class="processed-tag">已处理</span>
-              <button v-else type="button" class="fb-process-btn" @click="markProcessed(selectedFeedbackDetail.id)">标记已处理</button>
+              <p class="fb-review-hint">请审核这条问答，判定应进入有帮助还是无帮助。</p>
+              <div class="fb-review-actions">
+                <button
+                  type="button"
+                  class="fb-process-btn fb-process-btn--ok"
+                  :disabled="reviewingFeedback"
+                  :class="{ current: isFeedbackProcessed(selectedFeedbackDetail) && selectedFeedbackDetail.rating === 'HELPFUL' }"
+                  @click="reviewFeedback(selectedFeedbackDetail.id, 'HELPFUL')"
+                >
+                  {{ reviewingFeedback ? '提交中…' : '判为有帮助' }}
+                </button>
+                <button
+                  type="button"
+                  class="fb-process-btn fb-process-btn--bad"
+                  :disabled="reviewingFeedback"
+                  :class="{ current: isFeedbackProcessed(selectedFeedbackDetail) && selectedFeedbackDetail.rating === 'NOT_HELPFUL' }"
+                  @click="reviewFeedback(selectedFeedbackDetail.id, 'NOT_HELPFUL')"
+                >
+                  {{ reviewingFeedback ? '提交中…' : '判为无帮助' }}
+                </button>
+              </div>
             </div>
           </div>
         </template>
@@ -284,7 +318,7 @@
             />
             <div class="cam-info">
               <strong>{{ row.studentName }}</strong>
-              <span>{{ row.status === 'ACTIVE' ? row.stepTitle || '实验中' : '未开始' }}</span>
+              <span>{{ row.status === 'ACTIVE' ? row.stepTitle || '实验中' : row.status === 'FINISHED' ? '已完成' : '未开始' }}</span>
             </div>
           </button>
         </div>
@@ -338,7 +372,7 @@
       <div v-show="activeTab === 'report'" class="tab-panel">
         <div class="report-layout">
           <section class="report-list-section">
-            <h2>实验报告 ({{ currentReports.length }}/{{ cameraStudents.length }})</h2>
+            <h2>实验报告 ({{ submittedReportCount }}/{{ cameraStudents.length }})</h2>
             <div v-if="!reportsByClass.length" class="empty-state">暂无学生数据。</div>
             <div v-else class="report-class-list custom-scroll">
               <div
@@ -364,19 +398,21 @@
                     type="button"
                     class="student-report-row"
                     :class="{ active: stu.report && selectedReportId === stu.report.sessionId }"
-                    @click="stu.report && selectReportItem(stu.report.sessionId)"
+                    @click="stu.submitted && selectReportItem(stu.report?.sessionId || stu.sessionId)"
                   >
                     <span class="stu-avatar" :class="stu.submitted ? 'submitted' : 'not-submitted'">
                       {{ (stu.studentName || '?').charAt(0) }}
                     </span>
                     <div class="stu-info">
                       <strong>{{ stu.studentName }}</strong>
-                      <span>{{ stu.submitted ? formatTime(stu.report.endTime || stu.report.startTime) : '未提交' }}</span>
+                      <span>{{ stu.submitted ? formatTime(stu.report?.endTime || stu.report?.startTime) : '未提交' }}</span>
                     </div>
                     <span v-if="stu.submitted" class="stu-badges">
-                      <span v-if="stu.report.helpCount" class="badge-help">求助 {{ stu.report.helpCount }}</span>
-                      <span v-if="stu.report.errorPointCount" class="badge-err">纠错 {{ stu.report.errorPointCount }}</span>
-                      <span v-if="!stu.report.helpCount && !stu.report.errorPointCount" class="badge-ok">正常</span>
+                      <span v-if="stu.report?.gradingCompleted" class="badge-ok">已批改</span>
+                      <span v-else-if="stu.report?.aiReviewScore != null" class="badge-help">已预评</span>
+                      <span v-if="stu.report?.helpCount" class="badge-help">求助 {{ stu.report.helpCount }}</span>
+                      <span v-if="stu.report?.errorPointCount" class="badge-err">纠错 {{ stu.report.errorPointCount }}</span>
+                      <span v-if="!stu.report?.helpCount && !stu.report?.errorPointCount && !stu.report?.gradingCompleted && stu.report?.aiReviewScore == null" class="badge-ok">正常</span>
                     </span>
                     <span v-else class="stu-status pending">未提交</span>
                   </button>
@@ -395,49 +431,30 @@
                 </div>
                 <div class="rd-actions">
                   <button type="button" @click="openReport(selectedReportItem.sessionId)">查看完整报告</button>
-                  <button type="button" class="ai-btn" @click="openReportWithReview(selectedReportItem.sessionId)">AI 预评</button>
                   <button type="button" @click="downloadReport(selectedReportItem.sessionId, selectedReportItem.experimentName)">下载</button>
                 </div>
               </header>
 
-              <div v-if="previewLoading" class="empty-state">正在读取报告数据…</div>
-              <div v-else-if="selectedReportPreview" class="rd-body custom-scroll">
-                <div class="rd-summary">
-                  <span>求助 <strong>{{ selectedReportPreview.helpCount ?? 0 }}</strong></span>
-                  <span>纠错 <strong class="bad-text">{{ selectedReportPreview.errorPointCount ?? 0 }}</strong></span>
-                  <span>教程查阅 <strong>{{ selectedReportPreview.tutViewCount ?? 0 }}</strong></span>
-                  <span>环境巡检 <strong>{{ selectedReportPreview.labL3Count ?? 0 }}</strong></span>
+              <div class="rd-split">
+                <div v-if="previewLoading" class="empty-state">正在读取报告数据…</div>
+                <div v-else-if="selectedReportPreview" class="rd-body custom-scroll">
+                  <StudentReportDocument :report="selectedReportPreview" compact />
                 </div>
-
-                <h3 class="rd-section-title">实验数据记录</h3>
-                <table v-if="previewDataRows.length" class="data-check-table">
-                  <thead>
-                    <tr><th>步骤</th><th>提交数据</th><th>校验结果</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(item, i) in previewDataRows" :key="i">
-                      <td>{{ item.stepTitle || '—' }}</td>
-                      <td>{{ item.valuesSummary || '—' }}</td>
-                      <td :class="isBadValidation(item.validationSummary) ? 'bad-text' : 'ok-text'">
-                        {{ item.validationSummary || '—' }}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div v-else class="empty-state small">本次报告暂无结构化数据。</div>
-
-                <div v-if="selectedReportPreview.corrections?.length" class="rd-corrections">
-                  <h3 class="rd-section-title">操作纠错记录</h3>
-                  <article v-for="(log, i) in selectedReportPreview.corrections" :key="i" class="correction-item">
-                    <div class="corr-head">
-                      <span>{{ log.stepTitle || '—' }}</span>
-                      <span class="corr-type">{{ log.errorType || '—' }}</span>
-                    </div>
-                    <p>{{ log.detail || '—' }}</p>
-                  </article>
-                </div>
+                <div v-else class="empty-state">暂无报告数据。</div>
+                <ReportGradingPanel
+                  :session-id="selectedReportItem.sessionId"
+                  v-model:score="gradeScore"
+                  v-model:comment="gradeComment"
+                  :max-score="10"
+                  :review-error="reviewError"
+                  :reviewing="reviewingReport"
+                  :saving="savingGrade"
+                  :grading-completed="gradingCompleted"
+                  :grade-band="gradeBand"
+                  @ai-review="runAiReviewInPlace"
+                  @finish="finishGrade"
+                />
               </div>
-              <div v-else class="empty-state">暂无报告数据。</div>
             </template>
           </section>
         </div>
@@ -452,6 +469,8 @@
       :review-text="reviewText"
       :review-from-dify="reviewFromDify"
       :review-error="reviewError"
+      :review-score="gradeScore"
+      :review-comment="aiReviewComment"
       @close="closeReport"
       @download-docx="downloadSelectedReport"
       @ai-review="runAiReview"
@@ -467,6 +486,8 @@ import { useAuthStore } from '../stores/auth'
 import ReportModal from '../components/modals/ReportModal.vue'
 import ExperimentSelect from '../components/layout/ExperimentSelect.vue'
 import TeacherCameraCardPreview from '../components/monitor/TeacherCameraCardPreview.vue'
+import StudentReportDocument from '../components/teacher/StudentReportDocument.vue'
+import ReportGradingPanel from '../components/teacher/ReportGradingPanel.vue'
 import { useFlvLivePlayer } from '../composables/useFlvLivePlayer'
 
 const CURRENT_EXP_KEY = 'wxz_teacher_current_exp'
@@ -492,7 +513,8 @@ const selectedExpCode = ref('')
 const activeTab = ref('overview')
 
 const selectedUserId = ref(null)
-const feedbackFilter = ref('NOT_HELPFUL')
+const feedbackFilter = ref('PENDING')
+const reviewingFeedback = ref(false)
 const selectedReportId = ref(null)
 const selectedReportPreview = ref(null)
 const previewLoading = ref(false)
@@ -506,6 +528,13 @@ const reviewingReport = ref(false)
 const reviewText = ref('')
 const reviewFromDify = ref(true)
 const reviewError = ref('')
+const gradeScore = ref(null)
+const gradeComment = ref('')
+const aiReviewComment = ref('')
+const gradeBand = ref('')
+const reviewDimensions = ref([])
+const gradingCompleted = ref(false)
+const savingGrade = ref(false)
 
 const cameraSelectedId = ref(null)
 const camExpanded = ref(false)
@@ -590,15 +619,29 @@ const cameraSelectedStudent = computed(() =>
   cameraStudents.value.find((s) => s.userId === cameraSelectedId.value) || null
 )
 
-const helpfulCount = computed(() => currentFeedback.value.filter((f) => f.rating === 'HELPFUL').length)
-const notHelpfulCount = computed(() => currentFeedback.value.filter((f) => f.rating === 'NOT_HELPFUL').length)
-const unprocessedCount = computed(() => currentFeedback.value.filter((f) => !f.processed).length)
-
-const filteredFeedback = computed(() =>
-  currentFeedback.value
-    .filter((f) => f.rating === feedbackFilter.value)
-    .sort((a, b) => timeValue(b.createdAt) - timeValue(a.createdAt))
+const unprocessedCount = computed(() =>
+  currentFeedback.value.filter((f) => !isFeedbackProcessed(f)).length
 )
+const helpfulReviewedCount = computed(() =>
+  currentFeedback.value.filter((f) => isFeedbackProcessed(f) && f.rating === 'HELPFUL').length
+)
+const notHelpfulReviewedCount = computed(() =>
+  currentFeedback.value.filter((f) => isFeedbackProcessed(f) && f.rating === 'NOT_HELPFUL').length
+)
+
+const feedbackEmptyHint = computed(() => {
+  if (feedbackFilter.value === 'PENDING') return '暂无待审核的问答反馈。'
+  if (feedbackFilter.value === 'HELPFUL') return '暂无教师判定为有帮助的问答。'
+  return '暂无教师判定为无帮助的问答。'
+})
+
+const filteredFeedback = computed(() => {
+  const list = currentFeedback.value.filter((f) => {
+    if (feedbackFilter.value === 'PENDING') return !isFeedbackProcessed(f)
+    return isFeedbackProcessed(f) && f.rating === feedbackFilter.value
+  })
+  return list.sort((a, b) => timeValue(b.createdAt) - timeValue(a.createdAt))
+})
 
 const selectedFeedbackDetail = computed(() =>
   currentFeedback.value.find((f) => f.id === selectedFeedbackId.value) || null
@@ -624,27 +667,46 @@ const reportsByClass = computed(() => {
       classMap.set(cls, { className: cls, students: [], submitted: 0, total: 0 })
     }
     const group = classMap.get(cls)
-    const report = reportMap.get(s.userId) || reportMap.get(s.studentName)
+    const report = reportMap.get(s.userId)
+    const submitted = !!(s.reportCompleted || report?.reportCompleted)
     group.students.push({
       ...s,
       report: report || null,
-      submitted: !!report
+      submitted
     })
     group.total++
-    if (report) group.submitted++
+    if (submitted) group.submitted++
   })
   return [...classMap.values()].sort((a, b) => a.className.localeCompare(b.className))
 })
+
+const submittedReportCount = computed(() =>
+  reportsByClass.value.reduce((n, g) => n + g.submitted, 0)
+)
 
 function toggleClassExpand(className) {
   expandedClasses.value = { ...expandedClasses.value, [className]: !expandedClasses.value[className] }
 }
 
-const selectedReportItem = computed(() =>
-  sortedReports.value.find((r) => r.sessionId === selectedReportId.value) || null
-)
-
-const previewDataRows = computed(() => selectedReportPreview.value?.dataLogEntries || [])
+const selectedReportItem = computed(() => {
+  const fromList = sortedReports.value.find((r) => r.sessionId === selectedReportId.value)
+  if (fromList) return fromList
+  for (const grp of reportsByClass.value) {
+    for (const stu of grp.students) {
+      const sid = stu.report?.sessionId || stu.sessionId
+      if (sid && sid === selectedReportId.value) {
+        return {
+          ...stu.report,
+          sessionId: sid,
+          studentName: stu.studentName,
+          studentClass: stu.studentClass,
+          experimentName: stu.experimentName || stu.report?.experimentName
+        }
+      }
+    }
+  }
+  return null
+})
 
 const navTabs = computed(() => [
   {
@@ -669,7 +731,7 @@ const navTabs = computed(() => [
     key: 'report', label: '报告分析', color: '#ec4899',
     icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
     iconFill: 'M7 3a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2',
-    badge: currentReports.value.length ? String(currentReports.value.length) : ''
+    badge: submittedReportCount.value ? String(submittedReportCount.value) : ''
   }
 ])
 
@@ -815,17 +877,50 @@ function closeCameraModal() {
 async function loadPreviewReport(sessionId) {
   if (!sessionId) {
     selectedReportPreview.value = null
+    resetGradePanel()
     return
   }
   previewLoading.value = true
   try {
     const { data } = await teacherApi.report(sessionId)
     selectedReportPreview.value = data
+    applyGradeFromReport(data)
   } catch {
     selectedReportPreview.value = null
+    resetGradePanel()
   } finally {
     previewLoading.value = false
   }
+}
+
+function resetGradePanel() {
+  gradeScore.value = null
+  gradeComment.value = ''
+  aiReviewComment.value = ''
+  gradeBand.value = ''
+  reviewDimensions.value = []
+  gradingCompleted.value = false
+  reviewText.value = ''
+  reviewError.value = ''
+  reviewFromDify.value = true
+}
+
+function applyGradeFromReport(data) {
+  if (!data) {
+    resetGradePanel()
+    return
+  }
+  const json = data.aiReviewJson && typeof data.aiReviewJson === 'object' ? data.aiReviewJson : {}
+  const savedScore = data.teacherScore ?? data.aiReviewScore ?? json.score
+  gradeScore.value = savedScore == null || savedScore === '' ? null : Number(savedScore)
+  aiReviewComment.value = data.aiReviewComment || json.comment || ''
+  gradeComment.value = data.teacherComment || aiReviewComment.value
+  gradeBand.value = json.gradeBand || ''
+  reviewDimensions.value = Array.isArray(json.dimensions) ? json.dimensions : []
+  gradingCompleted.value = !!data.gradingCompleted
+  reviewText.value = aiReviewComment.value
+  reviewError.value = ''
+  reviewFromDify.value = data.aiReviewScore != null || !!aiReviewComment.value
 }
 
 async function openReport(sessionId) {
@@ -833,34 +928,74 @@ async function openReport(sessionId) {
   const { data } = await teacherApi.report(sessionId)
   selectedReport.value = data
   selectedReportSessionId.value = sessionId
-  reviewText.value = ''
-  reviewError.value = ''
-  reviewFromDify.value = true
   reportVisible.value = true
-}
-
-async function openReportWithReview(sessionId) {
-  await openReport(sessionId)
-  await runAiReview()
 }
 
 function closeReport() {
   reportVisible.value = false
-  reviewingReport.value = false
+}
+
+function applyReviewResponse(data) {
+  reviewText.value = data?.text || '未返回预评内容'
+  reviewFromDify.value = data?.fromDify !== false
+  const payload = data?.data && typeof data.data === 'object' ? data.data : {}
+  const score = data?.score ?? payload.score
+  gradeScore.value = score == null || score === '' ? gradeScore.value : Number(score)
+  aiReviewComment.value = data?.comment || payload.comment || ''
+  if (!aiReviewComment.value) {
+    const raw = String(data?.text || '').trim()
+    if (raw && !raw.startsWith('{') && !raw.startsWith('```')) {
+      aiReviewComment.value = raw
+    }
+  }
+  if (aiReviewComment.value) {
+    gradeComment.value = aiReviewComment.value
+  }
+  gradeBand.value = data?.gradeBand || payload.gradeBand || ''
+  reviewDimensions.value = Array.isArray(payload.dimensions) ? payload.dimensions : []
+  gradingCompleted.value = false
+}
+
+async function runAiReviewInPlace() {
+  if (selectedReportItem.value?.sessionId) {
+    selectedReportSessionId.value = selectedReportItem.value.sessionId
+  }
+  await runAiReview()
 }
 
 async function runAiReview() {
-  if (!selectedReportSessionId.value || reviewingReport.value) return
+  const sessionId = selectedReportSessionId.value || selectedReportId.value
+  if (!sessionId || reviewingReport.value) return
+  selectedReportSessionId.value = sessionId
   reviewingReport.value = true
   reviewError.value = ''
   try {
-    const { data } = await teacherApi.reviewReport(selectedReportSessionId.value)
-    reviewText.value = data?.text || '未返回预评内容'
-    reviewFromDify.value = data?.fromDify !== false
+    const { data } = await teacherApi.reviewReport(sessionId)
+    applyReviewResponse(data)
   } catch (e) {
     reviewError.value = e.response?.data?.message || e.message || 'AI 预评失败'
   } finally {
     reviewingReport.value = false
+  }
+}
+
+async function finishGrade() {
+  const sessionId = selectedReportId.value || selectedReportSessionId.value
+  if (!sessionId || savingGrade.value || gradeScore.value == null) return
+  savingGrade.value = true
+  reviewError.value = ''
+  try {
+    const { data } = await teacherApi.completeGrade(sessionId, {
+      score: Number(gradeScore.value),
+      comment: gradeComment.value || ''
+    })
+    applyGradeFromReport(data)
+    gradingCompleted.value = true
+    await loadExperimentData()
+  } catch (e) {
+    reviewError.value = e.response?.data?.message || e.message || '保存成绩失败'
+  } finally {
+    savingGrade.value = false
   }
 }
 
@@ -887,9 +1022,17 @@ async function downloadSelectedReport() {
   }
 }
 
-async function markProcessed(feedbackId) {
-  await teacherApi.markFeedbackProcessed(feedbackId)
-  await loadExperimentData()
+async function reviewFeedback(feedbackId, rating) {
+  if (!feedbackId || reviewingFeedback.value) return
+  reviewingFeedback.value = true
+  try {
+    await teacherApi.markFeedbackProcessed(feedbackId, { rating })
+    selectedFeedbackId.value = null
+    feedbackFilter.value = rating
+    await loadExperimentData()
+  } finally {
+    reviewingFeedback.value = false
+  }
 }
 
 async function loadBenchCameraConfig() {
@@ -936,10 +1079,6 @@ function priorityLabel(p) {
   return { high: '高', medium: '中', normal: '低' }[p] || '低'
 }
 
-function isBadValidation(text) {
-  return /异常|错误|不通过|fail|error/i.test(String(text || ''))
-}
-
 function timeValue(value) {
   const d = new Date(value || 0)
   return Number.isNaN(d.getTime()) ? 0 : d.getTime()
@@ -954,8 +1093,30 @@ function formatTime(value) {
   })
 }
 
+function isFeedbackProcessed(item) {
+  return item?.processed === true || item?.processed === 1 || item?.processed === 'true'
+}
+
+function ratingLabel(rating) {
+  if (rating === 'HELPFUL') return '有帮助'
+  if (rating === 'NOT_HELPFUL') return '无帮助'
+  return '—'
+}
+
+function studentRatingOf(item) {
+  return item?.studentRating || item?.rating || ''
+}
+
 function plainText(text) {
-  return String(text || '').replace(/[#>*`_\-]/g, '').replace(/\n{3,}/g, '\n\n').trim()
+  return String(text || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[#>*`_\-]/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function replyPreview(text) {
+  return plainText(text).replace(/\s+/g, ' ').trim()
 }
 
 function logout() {
@@ -1055,6 +1216,7 @@ function logout() {
 }
 .terminal-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 .tab-panel { height: 100%; overflow: hidden; display: flex; flex-direction: column; padding: 14px 24px 20px; }
+.tab-panel:has(.report-layout) { padding: 0; }
 
 /* ====== 统计栏 ====== */
 .stat-bar {
@@ -1234,7 +1396,7 @@ function logout() {
 .fb-list-wrap { flex: 1; overflow-y: auto; }
 .fb-list-head {
   display: grid;
-  grid-template-columns: 140px 60px 1fr 140px 80px;
+  grid-template-columns: 132px 52px minmax(120px, 1fr) minmax(160px, 1.3fr) 108px 128px;
   gap: 0; padding: 0 16px; height: 36px; align-items: center;
   background: #f8f9fc; border-bottom: 1px solid #e4e9f3;
   position: sticky; top: 0; z-index: 1;
@@ -1242,7 +1404,7 @@ function logout() {
 }
 .fb-list-row {
   display: grid;
-  grid-template-columns: 140px 60px 1fr 140px 80px;
+  grid-template-columns: 132px 52px minmax(120px, 1fr) minmax(160px, 1.3fr) 108px 128px;
   gap: 0; padding: 0 16px; min-height: 48px; align-items: center;
   border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.12s;
 }
@@ -1259,11 +1421,14 @@ function logout() {
 }
 .fb-col-student strong { font-size: 13px; font-weight: 600; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fb-col-step { font-size: 13px; color: #64748b; }
-.fb-col-question {
+.fb-col-question,
+.fb-col-reply {
   font-size: 13px; color: #334155; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; padding-right: 12px;
 }
+.fb-col-reply { color: #475569; }
 .fb-col-time { font-size: 12px; color: #94a3b8; }
+.fb-col-status { text-align: left; }
 
 .fb-badge {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1271,6 +1436,8 @@ function logout() {
 }
 .fb-badge--pending { background: #fef3c7; color: #d97706; }
 .fb-badge--done { background: #f1f5f9; color: #94a3b8; }
+.fb-badge--ok { background: #d1fae5; color: #047857; }
+.fb-badge--bad { background: #fee2e2; color: #b91c1c; }
 
 .fb-detail-top {
   display: flex; align-items: center; justify-content: space-between;
@@ -1298,13 +1465,23 @@ function logout() {
 }
 .fb-detail-block p { font-size: 13px; line-height: 1.6; color: #334155; }
 .fb-detail-q p { color: #0f172a; }
-.fb-detail-footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid #e4e9f3; }
-.fb-process-btn {
-  height: 32px; padding: 0 16px; border-radius: 8px;
-  background: #4f46e5; color: #fff; font-size: 12px; font-weight: 600;
-  transition: background 0.15s;
+.fb-student-mark {
+  margin-bottom: 14px; font-size: 13px; color: #64748b;
 }
-.fb-process-btn:hover { background: #4338ca; }
+.fb-detail-footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid #e4e9f3; }
+.fb-review-hint { font-size: 12px; color: #64748b; margin-bottom: 10px; }
+.fb-review-actions { display: flex; gap: 8px; }
+.fb-process-btn {
+  height: 36px; padding: 0 16px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; transition: all 0.15s;
+}
+.fb-process-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.fb-process-btn--ok { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.fb-process-btn--ok:hover:not(:disabled) { background: #d1fae5; }
+.fb-process-btn--ok.current { background: #059669; color: #fff; border-color: #059669; }
+.fb-process-btn--bad { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.fb-process-btn--bad:hover:not(:disabled) { background: #fee2e2; }
+.fb-process-btn--bad.current { background: #dc2626; color: #fff; border-color: #dc2626; }
 .processed-tag { color: #94a3b8; font-size: 12px; }
 
 /* ====== 摄像头监控 ====== */
@@ -1409,7 +1586,7 @@ function logout() {
 .report-class-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .report-detail-section {
   display: flex; flex-direction: column; min-height: 0;
-  background: #fff; padding: 16px;
+  background: #fff; padding: 16px; overflow: hidden;
 }
 
 /* 班级分组 */
@@ -1476,9 +1653,25 @@ function logout() {
 }
 .rd-actions .ai-btn:hover { background: #4338ca; color: #fff; }
 
-.rd-body { flex: 1; overflow-y: auto; }
+.rd-body { flex: 1; overflow-y: auto; background: #f8fafc; padding: 12px; border-radius: 10px; }
+.rd-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+}
+.rd-split .rd-body { border-radius: 10px 0 0 10px; }
+.rd-split .empty-state { padding: 24px; }
 .rd-section-title { color: #0f172a; font-size: 14px; font-weight: 700; margin-bottom: 10px; margin-top: 16px; }
 .rd-section-title:first-child { margin-top: 0; }
+.rd-student-report { display: flex; flex-direction: column; gap: 12px; }
+.rd-student-section { padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.rd-student-section h4 { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: #334155; }
+.rd-student-html { font-size: 13px; line-height: 1.7; color: #1e293b; overflow: auto; }
+.rd-student-html :deep(img) { max-width: 100%; height: auto; border-radius: 6px; }
+.rd-student-html :deep(table) { width: 100%; border-collapse: collapse; }
+.rd-student-html :deep(th), .rd-student-html :deep(td) { border: 1px solid #e2e8f0; padding: 4px 8px; }
 .rd-summary {
   display: flex; align-items: center; gap: 0; margin-bottom: 14px;
   padding: 8px 0; border-bottom: 1px solid #f1f5f9;
@@ -1527,6 +1720,7 @@ function logout() {
   .detail-panel { max-height: 320px; }
   .kpi-row { grid-template-columns: repeat(2, 1fr); }
   .report-layout { grid-template-columns: 1fr; }
+  .rd-split { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
   .teacher-terminal { height: auto; min-height: 100vh; overflow-y: auto; }

@@ -10,7 +10,6 @@
         @click="$emit('update:modelValue', tab.key)"
       >
         {{ tab.label }}
-        <span v-if="tab.key === 'data' && dataCount" class="wb-badge">{{ dataCount }}</span>
       </button>
     </nav>
 
@@ -31,11 +30,13 @@
         :student-name="studentName"
         :suggestions="suggestions"
         :read-only="readOnly"
+        :qa-locked="qaLocked"
         :session-history="sessionHistory"
         :current-session-id="currentSessionId"
         :session-history-loading="sessionHistoryLoading"
         @new-session="$emit('new-session')"
         @select-session="$emit('select-session', $event)"
+        @archive-session="$emit('archive-session', $event)"
         @send="$emit('send', $event)"
         @stop="$emit('stop')"
         @upload-image="$emit('upload-image', $event)"
@@ -48,6 +49,8 @@
         v-else-if="modelValue === 'data'"
         :session-id="sessionId"
         :session-data-revision="sessionDataRevision"
+        :read-only="readOnly"
+        @deleted="$emit('data-deleted')"
       />
 
       <ChatRecordPanel
@@ -82,6 +85,7 @@ defineProps({
   dataAttachment: { type: Object, default: null },
   suggestions: { type: Array, default: () => [] },
   readOnly: { type: Boolean, default: false },
+  qaLocked: { type: Boolean, default: false },
   sessionHistory: { type: Array, default: () => [] },
   currentSessionId: { type: Number, default: 0 },
   sessionHistoryLoading: { type: Boolean, default: false }
@@ -91,12 +95,14 @@ defineEmits([
   'update:modelValue',
   'new-session',
   'select-session',
+  'archive-session',
   'send',
   'stop',
   'upload-image',
   'capture-image',
   'clear-image',
-  'clear-data'
+  'clear-data',
+  'data-deleted'
 ])
 
 const tabs = [
@@ -119,10 +125,6 @@ const tabs = [
 .wb-tab--active::after {
   content: '';
   @apply absolute left-3 right-3 bottom-0 h-0.5 bg-brand-600 rounded-full;
-}
-.wb-badge {
-  @apply ml-1 inline-flex min-w-[1.1rem] h-[1.1rem] px-1 items-center justify-center
-    rounded-full bg-brand-600 text-white text-[10px] tabular-nums;
 }
 .wb-body { @apply flex flex-col; }
 </style>

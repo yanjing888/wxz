@@ -98,6 +98,9 @@ public class LabSessionService {
         if (userId != null && userId > GUEST_USER_ID) {
             accessService.requireAssignedIfStudent(userId, req.getExperimentCode());
         }
+        if (isLabCompleted(userId != null ? userId : GUEST_USER_ID, req.getExperimentCode())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "实验已结束，仅可查看历史对话");
+        }
         ExperimentConfig exp = experimentConfigService.getByCode(req.getExperimentCode());
         LabSession session = new LabSession();
         session.setUserId(userId != null ? userId : GUEST_USER_ID);
@@ -118,15 +121,33 @@ public class LabSessionService {
         List<LabSession> sessions;
         if (experimentCode != null && !experimentCode.isBlank()) {
             sessions = includeEmpty
-                    ? sessionRepository.findByUserIdAndExperimentCodeOrderByStartTimeDesc(userId, experimentCode.trim())
+                    ? sessionRepository.findByUserIdAndExperimentCodeAndHistoryArchivedFalseOrderByStartTimeDesc(
+                            userId, experimentCode.trim())
                     : sessionRepository.findConversationSessionsByUserIdAndExperimentCode(userId, experimentCode.trim());
         } else {
             sessions = includeEmpty
-                    ? sessionRepository.findByUserIdOrderByStartTimeDesc(userId)
+                    ? sessionRepository.findByUserIdAndHistoryArchivedFalseOrderByStartTimeDesc(userId)
                     : sessionRepository.findConversationSessionsByUserId(userId);
         }
         sessions.forEach(this::attachHistoryTitle);
         return sessions;
+    }
+
+    public boolean isLabCompleted(Long userId, String experimentCode) {
+        if (userId == null || experimentCode == null || experimentCode.isBlank()) {
+            return false;
+        }
+        return sessionRepository.existsByUserIdAndExperimentCodeAndStatus(userId, experimentCode.trim(), "FINISHED");
+    }
+
+    private void assertLabChatOpen(LabSession session) {
+        if (session == null) {
+            return;
+        }
+        if ("FINISHED".equals(session.getStatus())
+                || isLabCompleted(session.getUserId(), session.getExperimentCode())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "实验已结束，仅可查看历史对话");
+        }
     }
 
     public LabSession getLatestActiveSession(Long userId, String experimentCode) {
@@ -134,7 +155,8 @@ public class LabSessionService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "experimentCode is required");
         }
         return sessionRepository
-                .findFirstByUserIdAndExperimentCodeAndStatusOrderByStartTimeDesc(userId, experimentCode.trim(), "ACTIVE")
+                .findFirstByUserIdAndExperimentCodeAndHistoryArchivedFalseAndStatusOrderByStartTimeDesc(
+                        userId, experimentCode.trim(), "ACTIVE")
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No active session"));
     }
 
@@ -148,7 +170,7 @@ public class LabSessionService {
         }
         String code = experimentCode.trim();
         Optional<LabSession> active = sessionRepository
-                .findFirstByUserIdAndExperimentCodeAndStatusOrderByStartTimeDesc(userId, code, "ACTIVE");
+                .findFirstByUserIdAndExperimentCodeAndHistoryArchivedFalseAndStatusOrderByStartTimeDesc(userId, code, "ACTIVE");
         if (active.isPresent()) {
             return active.get();
         }
@@ -156,7 +178,7 @@ public class LabSessionService {
         if (!recent.isEmpty()) {
             return recent.get(0);
         }
-        return sessionRepository.findFirstByUserIdAndExperimentCodeOrderByStartTimeDesc(userId, code)
+        return sessionRepository.findFirstByUserIdAndExperimentCodeAndHistoryArchivedFalseOrderByStartTimeDesc(userId, code)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No session"));
     }
 
@@ -328,7 +350,7 @@ public class LabSessionService {
         Long sessionId = session.getId();
         ExperimentConfig exp = experimentConfigService.getByCode(session.getExperimentCode());
         Map<String, Object> stepSchemas = buildStepDataSchemas(exp);
-        List<SessionDataLog> logs = sessionDataLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        List<SessionDataLog> logs = sessionDataLogRepository.findOfficialBySessionIdOrderByCreatedAtAsc(sessionId);
         List<Map<String, Object>> logEntries = new ArrayList<>();
         Map<String, Object> byStep = new LinkedHashMap<>();
         for (SessionDataLog log : logs) {
@@ -379,7 +401,7 @@ public class LabSessionService {
                     Map<String, Object> schema = new LinkedHashMap<>();
                     schema.put("stepId", parseStepId(entry.getKey()));
                     schema.put("stepTitle", step.getTitle() != null ? step.getTitle() : ("步骤 " + entry.getKey()));
-                    schema.put("fields", buildDataFieldColumns(step.getDataFields()));
+                    schema.put("fields", buildDataFieldColumns(effectiveDataFields(exp, step)));
                     schemas.put(entry.getKey(), schema);
                 });
         return schemas;
@@ -434,6 +456,7 @@ public class LabSessionService {
         entry.put("values", readJsonMap(log.getValuesJson()));
         entry.put("validation", readJsonMap(log.getValidationJson()));
         entry.put("feedback", log.getFeedback());
+        entry.put("officialData", isOfficialData(log));
         entry.put("createdAt", log.getCreatedAt() != null ? log.getCreatedAt().toString() : "");
         return entry;
     }
@@ -450,32 +473,63 @@ public class LabSessionService {
         return submitSessionData(session, req);
     }
 
+    @Transactional
+    public void deleteSessionData(Long sessionId, Long userId, Long dataLogId) {
+        LabSession session = getSession(sessionId, userId);
+        SessionDataLog log = sessionDataLogRepository.findById(dataLogId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据记录不存在"));
+        if (!Objects.equals(log.getSessionId(), session.getId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据记录不存在");
+        }
+        sessionDataLogRepository.delete(log);
+    }
+
     private SessionDataSubmitResponse submitSessionData(LabSession session, SubmitSessionDataRequest req) {
+        assertLabChatOpen(session);
         Long sessionId = session.getId();
         ExperimentConfig exp = experimentConfigService.getByCode(session.getExperimentCode());
         int stepId = req.getStepId() != null ? req.getStepId() : session.getActiveStep();
         StepConfig step = resolveStep(exp, stepId);
 
         if (!isDataStep(exp, step)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前步骤请使用拍照纠错，不支持数据提交");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前步骤暂无可提交的数据字段");
         }
 
         Map<String, Object> values = req.getValues() != null ? new LinkedHashMap<>(req.getValues()) : Map.of();
-        DataValidationResult validation = dataValidationService.validate(exp, step, values);
+        if (values.entrySet().stream().noneMatch(e -> e.getValue() != null && !String.valueOf(e.getValue()).isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请至少填写一项数据");
+        }
+        StepConfig validationStep = withDataFields(step, effectiveDataFields(exp, step));
+        DataValidationResult validation = dataValidationService.validate(exp, validationStep, values);
+        boolean officialData = req.getOfficialData() == null || Boolean.TRUE.equals(req.getOfficialData());
+        boolean runCorrection = req.getRunCorrection() == null || Boolean.TRUE.equals(req.getRunCorrection());
+        if (officialData && !validation.getErrors().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "正式实验数据未通过预检：" + String.join("；", validation.getErrors()));
+        }
 
         Map<String, Object> inputs = new LinkedHashMap<>();
         String dataJson = writeJson(values);
-        inputs.put("query", buildDataAssistQuery(step, validation, values));
-        inputs.put("data_json", dataJson);
-        putExperimentInputs(inputs, exp.getName(), exp.getCode());
-        inputs.put("step_id", String.valueOf(stepId));
-        putStepContextInputs(inputs, step);
-        putDifyRoutingInputs(inputs, step, false);
-        attachKnowledgeMapInputs(inputs, exp, stepId, false);
-        attachKnowledgeContext(inputs, exp, session, step, inputs.get("query").toString(), false);
+        AssistResponse assist;
+        String feedback;
+        if (runCorrection) {
+            inputs.put("query", buildDataAssistQuery(validationStep, validation, values));
+            inputs.put("data_json", dataJson);
+            putExperimentInputs(inputs, exp.getName(), exp.getCode());
+            inputs.put("step_id", String.valueOf(stepId));
+            putStepContextInputs(inputs, step);
+            putDifyRoutingInputs(inputs, step, false);
+            attachKnowledgeMapInputs(inputs, exp, stepId, false);
+            attachKnowledgeContext(inputs, exp, session, step, inputs.get("query").toString(), false);
 
-        AssistResponse assist = difyService.assist("text-assist", inputs, "guest-" + sessionId, exp, stepId, false, null, true);
-        String feedback = prependValidationSummary(assist.getFeedback(), validation);
+            assist = difyService.assist("text-assist", inputs, "guest-" + sessionId, exp, stepId, false, null, true);
+            feedback = prependValidationSummary(assist.getFeedback(), validation);
+        } else {
+            assist = new AssistResponse();
+            assist.setFromDify(false);
+            assist.setType("data_save");
+            feedback = officialData ? "已保存为正式实验数据，后续实验报告会引用这条记录。" : "已保存为过程检查记录。";
+        }
         assist.setFeedback(feedback);
 
         SessionDataLog log = new SessionDataLog();
@@ -485,18 +539,23 @@ public class LabSessionService {
         log.setValuesJson(dataJson);
         log.setValidationJson(writeJson(validation));
         log.setFeedback(feedback);
+        log.setOfficialData(officialData);
         sessionDataLogRepository.save(log);
 
-        session.setHelpCount(session.getHelpCount() + 1);
-        sessionRepository.save(session);
+        if (runCorrection) {
+            session.setHelpCount(session.getHelpCount() + 1);
+            sessionRepository.save(session);
+        }
 
-        String submittedText = "【数据提交】" + log.getStepTitle() + "\n" + values.entrySet().stream()
-                .map(e -> e.getKey() + ": " + e.getValue())
-                .collect(Collectors.joining("；"));
-        saveChatMessage(sessionId, "user", stepId, submittedText, null);
-        saveChatMessage(sessionId, "ai", stepId, feedback, null);
+        if (runCorrection) {
+            String submittedText = (officialData ? "【正式数据检查】" : "【过程检查】") + log.getStepTitle() + "\n" + values.entrySet().stream()
+                    .map(e -> e.getKey() + ": " + e.getValue())
+                    .collect(Collectors.joining("；"));
+            saveChatMessage(sessionId, "user", stepId, submittedText, null);
+            saveChatMessage(sessionId, "ai", stepId, feedback, null);
+        }
 
-        if (!validation.isOk() || !validation.getWarnings().isEmpty()) {
+        if (runCorrection && (!validation.isOk() || !validation.getWarnings().isEmpty())) {
             CorrectionLog correction = new CorrectionLog();
             correction.setSessionId(sessionId);
             correction.setStepId(stepId);
@@ -509,6 +568,7 @@ public class LabSessionService {
 
         SessionDataSubmitResponse resp = new SessionDataSubmitResponse();
         resp.setStepId(stepId);
+        resp.setOfficialData(officialData);
         resp.setValues(values);
         resp.setValidation(validation);
         resp.setAssist(assist);
@@ -522,13 +582,50 @@ public class LabSessionService {
         if (step == null) {
             return false;
         }
-        if ("vision".equalsIgnoreCase(step.getCorrectionMode())) {
-            return false;
-        }
-        if ("data".equalsIgnoreCase(step.getCorrectionMode())) {
+        if (!effectiveDataFields(exp, step).isEmpty()) {
             return true;
         }
-        return step.getDataFields() != null && !step.getDataFields().isEmpty();
+        return "data".equalsIgnoreCase(step.getCorrectionMode());
+    }
+
+    private static List<DataFieldConfig> effectiveDataFields(ExperimentConfig exp, StepConfig step) {
+        List<DataFieldConfig> fields = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        appendDataFields(fields, seen, exp != null ? exp.getCommonDataFields() : null);
+        if (step != null && !"image".equalsIgnoreCase(step.getDataSource())) {
+            appendDataFields(fields, seen, step.getDataFields());
+        }
+        return fields;
+    }
+
+    private static void appendDataFields(List<DataFieldConfig> target, Set<String> seen, List<DataFieldConfig> source) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        for (DataFieldConfig field : source) {
+            if (field == null || field.getKey() == null || field.getKey().isBlank()) {
+                continue;
+            }
+            if (seen.add(field.getKey())) {
+                target.add(field);
+            }
+        }
+    }
+
+    private StepConfig withDataFields(StepConfig source, List<DataFieldConfig> fields) {
+        StepConfig copy = new StepConfig();
+        if (source != null) {
+            copy.setTitle(source.getTitle());
+            copy.setDesc(source.getDesc());
+            copy.setGuidePath(source.getGuidePath());
+            copy.setCorrectionMode(source.getCorrectionMode());
+            copy.setDataSource(source.getDataSource());
+            copy.setDeviceType(source.getDeviceType());
+            copy.setTut(source.getTut());
+            copy.setAssistMock(source.getAssistMock());
+        }
+        copy.setDataFields(fields);
+        return copy;
     }
 
     private String buildDataAssistQuery(StepConfig step, DataValidationResult validation, Map<String, Object> values) {
@@ -692,6 +789,7 @@ public class LabSessionService {
     }
 
     private AssistPrepare prepareAssist(LabSession session, AssistRequest req) {
+        assertLabChatOpen(session);
         Long sessionId = session.getId();
 
         boolean hasImage = req.getImageUrl() != null && !req.getImageUrl().isBlank();
@@ -931,6 +1029,39 @@ public class LabSessionService {
         session.setEndTime(LocalDateTime.now());
         session.setCameraActive(false);
         session.setCameraActiveAt(null);
+        LabSession saved = sessionRepository.save(session);
+        closeLeftoverActiveSessions(saved);
+        return saved;
+    }
+
+    /** 结束实验后，同一实验下残留的「新建对话」会话一并结束，避免教师端仍显示进行中。 */
+    private void closeLeftoverActiveSessions(LabSession finished) {
+        if (finished.getUserId() == null || finished.getExperimentCode() == null) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        List<LabSession> others = sessionRepository
+                .findByUserIdAndExperimentCodeOrderByStartTimeDesc(finished.getUserId(), finished.getExperimentCode());
+        for (LabSession other : others) {
+            if (other.getId().equals(finished.getId()) || !"ACTIVE".equals(other.getStatus())) {
+                continue;
+            }
+            other.setStatus("FINISHED");
+            if (other.getEndTime() == null) {
+                other.setEndTime(now);
+            }
+            other.setCameraActive(false);
+            other.setCameraActiveAt(null);
+            sessionRepository.save(other);
+        }
+    }
+
+    @Transactional
+    public LabSession archiveFromHistory(Long sessionId, Long userId) {
+        LabSession session = getSession(sessionId, userId);
+        session.setHistoryArchived(true);
+        session.setCameraActive(false);
+        session.setCameraActiveAt(null);
         return sessionRepository.save(session);
     }
 
@@ -949,7 +1080,7 @@ public class LabSessionService {
         ExperimentConfig exp = experimentConfigService.getByCode(session.getExperimentCode());
         List<CorrectionLog> corrections = correctionLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
         List<EnvCheckLog> envLogs = envCheckLogRepository.findBySessionIdOrderByCreatedAtDesc(sessionId);
-        List<SessionDataLog> dataLogs = sessionDataLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        List<SessionDataLog> dataLogs = sessionDataLogRepository.findOfficialBySessionIdOrderByCreatedAtAsc(sessionId);
 
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("sessionId", sessionId);
@@ -1002,9 +1133,14 @@ public class LabSessionService {
             item.put("values", parseValuesJson(log.getValuesJson()));
             item.put("valuesSummary", summarizeValuesJson(log.getValuesJson()));
             item.put("validationSummary", summarizeValidationJson(log.getValidationJson()));
+            item.put("officialData", isOfficialData(log));
             entries.add(item);
         }
         return entries;
+    }
+
+    private boolean isOfficialData(SessionDataLog log) {
+        return log == null || log.getOfficialData() == null || Boolean.TRUE.equals(log.getOfficialData());
     }
 
     private Map<String, Object> parseValuesJson(String json) {

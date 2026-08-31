@@ -6,20 +6,9 @@ cd /d "%~dp0.."
 set "ROOT=%CD%"
 call "%~dp0_read-ports.bat"
 
-echo Ports: backend=%BACKEND_PORT% frontend=%FRONTEND_PORT% uvc-camera=%UVC_CAMERA_PORT%
-echo Config: %ROOT%\config\ports.env
-echo Freeing ports...
-call "%~dp0_free-port.bat" %BACKEND_PORT% backend
-call "%~dp0_free-port.bat" %FRONTEND_PORT% frontend
-call "%~dp0_free-port.bat" %UVC_CAMERA_PORT% uvc-camera
-timeout /t 1 /nobreak >nul
+echo Ports: backend=%BACKEND_PORT% frontend=%FRONTEND_PORT%
+echo Starting...
 
-echo Starting backend...
 start "WXZ-Backend" cmd /k call "%~dp0run-backend.bat"
-
-timeout /t 2 /nobreak >nul
-
-echo Starting frontend...
 start "WXZ-Frontend" cmd /k call "%~dp0run-frontend.bat"
-
 exit /b 0

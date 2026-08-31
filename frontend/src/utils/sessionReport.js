@@ -3,6 +3,7 @@
 function mapSessionDataRow(entry, row) {
   const values = row?.values ?? entry?.values
   return {
+    id: row?.id ?? entry?.id ?? null,
     stepId: entry?.stepId ?? row?.stepId,
     stepTitle: entry?.stepTitle || row?.stepTitle || '步骤',
     values: values && typeof values === 'object' ? values : {},
@@ -49,6 +50,7 @@ export function normalizeSessionDataByStep(data) {
       }
     }
     byStep[key].rows.push({
+      id: row.id ?? null,
       values: row.values,
       validation: row.validation,
       feedback: row.feedback,
@@ -116,6 +118,7 @@ export function buildSessionDataStepTables({ experimentName, entries, stepSchema
       stepTitle,
       fields: columns,
       rows: rows.map((r, i) => ({
+        id: r.id ?? null,
         index: i + 1,
         values: r.values && typeof r.values === 'object' ? r.values : {},
         createdAt: r.createdAt || ''

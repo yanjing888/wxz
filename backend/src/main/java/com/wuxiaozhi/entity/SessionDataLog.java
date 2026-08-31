@@ -34,6 +34,9 @@ public class SessionDataLog {
     @Column(columnDefinition = "TEXT")
     private String feedback;
 
+    /** true/null: official experiment data; false: process check only, excluded from reports. */
+    private Boolean officialData = true;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

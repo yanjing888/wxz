@@ -22,6 +22,7 @@
         :read-only="sending || !conversationId"
         :loading-assist="sending"
         @send="sendMessage"
+        @stop="stopGeneration"
       />
     </div>
   </StagePanel>
@@ -96,6 +97,26 @@ async function loadMessages() {
   }))
 }
 
+function stopGeneration() {
+  if (assistAbort.value) {
+    assistAbort.value.abort()
+    assistAbort.value = null
+  }
+  sending.value = false
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    if (messages.value[i].streaming) {
+      messages.value[i].streaming = false
+      break
+    }
+  }
+}
+
+function finishAiMessage(aiIndex) {
+  if (!messages.value[aiIndex]) return
+  messages.value[aiIndex].streaming = false
+  sending.value = false
+}
+
 async function sendMessage(text) {
   const prompt = (text || '').trim()
   if (!prompt || !conversationId.value || sending.value) return false
@@ -121,18 +142,19 @@ async function sendMessage(text) {
       },
       {
         onChunk: (chunk) => { messages.value[aiIndex].text += chunk },
-        onAnswerEnd: () => { messages.value[aiIndex].streaming = false },
+        onAnswerEnd: () => { finishAiMessage(aiIndex) },
         onDone: (data) => {
           if (doneHandled) return
           doneHandled = true
-          messages.value[aiIndex].streaming = false
+          finishAiMessage(aiIndex)
           if (data?.feedback && !messages.value[aiIndex].text.trim()) messages.value[aiIndex].text = data.feedback
           if (data?.aiMessageId) messages.value[aiIndex].id = data.aiMessageId
         },
         onError: (msg) => {
-          messages.value[aiIndex].streaming = false
+          finishAiMessage(aiIndex)
           if (!messages.value[aiIndex].text) messages.value[aiIndex].text = `**请求失败**：${msg}`
-        }
+        },
+        onStreamEnd: () => { finishAiMessage(aiIndex) }
       },
       abortCtrl.signal
     )
@@ -144,10 +166,9 @@ async function sendMessage(text) {
     return false
   } finally {
     if (assistAbort.value === abortCtrl) {
-      sending.value = false
       assistAbort.value = null
     }
-    if (messages.value[aiIndex]) messages.value[aiIndex].streaming = false
+    finishAiMessage(aiIndex)
   }
 }
 </script>

@@ -6,6 +6,40 @@
   "dataCollection": {
     "enabled": true
   },
+  "commonDataFields": [
+    {
+      "key": "focus_lift_position_mm",
+      "label": "调焦升降位置",
+      "type": "number",
+      "unit": "mm",
+      "min": 0,
+      "max": 60,
+      "required": false,
+      "placeholder": "环纹清晰时的升降尺读数",
+      "photoAssist": true,
+      "scaleReading": true,
+      "scaleAxis": "vertical",
+      "scaleDirection": "down",
+      "scaleUnitPerTick": 1,
+      "scaleZeroValue": 0
+    },
+    {
+      "key": "stage_lateral_position_mm",
+      "label": "横向居中位置",
+      "type": "number",
+      "unit": "mm",
+      "min": 0,
+      "max": 60,
+      "required": false,
+      "placeholder": "中心暗斑居中时的横移尺读数",
+      "photoAssist": true,
+      "scaleReading": true,
+      "scaleAxis": "horizontal",
+      "scaleDirection": "left",
+      "scaleUnitPerTick": 1,
+      "scaleZeroValue": 0
+    }
+  ],
   "menuLabels": [
     "仪器摆放与光路装调",
     "目镜视度调节与粗调成像",
@@ -68,7 +102,7 @@
     "4": {
       "title": "曲率半径计算",
       "correctionMode": "data",
-      "dataSource": "manual",
+      "dataSource": "image",
       "dataFields": [
         { "key": "delta_m", "label": "环序差 |m-n|", "type": "number", "min": 1, "required": true, "placeholder": "建议 ≥ 5" },
         { "key": "delta_D2_mm2", "label": "Dₘ²-Dₙ²", "type": "number", "unit": "mm²", "min": 0, "required": true },

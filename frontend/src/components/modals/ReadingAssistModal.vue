@@ -83,7 +83,7 @@
               </button>
             </div>
             <p class="text-[12px] text-ink-faint mt-2">
-              AI 识别仅作参考。确认后会先填入左侧读数区，仍需你检查后点击「提交数据并纠错」才会入库。
+              AI 识别仅作参考。确认后会先填入左侧读数区，可先检查纠错，确认无误后再保存为实验数据。
             </p>
           </template>
           <div v-else class="result-empty">

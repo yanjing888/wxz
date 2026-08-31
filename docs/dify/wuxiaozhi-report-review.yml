@@ -1,0 +1,931 @@
+app:
+  name: 物小智-教师报告预评
+  description: 教师端 report-review：输入学生报告文件 + 本实验目的与步骤。文档提取正文后，空报告短路；可评时五维并行打分并汇总建议分与评语。
+  mode: advanced-chat
+  icon_type: emoji
+  icon: 📝
+  icon_background: '#EEF2FF'
+  use_icon_as_answer_icon: false
+kind: app
+version: 0.6.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    opening_statement: 我是物小智教师预评助手。请提交学生报告后，我会给出建议分和评语，需教师确认才作为正式成绩。
+    suggested_questions:
+    - 请对本份实验报告做预评
+    - 给出建议分和可编辑评语
+    suggested_questions_after_answer:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    file_upload:
+      enabled: true
+      allowed_file_types:
+      - document
+      allowed_file_extensions:
+      - .docx
+      - .doc
+      - .pdf
+      - .txt
+      - .md
+      allowed_file_upload_methods:
+      - local_file
+      number_limits: 1
+  graph:
+    edges:
+    - id: e00
+      source: start
+      sourceHandle: source
+      target: extract
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: start
+        targetType: document-extractor
+      zIndex: 0
+    - id: e01
+      source: extract
+      sourceHandle: source
+      target: parse
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: document-extractor
+        targetType: code
+      zIndex: 0
+    - id: e02
+      source: parse
+      sourceHandle: source
+      target: metrics
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      zIndex: 0
+    - id: e03
+      source: metrics
+      sourceHandle: source
+      target: router
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: code
+        targetType: if-else
+      zIndex: 0
+    - id: e-empty
+      source: router
+      sourceHandle: empty
+      target: empty
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: code
+      zIndex: 0
+    - id: e-empty-ans
+      source: empty
+      sourceHandle: source
+      target: answer_empty
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: code
+        targetType: answer
+      zIndex: 0
+    - id: e-c
+      source: router
+      sourceHandle: 'false'
+      target: completeness
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      zIndex: 0
+    - id: e-d
+      source: router
+      sourceHandle: 'false'
+      target: data_quality
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      zIndex: 0
+    - id: e-e
+      source: router
+      sourceHandle: 'false'
+      target: error_analysis
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      zIndex: 0
+    - id: e-f
+      source: router
+      sourceHandle: 'false'
+      target: conclusion
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      zIndex: 0
+    - id: e-t
+      source: router
+      sourceHandle: 'false'
+      target: think
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      zIndex: 0
+    - id: e-mc
+      source: completeness
+      sourceHandle: source
+      target: merge
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      zIndex: 0
+    - id: e-md
+      source: data_quality
+      sourceHandle: source
+      target: merge
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      zIndex: 0
+    - id: e-me
+      source: error_analysis
+      sourceHandle: source
+      target: merge
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      zIndex: 0
+    - id: e-mf
+      source: conclusion
+      sourceHandle: source
+      target: merge
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      zIndex: 0
+    - id: e-mt
+      source: think
+      sourceHandle: source
+      target: merge
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      zIndex: 0
+    - id: e-final
+      source: merge
+      sourceHandle: source
+      target: final
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: code
+        targetType: llm
+      zIndex: 0
+    - id: e-fmt
+      source: final
+      sourceHandle: source
+      target: format
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      zIndex: 0
+    - id: e-ans
+      source: format
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: code
+        targetType: answer
+      zIndex: 0
+    nodes:
+    - id: start
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 80
+        y: 300
+      positionAbsolute:
+        x: 80
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 开始：报告文件 + 实验目的步骤
+        type: start
+        selected: false
+        variables:
+        - label: 学生实验报告
+          variable: student_report_file
+          type: file
+          required: false
+          allowed_file_types:
+          - document
+          allowed_file_extensions:
+          - .docx
+          - .doc
+          - .pdf
+          - .txt
+          - .md
+          allowed_file_upload_methods:
+          - local_file
+          options: []
+        - label: 实验目的与步骤
+          variable: experiment_spec
+          type: paragraph
+          required: false
+          options: []
+          max_length: 12000
+        - label: 实验名称
+          variable: experiment_name
+          type: text-input
+          required: false
+          options: []
+          max_length: 200
+        - label: 学生姓名
+          variable: student_name
+          type: text-input
+          required: false
+          options: []
+          max_length: 80
+        - label: 班级
+          variable: student_class
+          type: text-input
+          required: false
+          options: []
+          max_length: 80
+    - id: extract
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 360
+        y: 300
+      positionAbsolute:
+        x: 360
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 节点01 从报告文件提取正文
+        type: document-extractor
+        selected: false
+        variable_selector:
+        - start
+        - student_report_file
+        is_array_file: false
+    - id: parse
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 640
+        y: 300
+      positionAbsolute:
+        x: 640
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 节点02 对齐评分材料
+        type: code
+        selected: false
+        code_language: python3
+        code: "import re\n\n\ndef _clean(v):\n    if v is None:\n        return \"\"\n    return str(v).strip()\n\n\ndef _strip_html(text):\n\
+          \    if not text:\n        return \"\"\n    s = str(text)\n    s = re.sub(r\"(?i)<br\\s*/?>\", \"\\n\", s)\n   \
+          \ s = re.sub(r\"(?i)</(p|div|h[1-6]|li|tr|table)>\", \"\\n\", s)\n    s = re.sub(r\"(?i)<li[^>]*>\", \"- \", s)\n\
+          \    s = re.sub(r\"<[^>]+>\", \" \", s)\n    s = s.replace(\"&nbsp;\", \" \").replace(\"&lt;\", \"<\").replace(\"\
+          &gt;\", \">\").replace(\"&amp;\", \"&\")\n    s = re.sub(r\"[ \\t]+\", \" \", s)\n    s = re.sub(r\"\\n{3,}\", \"\
+          \\n\\n\", s)\n    return s.strip()\n\n\ndef main(query=\"\", student_report=\"\", experiment_spec=\"\", experiment_name=\"\
+          \", student_name=\"\", student_class=\"\"):\n    name = _clean(experiment_name) or \"大学物理实验\"\n    report = _strip_html(_clean(student_report))[:20000]\n\
+          \    spec = _strip_html(_clean(experiment_spec))[:12000]\n    return {\n        \"query\": _clean(query) or \"请对照实验目的与步骤，对学生实验报告做预评（非终裁）。\"\
+          ,\n        \"experiment_name\": name,\n        \"student_name\": _clean(student_name),\n        \"student_class\"\
+          : _clean(student_class),\n        \"student_report\": report,\n        \"experiment_guide_text\": spec,\n    }\n"
+        variables:
+        - variable: student_report
+          value_selector:
+          - extract
+          - text
+        - variable: experiment_spec
+          value_selector:
+          - start
+          - experiment_spec
+        - variable: experiment_name
+          value_selector:
+          - start
+          - experiment_name
+        - variable: student_name
+          value_selector:
+          - start
+          - student_name
+        - variable: student_class
+          value_selector:
+          - start
+          - student_class
+        - variable: query
+          value_selector:
+          - sys
+          - query
+        outputs:
+          query:
+            type: string
+            children: null
+          experiment_name:
+            type: string
+            children: null
+          student_name:
+            type: string
+            children: null
+          student_class:
+            type: string
+            children: null
+          student_report:
+            type: string
+            children: null
+          experiment_guide_text:
+            type: string
+            children: null
+    - id: metrics
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 920
+        y: 300
+      positionAbsolute:
+        x: 920
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 节点03 硬性指标与风险标记
+        type: code
+        selected: false
+        code_language: python3
+        code: "import re\n\n\ndef main(student_report=\"\", experiment_guide_text=\"\"):\n    text = student_report or \"\"\
+          \n    guide = experiment_guide_text or \"\"\n    has_uncertainty = bool(re.search(r\"不确定|误差|标准差|相对|±|\\+/-\", text))\n\
+          \    has_unit = bool(re.search(r\"(mm|cm|m|nm|N|kN|MPa|Pa|kg|g|s|V|A|Ω|ohm|℃)\", text, re.I))\n    word_count =\
+          \ len(re.sub(r\"\\s+\", \"\", text))\n    section_hits = []\n    for label in [\"实验目的\", \"实验原理\", \"实验仪器\", \"\
+          实验步骤\", \"数据\", \"结果\", \"讨论\", \"分析\"]:\n        if label in text:\n            section_hits.append(label)\n  \
+          \  risk = []\n    if word_count < 180:\n        risk.append(\"正文偏短\")\n    if not has_uncertainty:\n        risk.append(\"\
+          缺少不确定度/误差分析\")\n    if not has_unit:\n        risk.append(\"单位痕迹不足\")\n    if not guide:\n        risk.append(\"\
+          未收到实验目的与步骤\")\n    if len(section_hits) < 3:\n        risk.append(\"报告结构不完整\")\n    review_route = \"empty\" if\
+          \ word_count < 80 else \"review\"\n    return {\n        \"word_count\": word_count,\n        \"section_count\"\
+          : len(section_hits),\n        \"filled_sections\": \"、\".join(section_hits) if section_hits else \"未识别到标准章节\",\n\
+          \        \"has_uncertainty\": has_uncertainty,\n        \"has_unit\": has_unit,\n        \"risk_flags\": \"；\".join(risk)\
+          \ if risk else \"未发现明显硬性风险\",\n        \"review_route\": review_route,\n    }\n"
+        variables:
+        - variable: student_report
+          value_selector:
+          - parse
+          - student_report
+        - variable: experiment_guide_text
+          value_selector:
+          - parse
+          - experiment_guide_text
+        outputs:
+          word_count:
+            type: number
+            children: null
+          section_count:
+            type: number
+            children: null
+          filled_sections:
+            type: string
+            children: null
+          has_uncertainty:
+            type: boolean
+            children: null
+          has_unit:
+            type: boolean
+            children: null
+          risk_flags:
+            type: string
+            children: null
+          review_route:
+            type: string
+            children: null
+    - id: router
+      type: custom
+      width: 244
+      height: 124
+      position:
+        x: 1200
+        y: 280
+      positionAbsolute:
+        x: 1200
+        y: 280
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 节点04 是否可评
+        type: if-else
+        selected: false
+        cases:
+        - id: empty
+          case_id: empty
+          logical_operator: and
+          conditions:
+          - id: route-empty
+            varType: string
+            variable_selector:
+            - metrics
+            - review_route
+            comparison_operator: is
+            value: empty
+    - id: empty
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 1540
+        y: 40
+      positionAbsolute:
+        x: 1540
+        y: 40
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 分支A 空报告直接给分
+        type: code
+        selected: false
+        code_language: python3
+        code: "import json\n\n\ndef main(experiment_name=\"\", student_name=\"\", word_count=0, risk_flags=\"\"):\n    name\
+          \ = experiment_name or \"本次实验\"\n    who = student_name or \"该生\"\n    comment = (\n        f\"{who}的《{name}》报告正文过短或几乎未填写（约\
+          \ {word_count} 字），\"\n        \"无法按完整性、数据、误差、结论、思考题五维可靠评分。\"\n        \"建议退回补全实验目的、原理、数据与结论后再评。\"\n        f\"硬性提示：{risk_flags\
+          \ or '正文不足'}。\"\n    )\n    result = {\n        \"score\": 1.5,\n        \"score100\": 15,\n        \"maxScore\"\
+          : 10,\n        \"gradeBand\": \"不及格\",\n        \"comment\": comment,\n        \"dimensions\": [],\n        \"risks\"\
+          : [\"正文过短，未进入五维评分\"],\n        \"needsTeacherConfirm\": True,\n    }\n    return {\"result_json\": json.dumps(result,\
+          \ ensure_ascii=False)}\n"
+        variables:
+        - variable: experiment_name
+          value_selector:
+          - parse
+          - experiment_name
+        - variable: student_name
+          value_selector:
+          - parse
+          - student_name
+        - variable: word_count
+          value_selector:
+          - metrics
+          - word_count
+        - variable: risk_flags
+          value_selector:
+          - metrics
+          - risk_flags
+        outputs:
+          result_json:
+            type: string
+            children: null
+    - id: answer_empty
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 1600
+        y: 40
+      positionAbsolute:
+        x: 1600
+        y: 40
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 回答：空报告预评
+        type: answer
+        selected: false
+        answer: '{{#empty.result_json#}}'
+        variables: []
+    - id: completeness
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 1540
+        y: 160
+      positionAbsolute:
+        x: 1540
+        y: 160
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 分支B1 完整性
+        type: llm
+        selected: false
+        model: &id001
+          provider: langgenius/tongyi/tongyi
+          name: qwen-plus
+          mode: chat
+          completion_params:
+            temperature: 0.15
+        prompt_template:
+        - id: system-prompt
+          role: system
+          text: "你是大学物理实验报告预评教师，只负责「完整性」这一维打分。\n\n实验：{{#parse.experiment_name#}}\n学生：{{#parse.student_name#}}（{{#parse.student_class#}}）\n\
+            \n## 本实验应完成什么（目的、步骤与要求）\n{{#parse.experiment_guide_text#}}\n\n## 学生提交的实验报告\n{{#parse.student_report#}}\n\n客观指标：字数\
+            \ {{#metrics.word_count#}}；已识别章节 {{#metrics.filled_sections#}}；硬性风险 {{#metrics.risk_flags#}}\n\n评分要点：\n对照指导书检查实验目的、原理、仪器、步骤、数据与处理、结果、分析与讨论是否齐全。缺章、空章、明显复制提纲扣分。\n\
+            \n有实验步骤要求记录的量，报告里却完全没有对应数据，必须在 issues 中指出。\n\nJSON 字段：\n{\n  \"dimension\": \"完整性\",\n  \"score\": 0,\n  \"max\"\
+            : 20,\n  \"comment\": \"该维评语\",\n  \"issues\": []\n}\n\n输出约束（必须遵守）：\n- 只输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释性前后文。\n\
+            - score 必须是 0 到 20 的整数。\n- comment 用中文，2-5 句，具体指出报告里出现或缺失的内容，禁止空套话。\n- issues 为字符串数组，没有问题则给空数组。\n- 只根据学生已写内容和过程数据判断，不得替学生补写未出现的测量值，不得编造数据。\n\
+            - 这是预评，不是终裁。\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+    - id: data_quality
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 1540
+        y: 280
+      positionAbsolute:
+        x: 1540
+        y: 280
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 分支B2 数据可信度
+        type: llm
+        selected: false
+        model: *id001
+        prompt_template:
+        - id: system-prompt
+          role: system
+          text: "你是大学物理实验报告预评教师，只负责「数据可信度」这一维打分。\n\n实验：{{#parse.experiment_name#}}\n学生：{{#parse.student_name#}}（{{#parse.student_class#}}）\n\
+            \n## 本实验应完成什么（目的、步骤与要求）\n{{#parse.experiment_guide_text#}}\n\n## 学生提交的实验报告\n{{#parse.student_report#}}\n\n客观指标：字数\
+            \ {{#metrics.word_count#}}；已识别章节 {{#metrics.filled_sections#}}；硬性风险 {{#metrics.risk_flags#}}\n\n评分要点：\n核对报告数据是否与过程记录方向一致、是否有单位、是否像估算/编造、表格是否可读。无数据最高\
+            \ 6 分。\n\n不得把指导书例题数据当成学生数据。\n\nJSON 字段：\n{\n  \"dimension\": \"数据可信度\",\n  \"score\": 0,\n  \"max\": 20,\n  \"\
+            comment\": \"该维评语\",\n  \"issues\": []\n}\n\n输出约束（必须遵守）：\n- 只输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释性前后文。\n- score\
+            \ 必须是 0 到 20 的整数。\n- comment 用中文，2-5 句，具体指出报告里出现或缺失的内容，禁止空套话。\n- issues 为字符串数组，没有问题则给空数组。\n- 只根据学生已写内容和过程数据判断，不得替学生补写未出现的测量值，不得编造数据。\n\
+            - 这是预评，不是终裁。\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+    - id: error_analysis
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 1540
+        y: 400
+      positionAbsolute:
+        x: 1540
+        y: 400
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 分支B3 误差分析
+        type: llm
+        selected: false
+        model: *id001
+        prompt_template:
+        - id: system-prompt
+          role: system
+          text: "你是大学物理实验报告预评教师，只负责「误差分析」这一维打分。\n\n实验：{{#parse.experiment_name#}}\n学生：{{#parse.student_name#}}（{{#parse.student_class#}}）\n\
+            \n## 本实验应完成什么（目的、步骤与要求）\n{{#parse.experiment_guide_text#}}\n\n## 学生提交的实验报告\n{{#parse.student_report#}}\n\n客观指标：字数\
+            \ {{#metrics.word_count#}}；已识别章节 {{#metrics.filled_sections#}}；硬性风险 {{#metrics.risk_flags#}}\n\n评分要点：\n看是否写出误差来源、不确定度或相对误差、数据处理思路是否与本实验匹配。空泛套话扣分。\n\
+            \n只评价学生已写的误差/不确定度内容，不要替学生补算。\n\nJSON 字段：\n{\n  \"dimension\": \"误差分析\",\n  \"score\": 0,\n  \"max\": 20,\n  \"\
+            comment\": \"该维评语\",\n  \"issues\": []\n}\n\n输出约束（必须遵守）：\n- 只输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释性前后文。\n- score\
+            \ 必须是 0 到 20 的整数。\n- comment 用中文，2-5 句，具体指出报告里出现或缺失的内容，禁止空套话。\n- issues 为字符串数组，没有问题则给空数组。\n- 只根据学生已写内容和过程数据判断，不得替学生补写未出现的测量值，不得编造数据。\n\
+            - 这是预评，不是终裁。\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+    - id: conclusion
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 1540
+        y: 520
+      positionAbsolute:
+        x: 1540
+        y: 520
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 分支B4 结论质量
+        type: llm
+        selected: false
+        model: *id001
+        prompt_template:
+        - id: system-prompt
+          role: system
+          text: "你是大学物理实验报告预评教师，只负责「结论质量」这一维打分。\n\n实验：{{#parse.experiment_name#}}\n学生：{{#parse.student_name#}}（{{#parse.student_class#}}）\n\
+            \n## 本实验应完成什么（目的、步骤与要求）\n{{#parse.experiment_guide_text#}}\n\n## 学生提交的实验报告\n{{#parse.student_report#}}\n\n客观指标：字数\
+            \ {{#metrics.word_count#}}；已识别章节 {{#metrics.filled_sections#}}；硬性风险 {{#metrics.risk_flags#}}\n\n评分要点：\n看结论是否回应实验目的、是否有定量结果、是否与前面数据矛盾。只有一句话且无数据支撑则低分。\n\
+            \n结论抄原理、不回答测量问题，issues 中明确写出。\n\nJSON 字段：\n{\n  \"dimension\": \"结论质量\",\n  \"score\": 0,\n  \"max\": 20,\n  \"\
+            comment\": \"该维评语\",\n  \"issues\": []\n}\n\n输出约束（必须遵守）：\n- 只输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释性前后文。\n- score\
+            \ 必须是 0 到 20 的整数。\n- comment 用中文，2-5 句，具体指出报告里出现或缺失的内容，禁止空套话。\n- issues 为字符串数组，没有问题则给空数组。\n- 只根据学生已写内容和过程数据判断，不得替学生补写未出现的测量值，不得编造数据。\n\
+            - 这是预评，不是终裁。\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+    - id: think
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 1540
+        y: 640
+      positionAbsolute:
+        x: 1540
+        y: 640
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 分支B5 思考题与讨论
+        type: llm
+        selected: false
+        model: *id001
+        prompt_template:
+        - id: system-prompt
+          role: system
+          text: "你是大学物理实验报告预评教师，只负责「思考题与讨论」这一维打分。\n\n实验：{{#parse.experiment_name#}}\n学生：{{#parse.student_name#}}（{{#parse.student_class#}}）\n\
+            \n## 本实验应完成什么（目的、步骤与要求）\n{{#parse.experiment_guide_text#}}\n\n## 学生提交的实验报告\n{{#parse.student_report#}}\n\n客观指标：字数\
+            \ {{#metrics.word_count#}}；已识别章节 {{#metrics.filled_sections#}}；硬性风险 {{#metrics.risk_flags#}}\n\n评分要点：\n看分析与讨论、思考题是否结合本次实验，而不是万能模板。有过程纠错却完全不反思，酌情扣分。\n\
+            \n没有讨论章可以给低分，但不要虚构学生没写的思考题答案。\n\nJSON 字段：\n{\n  \"dimension\": \"思考题与讨论\",\n  \"score\": 0,\n  \"max\": 20,\n\
+            \  \"comment\": \"该维评语\",\n  \"issues\": []\n}\n\n输出约束（必须遵守）：\n- 只输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释性前后文。\n-\
+            \ score 必须是 0 到 20 的整数。\n- comment 用中文，2-5 句，具体指出报告里出现或缺失的内容，禁止空套话。\n- issues 为字符串数组，没有问题则给空数组。\n- 只根据学生已写内容和过程数据判断，不得替学生补写未出现的测量值，不得编造数据。\n\
+            - 这是预评，不是终裁。\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+    - id: merge
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 1600
+        y: 400
+      positionAbsolute:
+        x: 1600
+        y: 400
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 节点04 五维分数汇总
+        type: code
+        selected: false
+        code_language: python3
+        code: "import json\nimport re\n\n\ndef _extract_obj(text):\n    if not text:\n        return {}\n    s = str(text).strip()\n\
+          \    s = re.sub(r\"^```(?:json)?\", \"\", s, flags=re.I).strip()\n    s = re.sub(r\"```$\", \"\", s).strip()\n \
+          \   try:\n        obj = json.loads(s)\n        return obj if isinstance(obj, dict) else {}\n    except Exception:\n\
+          \        pass\n    m = re.search(r\"\\{[\\s\\S]*\\}\", s)\n    if not m:\n        return {}\n    try:\n        obj\
+          \ = json.loads(m.group(0))\n        return obj if isinstance(obj, dict) else {}\n    except Exception:\n       \
+          \ return {}\n\n\ndef _score(obj, default=0):\n    try:\n        n = float(obj.get(\"score\", default))\n    except\
+          \ Exception:\n        n = default\n    if n < 0:\n        n = 0\n    if n > 20:\n        n = 20\n    return int(round(n))\n\
+          \n\ndef _band(score100):\n    if score100 >= 90:\n        return \"优秀\"\n    if score100 >= 80:\n        return\
+          \ \"良好\"\n    if score100 >= 70:\n        return \"中等\"\n    if score100 >= 60:\n        return \"及格\"\n    return\
+          \ \"不及格\"\n\n\ndef main(completeness_json=\"\", data_json=\"\", error_json=\"\", conclusion_json=\"\", think_json=\"\
+          \", risk_flags=\"\"):\n    items = [\n        _extract_obj(completeness_json),\n        _extract_obj(data_json),\n\
+          \        _extract_obj(error_json),\n        _extract_obj(conclusion_json),\n        _extract_obj(think_json),\n\
+          \    ]\n    names = [\"完整性\", \"数据可信度\", \"误差分析\", \"结论质量\", \"思考题与讨论\"]\n    dimensions = []\n    total = 0\n \
+          \   issues = []\n    for i, obj in enumerate(items):\n        name = obj.get(\"dimension\") or names[i]\n      \
+          \  score = _score(obj, 0 if obj else 10)\n        comment = str(obj.get(\"comment\") or \"\").strip()\n        dim_issues\
+          \ = obj.get(\"issues\") if isinstance(obj.get(\"issues\"), list) else []\n        dimensions.append({\n        \
+          \    \"dimension\": name,\n            \"score\": score,\n            \"max\": 20,\n            \"comment\": comment,\n\
+          \            \"issues\": [str(x) for x in dim_issues if str(x).strip()],\n        })\n        total += score\n \
+          \       issues.extend([str(x) for x in dim_issues if str(x).strip()])\n    if risk_flags and risk_flags != \"未发现明显硬性风险\"\
+          :\n        issues.append(str(risk_flags))\n    score10 = round(total / 10.0, 1)\n    merged = {\n        \"score\"\
+          : score10,\n        \"score100\": total,\n        \"maxScore\": 10,\n        \"gradeBand\": _band(total),\n    \
+          \    \"dimensions\": dimensions,\n        \"risks\": list(dict.fromkeys(issues)),\n        \"needsTeacherConfirm\"\
+          : True,\n    }\n    return {\n        \"score10\": score10,\n        \"score100\": total,\n        \"grade_band\"\
+          : merged[\"gradeBand\"],\n        \"merged_json\": json.dumps(merged, ensure_ascii=False),\n        \"risk_summary\"\
+          : \"；\".join(merged[\"risks\"]) if merged[\"risks\"] else \"未发现明显风险\",\n    }\n"
+        variables:
+        - variable: completeness_json
+          value_selector:
+          - completeness
+          - text
+        - variable: data_json
+          value_selector:
+          - data_quality
+          - text
+        - variable: error_json
+          value_selector:
+          - error_analysis
+          - text
+        - variable: conclusion_json
+          value_selector:
+          - conclusion
+          - text
+        - variable: think_json
+          value_selector:
+          - think
+          - text
+        - variable: risk_flags
+          value_selector:
+          - metrics
+          - risk_flags
+        outputs:
+          score10:
+            type: number
+            children: null
+          score100:
+            type: number
+            children: null
+          grade_band:
+            type: string
+            children: null
+          merged_json:
+            type: string
+            children: null
+          risk_summary:
+            type: string
+            children: null
+    - id: final
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 1940
+        y: 400
+      positionAbsolute:
+        x: 1940
+        y: 400
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 节点05 总评语生成
+        type: llm
+        selected: false
+        model:
+          provider: langgenius/tongyi/tongyi
+          name: qwen-plus
+          mode: chat
+          completion_params:
+            temperature: 0.25
+        prompt_template:
+        - id: system-prompt
+          role: system
+          text: "你是大学物理实验课程的阅卷教师，正在写「AI 预评」总评语。分数已经由前序节点按五维加总得出，你不要改分数，只写评语并整理风险。\n\n实验：{{#parse.experiment_name#}}\n学生：{{#parse.student_name#}}（{{#parse.student_class#}}）\n\
+            建议得分（10 分制）：{{#merge.score10#}} / 10\n百分制参考：{{#merge.score100#}} / 100\n分档：{{#merge.grade_band#}}\n硬性风险：{{#merge.risk_summary#}}\n\
+            \n## 五维评分 JSON\n{{#merge.merged_json#}}\n\n## 学生实验报告（摘要依据）\n{{#parse.student_report#}}\n\n写一段 120-220 字的中文总评，面向教师，可直接贴到批改栏：\n\
+            - 先一句总体印象，再点出 1-2 个优点和 1-2 个必须修改处。\n- 明确这是建议分，需教师确认后才算正式成绩。\n- 不要出现「作为 AI」「根据指令」「JSON」等元话语。\n\n只输出一个 JSON 对象，不要\
+            \ Markdown，不要代码块：\n{\n  \"score\": <必须等于上面的 10 分制分数，保留一位小数>,\n  \"score100\": <必须等于上面的百分制整数>,\n  \"maxScore\"\
+            : 10,\n  \"gradeBand\": \"<分档>\",\n  \"comment\": \"<总评语>\",\n  \"dimensions\": <原样保留五维数组>,\n  \"risks\": <字符串数组>,\n\
+            \  \"needsTeacherConfirm\": true\n}\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+    - id: format
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 2280
+        y: 400
+      positionAbsolute:
+        x: 2280
+        y: 400
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 节点06 结构化输出校验
+        type: code
+        selected: false
+        code_language: python3
+        code: "import json\nimport re\n\n\ndef _extract_obj(text):\n    if not text:\n        return {}\n    s = str(text).strip()\n\
+          \    s = re.sub(r\"^```(?:json)?\", \"\", s, flags=re.I).strip()\n    s = re.sub(r\"```$\", \"\", s).strip()\n \
+          \   try:\n        obj = json.loads(s)\n        return obj if isinstance(obj, dict) else {}\n    except Exception:\n\
+          \        pass\n    m = re.search(r\"\\{[\\s\\S]*\\}\", s)\n    if not m:\n        return {}\n    try:\n        obj\
+          \ = json.loads(m.group(0))\n        return obj if isinstance(obj, dict) else {}\n    except Exception:\n       \
+          \ return {}\n\n\ndef main(final_text=\"\", merged_json=\"\", score10=0, score100=0, grade_band=\"\"):\n    merged\
+          \ = _extract_obj(merged_json)\n    final = _extract_obj(final_text)\n    out = dict(merged)\n    out.update({k:\
+          \ v for k, v in final.items() if v is not None and v != \"\"})\n    try:\n        score = float(score10)\n    except\
+          \ Exception:\n        score = float(out.get(\"score\") or 0)\n    try:\n        s100 = int(float(score100))\n  \
+          \  except Exception:\n        s100 = int(out.get(\"score100\") or round(score * 10))\n    if score <= 0 and s100\
+          \ > 0:\n        score = round(s100 / 10.0, 1)\n    comment = str(out.get(\"comment\") or \"\").strip()\n    if not\
+          \ comment:\n        comment = str(final_text or \"\").strip() or \"预评已完成，请教师核验分数与评语后确认。\"\n    result = {\n    \
+          \    \"score\": round(float(score), 1),\n        \"score100\": s100,\n        \"maxScore\": 10,\n        \"gradeBand\"\
+          : str(out.get(\"gradeBand\") or grade_band or \"\"),\n        \"comment\": comment,\n        \"dimensions\": out.get(\"\
+          dimensions\") if isinstance(out.get(\"dimensions\"), list) else [],\n        \"risks\": out.get(\"risks\") if isinstance(out.get(\"\
+          risks\"), list) else [],\n        \"needsTeacherConfirm\": True,\n    }\n    return {\"result_json\": json.dumps(result,\
+          \ ensure_ascii=False)}\n"
+        variables:
+        - variable: final_text
+          value_selector:
+          - final
+          - text
+        - variable: merged_json
+          value_selector:
+          - merge
+          - merged_json
+        - variable: score10
+          value_selector:
+          - merge
+          - score10
+        - variable: score100
+          value_selector:
+          - merge
+          - score100
+        - variable: grade_band
+          value_selector:
+          - merge
+          - grade_band
+        outputs:
+          result_json:
+            type: string
+            children: null
+    - id: answer
+      type: custom
+      width: 244
+      height: 54
+      position:
+        x: 2620
+        y: 400
+      positionAbsolute:
+        x: 2620
+        y: 400
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      data:
+        title: 回答：五维预评 JSON
+        type: answer
+        selected: false
+        answer: '{{#format.result_json#}}'
+        variables: []

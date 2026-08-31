@@ -37,6 +37,7 @@ export const sessionApi = {
   tutorialView: (id) => http.post(`/api/sessions/${id}/tutorial-view`),
   getData: (id) => http.get(`/api/sessions/${id}/data`),
   submitData: (id, data) => http.post(`/api/sessions/${id}/data`, data),
+  deleteData: (id, dataLogId) => http.delete(`/api/sessions/${id}/data/${dataLogId}`),
   deviceConnect: (id, stepId) => http.post(`/api/sessions/${id}/device/connect?stepId=${stepId}`),
   deviceStatus: (id, stepId) => http.get(`/api/sessions/${id}/device/status?stepId=${stepId}`),
   deviceRead: (id, stepId) => http.post(`/api/sessions/${id}/device/read?stepId=${stepId}`),
@@ -45,6 +46,7 @@ export const sessionApi = {
   deviceSnapshot: (id, stepId) => http.get(`/api/sessions/${id}/device/snapshot?stepId=${stepId}`),
   ccdCapture: (id) => http.post(`/api/sessions/${id}/ccd-capture`),
   finish: (id) => http.post(`/api/sessions/${id}/finish`),
+  archive: (id) => http.post(`/api/sessions/${id}/archive`),
   report: (id) => http.get(`/api/sessions/${id}/report`),
   reportDocx: (id) => http.get(`/api/sessions/${id}/report/docx`, { responseType: 'blob' }),
   studentReportDocx: (id, data) =>
@@ -132,7 +134,7 @@ export const studentExperimentApi = {
   listProgress: () => http.get('/api/student/experiments/progress'),
   getProgress: (code) => http.get(`/api/student/experiments/${code}/progress`),
   completePreLab: (code) => http.post(`/api/student/experiments/${code}/progress/pre-lab`),
-  completeReport: (code) => http.post(`/api/student/experiments/${code}/progress/report`),
+  completeReport: (code, data) => http.post(`/api/student/experiments/${code}/progress/report`, data || {}),
   completeRecap: (code) => http.post(`/api/student/experiments/${code}/progress/recap`)
 }
 
@@ -185,15 +187,20 @@ export const aiToolApi = {
   messages: (conversationId) => http.get(`/api/ai/conversations/${conversationId}/messages`)
 }
 
+export const scaleReadingApi = {
+  recognize: (data) => http.post('/api/scale-reading/recognize', data)
+}
+
 export const teacherApi = {
   overview: () => http.get('/api/teacher/overview'),
   reports: (params = {}) => http.get('/api/teacher/reports', { params }),
   report: (sessionId) => http.get(`/api/teacher/reports/${sessionId}`),
   reportDocx: (sessionId) => http.get(`/api/teacher/reports/${sessionId}/docx`, { responseType: 'blob' }),
-  reviewReport: (sessionId) => http.post(`/api/teacher/reports/${sessionId}/ai-review`),
+  reviewReport: (sessionId) => http.post(`/api/teacher/reports/${sessionId}/ai-review`, null, { timeout: 180000 }),
+  completeGrade: (sessionId, data) => http.patch(`/api/teacher/reports/${sessionId}/grade`, data),
   classroom: (params = {}) => http.get('/api/teacher/classroom', { params }),
   feedback: (params = {}) => http.get('/api/teacher/feedback', { params }),
-  markFeedbackProcessed: (feedbackId) => http.patch(`/api/teacher/feedback/${feedbackId}/processed`),
+  markFeedbackProcessed: (feedbackId, data) => http.patch(`/api/teacher/feedback/${feedbackId}/processed`, data),
   students: () => http.get('/api/teacher/students'),
   importStudents: (data) => http.post('/api/teacher/students/import', data),
   assignExperiments: (userId, data) => http.put(`/api/teacher/students/${userId}/experiments`, data),

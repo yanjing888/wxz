@@ -22,25 +22,17 @@ DIFY_WF_REPORT_ASSIST=app-xxxxxxxxxxxxxxxx
 
 ### 1.2 后端自动注入的变量
 
-学生端 `AskPanel` 调用 `POST /api/ai/conversations/{id}/chat/stream` 时，后端会为 `report-assist` 注入：
+学生端报告页调用 `POST /api/ai/conversations/{id}/chat/stream` 时，后端只向 Dify 注入 **三个业务输入**（外加系统 `query`）：
 
-| 变量 | 来源 | 用途 |
-|------|------|------|
-| `query` | 学生输入 | 用户问题 |
-| `experiment_code` | 当前实验 | 路由/提示词 |
-| `experiment_name` | manifest | 提示词 |
-| `experiment_knowledge` | report-guide Knowledge | 原理要点 |
-| `sessionId` → 展开 | 当前 session | 拉取实验记录 |
-| `data_logs_json` | 各步骤提交的数据 | 表格、误差分析 |
-| `corrections_json` | 视觉/操作纠错 | 误差来源 |
-| `report_knowledge` | 报告指引 Knowledge | 完整性检查 |
-| `report_path` | 报告指引 Follow-up | 讨论/误差提纲 |
-| `purpose` … `discussion` | 学生草稿各章 | 对照缺项 |
-| `filled_section_keys` | 已填章节 key 列表 | 完整性 |
-| `section_word_counts` | 各章字数 | 质量启发式 |
-| `chat_history` | 本对话最近几轮 | 多轮上下文 |
+| 输入 | Dify 变量 | 后端如何生成 |
+|------|-----------|--------------|
+| 学生实验报告 | `student_report` | 前端各章草稿 JSON → 后端拼成带 `## 实验目的` 等标题的全文 |
+| 实验过程数据 | `data_logs_json` | 当前 session 各步骤提交的数据记录 |
+| 实验指导书 | `experiment_guide` | `teaching-knowledge.md` + manifest 分步操作指引 + 常见错误 + 需记录字段 |
 
-**前提**：学生在报告页必须有有效 `sessionId`（完成或进行中的实验会话）。
+**前提**：报告页有有效 `sessionId`（过程数据与指导书依赖当前实验）。
+
+**导入 DSL**：`docs/dify/物小智-学生实验报告助手.yml`
 
 ---
 
@@ -118,27 +110,13 @@ flowchart LR
 
 ### 2.3 开始节点 — 输入变量
 
-在 Dify Chatflow「开始」节点声明（与后端注入对齐）：
+Dify Chatflow「开始」节点 **只需声明 3 个变量**（用户问题走系统 `query`）：
 
-| 变量名 | 类型 | 必填 |
+| 变量名 | 类型 | 说明 |
 |--------|------|------|
-| `query` | 文本 | 是（系统用户消息） |
-| `experiment_code` | 文本 | 否 |
-| `experiment_name` | 文本 | 否 |
-| `experiment_knowledge` | 段落 | 否 |
-| `data_logs_json` | 段落 | 否 |
-| `corrections_json` | 段落 | 否 |
-| `report_knowledge` | 段落 | 否 |
-| `report_path` | 段落 | 否 |
-| `purpose` | 段落 | 否 |
-| `principle` | 段落 | 否 |
-| `apparatus` | 段落 | 否 |
-| `procedure` | 段落 | 否 |
-| `data` | 段落 | 否 |
-| `results` | 段落 | 否 |
-| `discussion` | 段落 | 否 |
-| `filled_section_keys` | 文本 | 否 |
-| `chat_history` | 段落 | 否 |
+| `student_report` | 段落 | 学生当前实验报告全文（后端拼装） |
+| `data_logs_json` | 段落 | 实验过程数据 JSON |
+| `experiment_guide` | 段落 | 实验指导书（目的、步骤指引、常见错误、数据处理要求） |
 
 ### 2.4 代码节点 `parse` — 解析与本地指标
 

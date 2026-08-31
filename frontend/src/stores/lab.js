@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { experimentApi, feedbackApi, sessionApi, studentFileApi, systemApi, uploadApi } from '../api'
+import { experimentApi, feedbackApi, sessionApi, studentExperimentApi, studentFileApi, systemApi, uploadApi } from '../api'
 import { mediaUrl } from '../api/runtime'
 import { sniffImageMime, readFileAsDataUrl } from '../utils/imageFile'
 import { blobToFile, composeMarkedImage } from '../utils/markedImage'
@@ -24,6 +24,24 @@ function persistStoredSessionId(session) {
   localStorage.setItem(sessionStorageKey(session.experimentCode), String(session.id))
 }
 
+function clearStoredSessionId(experimentCode) {
+  if (!experimentCode) return
+  localStorage.removeItem(sessionStorageKey(experimentCode))
+}
+
+function effectiveDataFields(experiment, step) {
+  const common = Array.isArray(experiment?.commonDataFields) ? experiment.commonDataFields : []
+  const stepFields = step?.dataSource === 'image'
+    ? []
+    : (Array.isArray(step?.dataFields) ? step.dataFields : [])
+  const seen = new Set()
+  return [...common, ...stepFields].filter((field) => {
+    if (!field?.key || seen.has(field.key)) return false
+    seen.add(field.key)
+    return true
+  })
+}
+
 function briefEnvSummary(text, maxLen = 80) {
   if (!text) return '暂无异常'
   const plain = String(text)
@@ -39,7 +57,7 @@ const WELCOME_MESSAGE = `<div class="welcome-guide">
   <p class="welcome-guide-title">卡住就直接问我，或拍一张现场照片——不用先选工具。</p>
   <div class="welcome-guide-row"><strong>操作</strong><span>描述现象或拍照，我告诉你下一步怎么做。</span></div>
   <div class="welcome-guide-row"><strong>读数</strong><span>左侧可「拍照获取读数」，确认后再记入。</span></div>
-  <div class="welcome-guide-row"><strong>数据</strong><span>左侧表单或拍照读数提交；右侧「我的数据」查看记录。</span></div>
+  <div class="welcome-guide-row"><strong>数据</strong><span>左侧「检查并纠错」会带入输入框，发送后纠错；「保存为实验数据」才进报告。</span></div>
   <p class="welcome-guide-foot">你也可以点上方推荐问题开始。</p>
 </div>`
 
@@ -119,6 +137,7 @@ export const useLabStore = defineStore('lab', {
     session: null,
     sessionHistory: [],
     sessionHistoryLoading: false,
+    labCompleted: false,
     activeStep: 1,
     composerImageUrl: '',
     composerImagePreview: '',
@@ -187,8 +206,9 @@ export const useLabStore = defineStore('lab', {
       const step = state.experiment?.steps?.[String(state.activeStep)]
       if (!step) return false
       if (step.dataSource === 'device') return true
+      if (effectiveDataFields(state.experiment, step).length > 0) return true
       if (step.correctionMode === 'data') return true
-      return Array.isArray(step.dataFields) && step.dataFields.length > 0
+      return false
     },
     /** 数据采集区是否展开：用户手动覆盖优先，否则按步骤配置自动决定 */
     dataPanelOpen(state) {
@@ -235,7 +255,8 @@ export const useLabStore = defineStore('lab', {
         || state.deviceState === 'acquiring'
     },
     currentDataFields(state) {
-      return state.experiment?.steps?.[String(state.activeStep)]?.dataFields || []
+      const step = state.experiment?.steps?.[String(state.activeStep)]
+      return effectiveDataFields(state.experiment, step)
     },
     currentStepDataRows(state) {
       return state.sessionDataByStep[String(state.activeStep)]?.rows || []
@@ -263,6 +284,9 @@ export const useLabStore = defineStore('lab', {
     },
     envCheckDifyStatus(state) {
       return state.difyStatus?.workflowStatuses?.['env-check'] || null
+    },
+    labQaLocked(state) {
+      return state.labCompleted || state.session?.status === 'FINISHED'
     },
     /** 图片上传区：始终可用，所有步骤都允许拍照求助 */
     useVisionCorrection() {
@@ -305,6 +329,33 @@ export const useLabStore = defineStore('lab', {
         this.sessionHistoryLoading = false
       }
     },
+    async loadLabProgress(experimentCode = '') {
+      const code = (experimentCode || this.experiment?.code || '').trim()
+      if (!code) {
+        this.labCompleted = this.session?.status === 'FINISHED'
+        return this.labCompleted
+      }
+      try {
+        const { data } = await studentExperimentApi.getProgress(code)
+        this.labCompleted = !!(data?.labCompleted || data?.finishedSessionId)
+      } catch {
+        this.labCompleted = this.session?.status === 'FINISHED'
+          || this.sessionHistory.some((item) => item?.status === 'FINISHED')
+      }
+      return this.labCompleted
+    },
+    async archiveSession(sessionOrId) {
+      const sessionId = typeof sessionOrId === 'object' ? sessionOrId?.id : sessionOrId
+      if (!sessionId) return false
+      await sessionApi.archive(sessionId)
+      const wasCurrent = this.session?.id === sessionId
+      this.sessionHistory = this.sessionHistory.filter((item) => item.id !== sessionId)
+      if (wasCurrent && this.session) {
+        this.session = { ...this.session, historyArchived: true }
+        clearStoredSessionId(this.session.experimentCode || this.experiment?.code || '')
+      }
+      return { wasCurrent }
+    },
     async hydrateMissingHistoryTitles() {
       const missing = this.sessionHistory
         .filter((item) => item?.id && !item.historyTitle)
@@ -331,7 +382,7 @@ export const useLabStore = defineStore('lab', {
       })
     },
     updateCurrentSessionHistoryTitle() {
-      if (!this.session?.id) return
+      if (!this.session?.id || this.session.historyArchived) return
       const title = buildHistoryTitleFromMessages(this.messages)
       if (!title) return
 
@@ -373,8 +424,13 @@ export const useLabStore = defineStore('lab', {
 
       const savedId = readStoredSessionId(code)
       if (savedId) {
-        const ok = await this.resumeSession(savedId)
-        if (ok) return this.session
+        try {
+          const ok = await this.resumeSession(savedId)
+          if (ok) return this.session
+        } catch {
+          // 本地记下的会话已不存在或已归档
+        }
+        clearStoredSessionId(code)
       }
 
       const resumed = await this.getResumeSession(code)
@@ -473,8 +529,17 @@ export const useLabStore = defineStore('lab', {
         localStorage.setItem('wxz_exp', code)
         const name = localStorage.getItem('wxz_displayName') || this.session?.studentName || '学生'
         await this.loadExperiment(code)
-        await this.startSession(code, name, '')
-        this.startEnvTimer()
+        await this.loadLabProgress(code)
+        const restored = await this.restoreSessionForExperiment(code)
+        if (!restored && !this.labCompleted) {
+          await this.startSession(code, name, '')
+        } else if (!restored) {
+          this.resetLabUi()
+          this.session = null
+          this.messages = [welcomeChatMessage()]
+          await this.loadSessionHistory(code)
+        }
+        if (!this.labCompleted) this.startEnvTimer()
         return true
       } catch (e) {
         throw e
@@ -483,6 +548,9 @@ export const useLabStore = defineStore('lab', {
       }
     },
     async startSession(experimentCode, studentName, studentClass = '') {
+      if (await this.loadLabProgress(experimentCode)) {
+        throw new Error('实验已结束，仅可查看历史对话')
+      }
       this.stopEnvTimer()
       const { data } = await sessionApi.start({ experimentCode, studentName, studentClass })
       this.session = data
@@ -507,6 +575,8 @@ export const useLabStore = defineStore('lab', {
         await this.loadExperiment(session.experimentCode)
         localStorage.setItem('wxz_exp', session.experimentCode)
       }
+
+      if (session.historyArchived) return false
 
       this.resetLabUi()
       this.session = session
@@ -887,10 +957,17 @@ export const useLabStore = defineStore('lab', {
         this.dataSubmitErrors = ['暂无采集数据，请先完成仪器采集或读取测量值']
         return false
       }
-      return this.submitStepData(values, true)
+      return this.submitStepData(values, { fromDevice: true, officialData: true, runCorrection: true })
     },
-    async submitStepData(values, fromDevice = false, extraMessage = '') {
-      if (!this.session?.id || this.submittingData) return false
+    async submitStepData(values, options = {}) {
+      if (!this.session?.id || this.submittingData || this.labQaLocked) return false
+      const normalized = typeof options === 'boolean'
+        ? { fromDevice: options }
+        : { ...(options || {}) }
+      const fromDevice = normalized.fromDevice === true
+      const officialData = normalized.officialData !== false
+      const runCorrection = normalized.runCorrection !== false
+      const extraMessage = normalized.extraMessage || ''
       this.submittingData = true
       this.dataSubmitErrors = []
 
@@ -898,21 +975,32 @@ export const useLabStore = defineStore('lab', {
       const stepTitle = this.stepConfig?.title || ''
       const lines = formatDataValuesSummary(this.currentDataFields, values || {})
       const summary = lines.join('，')
-      const prefix = fromDevice ? '【仪器采集】' : '【数据提交】'
-      let text = `${prefix}${stepTitle}\n${summary || '(空)'}`
-      const note = (extraMessage || '').trim()
-      if (note) text += `\n\n${note}`
-      this.pushUser(text)
-      this.updateCurrentSessionHistoryTitle()
-
-      const aiIndex = this.messages.length
-      this.messages.push({ role: 'ai', text: '', streaming: true, ts: Date.now() })
+      let aiIndex = -1
+      if (runCorrection) {
+        const prefix = fromDevice ? '【仪器采集检查】' : (officialData ? '【正式数据检查】' : '【过程检查】')
+        let text = `${prefix}${stepTitle}\n${summary || '(空)'}`
+        const note = String(extraMessage || '').trim()
+        if (note) text += `\n\n${note}`
+        this.pushUser(text)
+        this.updateCurrentSessionHistoryTitle()
+        aiIndex = this.messages.length
+        this.messages.push({ role: 'ai', text: '', streaming: true, ts: Date.now() })
+      }
 
       try {
-        const { data } = await sessionApi.submitData(this.session.id, { stepId, values })
+        const { data } = await sessionApi.submitData(this.session.id, {
+          stepId,
+          values,
+          officialData,
+          runCorrection
+        })
         const feedback = data.assist?.feedback || ''
-        this.messages[aiIndex].text = feedback
-        this.messages[aiIndex].streaming = false
+        if (runCorrection && aiIndex >= 0) {
+          this.messages[aiIndex].text = feedback
+          this.messages[aiIndex].streaming = false
+        } else if (officialData) {
+          emitAppAlert('已保存实验数据', feedback || '已保存为正式实验数据，实验报告会引用这条记录。')
+        }
 
         if (data.validation?.errors?.length) {
           this.dataSubmitErrors = data.validation.errors
@@ -923,10 +1011,14 @@ export const useLabStore = defineStore('lab', {
         this.loadSessionHistory(this.experiment?.code || '').catch(() => {})
         return true
       } catch (e) {
-        this.messages[aiIndex].streaming = false
         const msg = e.response?.data?.message || e.message || '数据提交失败'
         this.dataSubmitErrors = [msg]
-        this.messages[aiIndex].text = `**提交失败**：${msg}`
+        if (runCorrection && aiIndex >= 0) {
+          this.messages[aiIndex].streaming = false
+          this.messages[aiIndex].text = `**提交失败**：${msg}`
+        } else {
+          emitAppAlert('保存失败', msg)
+        }
         return false
       } finally {
         this.submittingData = false
@@ -1018,6 +1110,29 @@ export const useLabStore = defineStore('lab', {
     },
     clearComposerDataAttachment() {
       this.composerDataAttachment = null
+    },
+    attachStepDataForCorrection(values = {}) {
+      const cleaned = Object.fromEntries(
+        Object.entries(values || {}).filter(([, value]) => value != null && String(value).trim() !== '')
+      )
+      if (!Object.keys(cleaned).length) {
+        this.dataSubmitErrors = ['请至少填写一项数据']
+        emitAppAlert('暂无可检查的数据', '请先填写读数，再点击“检查并纠错”。')
+        return false
+      }
+      this.dataSubmitErrors = []
+      this.composerDataAttachment = buildComposerDataAttachment({
+        stepId: this.activeStep,
+        stepTitle: this.stepConfig?.title || '',
+        fields: this.currentDataFields,
+        values: cleaned,
+        fromDevice: false
+      })
+      if (this.composerDataAttachment) {
+        this.composerDataAttachment.label = '待检查数据'
+      }
+      this.clearComposerImage()
+      return true
     },
     /** 读数助手确认后的读数：放入对话附件，由学生发送后才入库 */
     applyPhotoReadingToComposer({ value, instrumentLabel, instrumentKey, targetFieldKey } = {}) {
@@ -1176,15 +1291,19 @@ export const useLabStore = defineStore('lab', {
     },
     async sendMessage(userMessage) {
       if (!this.session?.id || this.loadingAssist || this.uploadingImage || this.submittingData) return false
-      if (this.session.status === 'FINISHED') return false
+      if (this.labQaLocked) return false
 
       if (this.composerDataAttachment) {
         const attachment = this.composerDataAttachment
         this.clearComposerDataAttachment()
         return this.submitStepData(
           attachment.values,
-          attachment.fromDevice !== false,
-          (userMessage || '').trim()
+          {
+            fromDevice: attachment.fromDevice !== false,
+            officialData: false,
+            runCorrection: true,
+            extraMessage: (userMessage || '').trim()
+          }
         )
       }
 
@@ -1439,6 +1558,7 @@ export const useLabStore = defineStore('lab', {
       if (!this.session?.id) return null
       const { data } = await sessionApi.finish(this.session.id)
       this.session = data
+      this.labCompleted = true
       this.stopEnvTimer()
       const { data: report } = await sessionApi.report(this.session.id)
       this.loadSessionHistory(this.experiment?.code || '').catch(() => {})

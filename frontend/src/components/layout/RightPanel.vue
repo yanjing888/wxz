@@ -11,9 +11,13 @@
     >
       <button
         type="button"
-        class="mx-3 mt-3 h-10 rounded-lg brand-gradient text-white text-sm font-bold shadow-brand flex items-center justify-center gap-2 btn-active-scale"
-        title="开始新的问答会话"
-        @click="$emit('new-session')"
+        class="mx-3 mt-3 h-10 rounded-lg text-sm font-bold flex items-center justify-center gap-2"
+        :class="qaLocked
+          ? 'bg-surface-muted text-ink-faint cursor-not-allowed'
+          : 'brand-gradient text-white shadow-brand btn-active-scale'"
+        :disabled="qaLocked"
+        :title="qaLocked ? '实验已结束，仅可查看历史对话' : '开始新的问答会话'"
+        @click="qaLocked ? null : $emit('new-session')"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m-7-7h14" />
@@ -32,25 +36,35 @@
             <div v-if="!sessionHistoryLoading && !sessionHistory.length" class="px-2 py-4 text-[11px] text-ink-faint leading-relaxed">
               暂无历史会话
             </div>
-            <button
+            <div
               v-for="item in sessionHistory"
               :key="item.id"
-              type="button"
-              class="relative w-full text-left rounded-lg px-2.5 py-2.5 mb-1.5 border transition-all btn-active-scale"
-              :class="item.id === currentSessionId ? 'bg-brand-50 border-brand-200 text-brand-900' : 'bg-transparent border-transparent text-ink-muted hover:bg-surface-soft hover:text-ink-base'"
-              :title="sessionTitle(item)"
-              @click="$emit('select-session', item)"
+              class="history-item group flex items-center gap-0.5 mb-1.5 rounded-lg border"
+              :class="item.id === currentSessionId ? 'bg-brand-50 border-brand-200' : 'bg-transparent border-transparent hover:bg-surface-soft'"
             >
-              <div class="flex items-center gap-2 min-w-0">
-                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h6m-8 8l3-3h9a3 3 0 003-3V7a3 3 0 00-3-3H7a3 3 0 00-3 3v7a3 3 0 003 3" />
-                </svg>
-                <span class="text-xs font-semibold truncate">{{ sessionTitle(item) }}</span>
-              </div>
-              <span class="history-title-tooltip pointer-events-none absolute left-2 right-2 top-full z-20 mt-1 hidden rounded-md border border-line-soft bg-white px-2 py-1.5 text-[11px] font-semibold leading-snug text-ink-strong shadow-card">
-                {{ sessionTitle(item) }}
-              </span>
-            </button>
+              <button
+                type="button"
+                class="min-w-0 flex-1 text-left rounded-lg pl-2.5 pr-1 py-2.5 transition-all btn-active-scale"
+                :class="item.id === currentSessionId ? 'text-brand-900' : 'text-ink-muted group-hover:text-ink-base'"
+                :title="sessionTitle(item)"
+                @click="$emit('select-session', item)"
+              >
+                <div class="flex items-center gap-2 min-w-0">
+                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h6m-8 8l3-3h9a3 3 0 003-3V7a3 3 0 00-3-3H7a3 3 0 00-3 3v7a3 3 0 003 3" />
+                  </svg>
+                  <span class="text-xs font-semibold truncate">{{ sessionTitle(item) }}</span>
+                </div>
+              </button>
+              <button
+                type="button"
+                class="archive-btn shrink-0 mr-1 px-1.5 py-1 rounded-md text-[10px] font-semibold leading-none text-ink-faint hover:text-brand-600 hover:bg-brand-50"
+                title="归档后从列表隐藏，对话仍会保留"
+                @click.stop="$emit('archive-session', item)"
+              >
+                归档
+              </button>
+            </div>
           </div>
           <div class="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-white to-transparent" />
         </div>
@@ -155,13 +169,14 @@ const props = defineProps({
   studentName: { type: String, default: '' },
   suggestions: { type: Array, default: () => [] },
   readOnly: { type: Boolean, default: false },
+  qaLocked: { type: Boolean, default: false },
   sessionHistory: { type: Array, default: () => [] },
   currentSessionId: { type: Number, default: 0 },
   sessionHistoryLoading: { type: Boolean, default: false },
   showHeader: { type: Boolean, default: true }
 })
 
-const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clear-image', 'clear-data', 'new-session', 'select-session'])
+const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clear-image', 'clear-data', 'new-session', 'select-session', 'archive-session'])
 
 const subtitle = computed(() => {
   const exp = props.experimentName
@@ -270,7 +285,12 @@ onBeforeUnmount(() => {
     );
 }
 
-button:hover > .history-title-tooltip {
-  display: block;
+.archive-btn {
+  opacity: 0.7;
+}
+
+.history-item:hover .archive-btn,
+.archive-btn:focus-visible {
+  opacity: 1;
 }
 </style>

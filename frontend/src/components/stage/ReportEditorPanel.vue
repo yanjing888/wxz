@@ -10,8 +10,13 @@
     </div>
 
     <template v-else>
+      <section
+        ref="reportFrame"
+        class="report-frame-resizable flex-1 min-h-0 min-w-0"
+        :style="reportColumns"
+      >
       <!-- ===== 左栏：报告编辑 ===== -->
-      <div class="report-main flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+      <div class="report-main min-w-0 min-h-0 flex flex-col overflow-hidden">
         <header class="report-header">
           <div class="header-left">
             <h2>{{ experimentName || '实验报告' }}</h2>
@@ -86,8 +91,17 @@
         </div>
       </div>
 
+      <div
+        class="workspace-resizer report-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整报告编辑区与助手区宽度"
+        title="拖动调整左右区域宽度"
+        @pointerdown="startReportResize"
+      />
+
       <!-- ===== 右栏：小智辅助（常驻） ===== -->
-      <aside class="report-aside border-l border-line-soft flex flex-col bg-surface-soft/30">
+      <aside class="report-aside flex flex-col bg-surface-soft/30 min-w-0 min-h-0">
         <div class="aside-header">
           <svg class="aside-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 2a7 7 0 017 7c0 2.5-1.5 4.5-3 6v2H8v-2c-1.5-1.5-3-3.5-3-6a7 7 0 017-7zM9 19h6M10 22h4" />
@@ -107,6 +121,7 @@
           />
         </div>
       </aside>
+      </section>
     </template>
 
     <!-- 公式输入弹窗 -->
@@ -186,7 +201,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import AskPanel from './AskPanel.vue'
 import { useAuthStore } from '../../stores/auth'
 import { sessionApi, studentExperimentApi } from '../../api'
@@ -198,6 +213,7 @@ import {
   sectionsToExportPayload,
   sectionsToFullText
 } from '../../utils/sessionReport'
+import { extractReportSections, readLocalReportDrafts, reportSectionsLength, syncSubmittedReportDrafts } from '../../utils/reportDraftSync'
 import { renderMathInMarkdown } from '../../utils/markdown'
 
 const props = defineProps({
@@ -233,6 +249,64 @@ const formulaInputRef = ref(null)
 const imageInputRef = ref(null)
 const previewOpen = ref(false)
 
+const REPORT_MAIN_WIDTH_KEY = 'wxz_report_main_width'
+const DEFAULT_REPORT_MAIN_WIDTH = 720
+const MIN_REPORT_MAIN_WIDTH = 360
+const MIN_REPORT_ASIDE_WIDTH = 280
+const reportFrame = ref(null)
+const reportMainWidth = ref(readStoredReportMainWidth())
+
+const reportColumns = computed(() => ({
+  '--report-main-width': `${reportMainWidth.value}px`
+}))
+
+function readStoredReportMainWidth() {
+  const raw = Number(localStorage.getItem(REPORT_MAIN_WIDTH_KEY))
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_REPORT_MAIN_WIDTH
+}
+
+function clampReportMainWidth(width) {
+  const frameWidth = reportFrame.value?.getBoundingClientRect().width || 0
+  const maxWidth = frameWidth
+    ? Math.max(MIN_REPORT_MAIN_WIDTH, frameWidth - MIN_REPORT_ASIDE_WIDTH - 10)
+    : 1200
+  return Math.min(Math.max(Math.round(width), MIN_REPORT_MAIN_WIDTH), maxWidth)
+}
+
+function startReportResize(event) {
+  if (!reportFrame.value) return
+  event.preventDefault()
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
+  document.body.classList.add('is-resizing-workspace')
+
+  const frameLeft = reportFrame.value.getBoundingClientRect().left
+
+  const onPointerMove = (moveEvent) => {
+    reportMainWidth.value = clampReportMainWidth(moveEvent.clientX - frameLeft)
+  }
+
+  const onPointerUp = () => {
+    localStorage.setItem(REPORT_MAIN_WIDTH_KEY, String(reportMainWidth.value))
+    document.body.classList.remove('is-resizing-workspace')
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', onPointerUp)
+    window.removeEventListener('pointercancel', onPointerUp)
+  }
+
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp, { once: true })
+  window.addEventListener('pointercancel', onPointerUp, { once: true })
+}
+
+onMounted(() => {
+  nextTick(() => {
+    if (!localStorage.getItem(REPORT_MAIN_WIDTH_KEY) && reportFrame.value) {
+      reportMainWidth.value = clampReportMainWidth(reportFrame.value.clientWidth - 350)
+    }
+  })
+  syncSubmittedReportDrafts()
+})
+
 const hasContent = computed(() => sectionDefs.some((d) => stripHtml(form[d.key] || '').trim()))
 const studentName = computed(() => auth.displayName || auth.username || '—')
 const todayStr = computed(() => {
@@ -265,7 +339,7 @@ function formatPreviewSection(html) {
 }
 
 function reportContextProvider() {
-  return JSON.stringify(buildReportAssistContext(sectionDefs, form, stripHtml))
+  return JSON.stringify(buildReportAssistContext(form, sectionDefs, stripHtml))
 }
 
 function stripHtml(html) {
@@ -380,22 +454,38 @@ function draftKey() {
 
 function saveDraft() {
   const key = draftKey()
-  if (key) localStorage.setItem(key, JSON.stringify({ ...form }))
+  if (!key) return
+  localStorage.setItem(key, JSON.stringify({
+    experimentCode: props.experimentCode,
+    sessionId: props.sessionId,
+    ...form
+  }))
+}
+
+function applySections(sections) {
+  if (!sections) return false
+  const extracted = extractReportSections(sections)
+  if (reportSectionsLength(extracted) < 1) return false
+  Object.keys(form).forEach((k) => {
+    form[k] = extracted[k] || ''
+  })
+  return true
 }
 
 function loadDraft() {
   const key = draftKey()
-  if (!key) return false
-  try {
-    const saved = JSON.parse(localStorage.getItem(key) || 'null')
-    if (!saved) return false
-    Object.keys(form).forEach((k) => {
-      form[k] = saved[k] || ''
-    })
-    return true
-  } catch {
-    return false
+  if (key) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || 'null')
+      if (applySections(saved)) return true
+    } catch {
+      // fall through
+    }
   }
+  const others = readLocalReportDrafts().filter((d) =>
+    !d.experimentCode || !props.experimentCode || d.experimentCode === props.experimentCode
+  )
+  return others.length ? applySections(others[0].sections) : false
 }
 
 async function onSessionChange() {
@@ -404,12 +494,28 @@ async function onSessionChange() {
   sourceReport.value = null
   Object.keys(form).forEach((k) => { form[k] = '' })
   if (!props.sessionId) return
-  if (loadDraft()) {
-    await nextTick()
-    syncEditorsFromForm()
-    await loadSourceReport()
-    return
+  let serverSections = null
+  if (props.experimentCode) {
+    try {
+      const { data } = await studentExperimentApi.getProgress(props.experimentCode)
+      reportDone.value = !!data?.reportCompleted
+      serverSections = data?.reportSections || null
+    } catch {
+      reportDone.value = false
+    }
   }
+  const loadedLocal = loadDraft()
+  if (!loadedLocal) applySections(serverSections)
+  else if (reportSectionsLength(extractReportSections(serverSections)) > reportSectionsLength(extractReportSections(form))) {
+    applySections(serverSections)
+  }
+  await nextTick()
+  syncEditorsFromForm()
+  await loadSourceReport()
+  if (reportDone.value && hasContent.value) {
+    persistReportToServer().catch(() => {})
+  }
+  if (loadedLocal || hasContent.value) return
   await generateFromSession()
 }
 
@@ -447,12 +553,27 @@ async function generateFromSession() {
   }
 }
 
+function currentSectionsPayload() {
+  const sections = {}
+  sectionDefs.forEach((def) => {
+    sections[def.key] = form[def.key] || ''
+  })
+  return sections
+}
+
+async function persistReportToServer() {
+  await studentExperimentApi.completeReport(props.experimentCode, {
+    sessionId: props.sessionId ? Number(props.sessionId) : null,
+    sections: currentSectionsPayload()
+  })
+}
+
 async function markReportComplete({ silent = false } = {}) {
   if (!props.experimentCode || reportCompleting.value || !hasContent.value) return
   reportCompleting.value = true
   if (!silent) completionMessage.value = ''
   try {
-    await studentExperimentApi.completeReport(props.experimentCode)
+    await persistReportToServer()
     reportDone.value = true
     if (!silent) completionMessage.value = '报告状态已同步，教师端可在报告评阅中查看。'
   } finally {
@@ -512,6 +633,12 @@ async function confirmSubmit() {
 
 <style scoped>
 .report-editor { @apply overflow-hidden bg-white; }
+
+.report-frame-resizable {
+  display: grid;
+  grid-template-columns: var(--report-main-width, minmax(360px, 1fr)) 10px minmax(280px, 1fr);
+  overflow: hidden;
+}
 
 /* ===== 左栏 ===== */
 .report-main { @apply bg-white; }
@@ -600,8 +727,10 @@ async function confirmSubmit() {
 
 /* ===== 右栏：小智辅助 ===== */
 .report-aside {
-  width: 340px;
-  flex-shrink: 0;
+  min-width: 0;
+}
+.report-resizer {
+  align-self: stretch;
 }
 .aside-header {
   @apply flex items-center gap-2 px-4 py-3 border-b border-line-soft bg-white;
@@ -809,11 +938,17 @@ async function confirmSubmit() {
 }
 
 @media (max-width: 1024px) {
-  .report-aside { width: 280px; }
+  .report-frame-resizable {
+    grid-template-columns: minmax(0, 1fr) 10px minmax(240px, 320px);
+  }
 }
 @media (max-width: 768px) {
-  .report-editor { @apply flex-col; }
-  .report-aside { width: 100%; height: 300px; border-left: 0; border-top: 1px solid var(--line-soft, #e4e9f3); }
+  .report-frame-resizable {
+    display: flex;
+    flex-direction: column;
+  }
+  .report-resizer { display: none; }
+  .report-aside { width: 100%; height: 300px; border-top: 1px solid var(--line-soft, #e4e9f3); }
   .report-header { @apply flex-col items-start gap-2; }
   .header-actions { @apply w-full; }
   .report-content { @apply px-4; }

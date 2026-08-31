@@ -1,5 +1,6 @@
 package com.wuxiaozhi.controller;
 
+import com.wuxiaozhi.dto.CompleteReportRequest;
 import com.wuxiaozhi.dto.ExperimentProgressDto;
 import com.wuxiaozhi.dto.StudentProfileDto;
 import com.wuxiaozhi.security.AuthSupport;
@@ -44,8 +45,10 @@ public class StudentExperimentController {
     }
 
     @PostMapping("/{experimentCode}/progress/report")
-    public ExperimentProgressDto completeReport(@PathVariable String experimentCode, Authentication authentication) {
-        return studentExperimentService.completeReport(AuthSupport.currentUserId(authentication), experimentCode);
+    public ExperimentProgressDto completeReport(@PathVariable String experimentCode,
+                                                @RequestBody(required = false) CompleteReportRequest request,
+                                                Authentication authentication) {
+        return studentExperimentService.completeReport(AuthSupport.currentUserId(authentication), experimentCode, request);
     }
 
     @PostMapping("/{experimentCode}/progress/recap")

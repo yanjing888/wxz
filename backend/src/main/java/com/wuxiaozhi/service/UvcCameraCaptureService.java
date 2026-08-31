@@ -46,7 +46,9 @@ public class UvcCameraCaptureService {
             log.info("UVC camera capture is disabled");
             return;
         }
-        startHelperIfNeeded(false);
+        Thread starter = new Thread(() -> startHelperIfNeeded(false), "uvc-helper-start");
+        starter.setDaemon(true);
+        starter.start();
     }
 
     @PreDestroy

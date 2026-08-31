@@ -26,5 +26,5 @@ if /I "%MYSQL_ENABLED%"=="true" (
 )
 
 cd /d "%ROOT%\backend"
-"%MVN%" spring-boot:run %PROFILE_ARG% -Dspring-boot.run.arguments=--server.port=%BACKEND_PORT%
+"%MVN%" -DskipTests spring-boot:run %PROFILE_ARG% -Dspring-boot.run.arguments=--server.port=%BACKEND_PORT%
 if errorlevel 1 pause

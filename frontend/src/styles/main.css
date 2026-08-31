@@ -674,6 +674,37 @@ body, html, #app {
   margin: 0.4em 0;
   line-height: 1.7;
 }
+
+.chat-md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.65em 0;
+  font-size: 12px;
+  line-height: 1.5;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-md thead th {
+  background: #f1f5f9;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.chat-md th,
+.chat-md td {
+  border: 1px solid var(--border-soft, #e2e8f0);
+  padding: 6px 10px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.chat-md tbody tr:nth-child(even) {
+  background: rgba(248, 250, 252, 0.65);
+}
+
 .chat-md strong, .chat-md b {
   color: var(--text-strong);
   font-weight: 700;

@@ -15,25 +15,38 @@
     </div>
     <div class="rounded-2xl bg-white border border-line-soft shadow-card focus-within:border-brand-300 focus-within:shadow-soft transition-all p-2.5">
       <div v-if="dataAttachment" class="mb-2">
-        <div class="relative rounded-xl border border-line-soft bg-[#f7f7f8] px-3 py-2.5 pr-9 max-w-[320px]">
+        <div
+          class="relative rounded-xl border border-line-soft bg-[#f7f7f8] px-3 py-2.5 pr-9 max-w-[420px] cursor-pointer hover:border-brand-200 hover:bg-brand-50/30 transition-colors"
+          role="button"
+          tabindex="0"
+          :title="dataAttachmentExpanded ? '收起数据明细' : '查看数据明细'"
+          @click="toggleDataAttachment"
+          @keydown.enter.prevent="toggleDataAttachment"
+          @keydown.space.prevent="toggleDataAttachment"
+        >
           <div class="flex items-start gap-2.5 min-w-0">
             <div class="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center shrink-0 shadow-sm">
               <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2a4 4 0 014-4h2M9 7h6M9 11h6M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
               </svg>
             </div>
-            <div class="min-w-0 pt-0.5">
+            <div class="min-w-0 pt-0.5 flex-1">
               <p class="text-[13px] font-semibold text-ink-strong truncate leading-snug">{{ dataAttachment.title }}</p>
-              <p class="text-[11px] text-ink-faint mt-0.5 truncate">
-                {{ dataAttachment.label }} · {{ dataAttachment.stepTitle || '当前步骤' }}
+              <p class="text-[11px] text-ink-faint mt-0.5 truncate flex items-center gap-1">
+                <span>{{ dataAttachment.label }} · {{ dataAttachment.stepTitle || '当前步骤' }}</span>
+                <span v-if="dataAttachmentBody" class="text-brand-600 font-semibold">{{ dataAttachmentExpanded ? '收起' : '查看' }}</span>
               </p>
             </div>
           </div>
+          <pre
+            v-if="dataAttachmentExpanded && dataAttachmentBody"
+            class="mt-2 ml-11 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-ink-base bg-white/80 rounded-lg border border-line-soft px-2.5 py-2"
+          >{{ dataAttachmentBody }}</pre>
           <button
             type="button"
             class="absolute top-2 right-2 w-6 h-6 rounded-full bg-ink-strong/90 text-white text-[13px] leading-none flex items-center justify-center hover:bg-ink-strong transition-colors"
             title="移除读数"
-            @click="$emit('clear-data')"
+            @click.stop="$emit('clear-data')"
           >
             ×
           </button>
@@ -190,6 +203,7 @@ const fileInput = ref(null)
 const textareaRef = ref(null)
 const localSending = ref(false)
 const previewOpen = ref(false)
+const dataAttachmentExpanded = ref(false)
 const voiceRecording = ref(false)
 const voiceTranscribing = ref(false)
 const voiceError = ref('')
@@ -210,6 +224,9 @@ const attachHint = computed(() => {
 })
 
 const inputPlaceholder = computed(() => {
+  if (props.readOnly) {
+    return '实验已结束，仅可查看历史对话'
+  }
   if (props.dataAttachment) {
     return '可补充说明或提问，Enter 发送读数并纠错…（Shift+Enter 换行）'
   }
@@ -229,6 +246,16 @@ const voiceTitle = computed(() => {
 })
 
 const voiceHint = computed(() => voiceError.value || voiceStatus.value)
+
+const dataAttachmentBody = computed(() => {
+  const body = String(props.dataAttachment?.body || '').trim()
+  if (body) return body
+  const values = props.dataAttachment?.values || {}
+  return Object.entries(values)
+    .filter(([, value]) => value != null && String(value).trim() !== '')
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('\n')
+})
 
 async function send() {
   if (!canSend.value || props.loadingAssist || props.submittingData || localSending.value) return
@@ -266,6 +293,11 @@ function openImagePreview() {
 
 function closeImagePreview() {
   previewOpen.value = false
+}
+
+function toggleDataAttachment() {
+  if (!dataAttachmentBody.value) return
+  dataAttachmentExpanded.value = !dataAttachmentExpanded.value
 }
 
 function onWindowKeydown(e) {
@@ -348,6 +380,16 @@ watch(
   () => props.imagePreview,
   (value) => {
     if (!value) closeImagePreview()
+  }
+)
+
+watch(
+  () => props.dataAttachment,
+  (value) => {
+    dataAttachmentExpanded.value = false
+    if (value && !props.readOnly) {
+      nextTick(() => textareaRef.value?.focus())
+    }
   }
 )
 

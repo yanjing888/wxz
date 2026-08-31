@@ -233,14 +233,88 @@ class AuthSessionIntegrationTest {
     }
 
     @Test
-    void latestActiveSessionReturnsUnfinishedSessionForExperiment() throws Exception {
+    void archiveSessionHidesItFromHistoryList() throws Exception {
+        saveUser("studentA", "secret123", "Student A", "");
+        JsonNode auth = login("studentA", "secret123");
+
+        long keepId = startSession(auth, "newton_rings", "Student A").get("id").asLong();
+        long archiveId = startSession(auth, "newton_rings", "Student A").get("id").asLong();
+        saveChatMessage(keepId, "Keep this conversation");
+        saveChatMessage(archiveId, "Archive this conversation");
+
+        mockMvc.perform(post("/api/sessions/{sessionId}/archive", archiveId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + auth.get("token").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(archiveId))
+                .andExpect(jsonPath("$.historyArchived").value(true));
+
+        mockMvc.perform(get("/api/sessions")
+                        .queryParam("experimentCode", "newton_rings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + auth.get("token").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(keepId));
+
+        mockMvc.perform(get("/api/sessions/resume")
+                        .queryParam("experimentCode", "newton_rings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + auth.get("token").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(keepId));
+    }
+
+    @Test
+    void finishSessionBlocksNewConversationButKeepsHistory() throws Exception {
         saveUser("studentA", "secret123", "Student A", "");
         JsonNode auth = login("studentA", "secret123");
 
         long finishedId = startSession(auth, "newton_rings", "Student A").get("id").asLong();
+        saveChatMessage(finishedId, "How do I start?");
         mockMvc.perform(post("/api/sessions/{sessionId}/finish", finishedId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + auth.get("token").asText()))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FINISHED"));
+
+        mockMvc.perform(post("/api/sessions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + auth.get("token").asText())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "experimentCode": "newton_rings",
+                                  "studentName": "Student A",
+                                  "studentClass": ""
+                                }
+                                """))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/sessions/{sessionId}/assist", finishedId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + auth.get("token").asText())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "userMessage": "Can I still ask?"
+                                }
+                                """))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(get("/api/sessions")
+                        .queryParam("experimentCode", "newton_rings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + auth.get("token").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(finishedId));
+
+        mockMvc.perform(get("/api/sessions/{sessionId}/messages", finishedId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + auth.get("token").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].text").value("How do I start?"));
+    }
+
+    @Test
+    void latestActiveSessionReturnsUnfinishedSessionForExperiment() throws Exception {
+        saveUser("studentA", "secret123", "Student A", "");
+        JsonNode auth = login("studentA", "secret123");
+
         JsonNode active = startSession(auth, "newton_rings", "Student A");
 
         mockMvc.perform(get("/api/sessions/latest")

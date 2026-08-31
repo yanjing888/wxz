@@ -52,6 +52,10 @@ public class LabSession {
 
     private LocalDateTime cameraActiveAt;
 
+    /** 从实验台「最近对话」列表归档隐藏，数据仍保留 */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean historyArchived = false;
+
     @Transient
     private String historyTitle;
 }

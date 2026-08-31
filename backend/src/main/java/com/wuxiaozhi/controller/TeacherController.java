@@ -63,6 +63,14 @@ public class TeacherController {
         return teacherService.reviewReport(teacher, sessionId);
     }
 
+    @PatchMapping("/reports/{sessionId}/grade")
+    public Map<String, Object> completeGrade(@PathVariable Long sessionId,
+                                             @Valid @RequestBody CompleteGradeRequest request,
+                                             Authentication authentication) {
+        User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
+        return teacherService.completeGrade(teacher, sessionId, request);
+    }
+
     @GetMapping("/classroom")
     public TeacherClassroomDto classroom(@RequestParam(required = false) String experimentCode,
                                          Authentication authentication) {
@@ -80,9 +88,11 @@ public class TeacherController {
     }
 
     @PatchMapping("/feedback/{feedbackId}/processed")
-    public TeacherFeedbackItemDto markProcessed(@PathVariable Long feedbackId, Authentication authentication) {
+    public TeacherFeedbackItemDto markProcessed(@PathVariable Long feedbackId,
+                                                @Valid @RequestBody ReviewFeedbackRequest request,
+                                                Authentication authentication) {
         User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
-        return teacherService.markFeedbackProcessed(teacher, feedbackId);
+        return teacherService.markFeedbackProcessed(teacher, feedbackId, request.getRating());
     }
 
     @GetMapping("/students")

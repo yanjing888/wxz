@@ -23,6 +23,16 @@ import java.util.stream.Collectors;
 @Service
 public class TeacherService {
 
+    private static final String[][] STUDENT_REPORT_SECTIONS = {
+            {"purpose", "1. 实验目的"},
+            {"principle", "2. 实验原理"},
+            {"apparatus", "3. 实验仪器"},
+            {"procedure", "4. 实验步骤"},
+            {"data", "5. 数据与处理"},
+            {"results", "6. 实验结果"},
+            {"discussion", "7. 分析与讨论"}
+    };
+
     private final UserRepository userRepository;
     private final LabSessionRepository sessionRepository;
     private final MessageFeedbackRepository feedbackRepository;
@@ -108,116 +118,173 @@ public class TeacherService {
 
     public List<TeacherReportItemDto> listReports(User teacher, String experimentCode) {
         String managedClass = FeedbackService.managedClass(teacher);
-        List<com.wuxiaozhi.entity.LabSession> sessions = managedClass.isBlank()
+        String filterCode = experimentCode != null ? experimentCode.trim() : "";
+        List<LabSession> sessions = managedClass.isBlank()
                 ? sessionRepository.findByStatusOrderByStartTimeDesc("FINISHED")
                 : sessionRepository.findByStatusAndStudentClassOrderByStartTimeDesc("FINISHED", managedClass);
-        return sessions.stream()
-                .filter(s -> experimentCode == null || experimentCode.isBlank()
-                        || experimentCode.equals(s.getExperimentCode()))
-                .map(this::toReportItem)
+        List<LabSession> finished = sessions.stream()
+                .filter(s -> filterCode.isBlank() || filterCode.equals(s.getExperimentCode()))
                 .toList();
+
+        Map<Long, LabSession> latestByUser = new LinkedHashMap<>();
+        for (LabSession session : finished) {
+            if (session.getUserId() != null) {
+                latestByUser.putIfAbsent(session.getUserId(), session);
+            }
+        }
+
+        Map<Long, StudentExperimentProgress> progressByUser = Map.of();
+        if (!filterCode.isBlank()) {
+            Set<Long> userIds = new LinkedHashSet<>(latestByUser.keySet());
+            List<StudentExperimentAssignment> assigned = assignmentRepository.findByExperimentCode(filterCode);
+            assigned.stream().map(StudentExperimentAssignment::getUserId).forEach(userIds::add);
+            if (!userIds.isEmpty()) {
+                progressByUser = progressRepository.findByExperimentCodeAndUserIdIn(filterCode, userIds).stream()
+                        .collect(Collectors.toMap(StudentExperimentProgress::getUserId, p -> p, (a, b) -> a));
+            }
+            for (StudentExperimentProgress progress : progressByUser.values()) {
+                if (!progress.isReportCompleted()) {
+                    continue;
+                }
+                LabSession preferred = null;
+                if (progress.getReportSessionId() != null) {
+                    preferred = sessionRepository.findById(progress.getReportSessionId()).orElse(null);
+                }
+                if (preferred == null) {
+                    preferred = latestByUser.get(progress.getUserId());
+                }
+                if (preferred == null) {
+                    preferred = sessionRepository
+                            .findFirstByUserIdAndExperimentCodeOrderByStartTimeDesc(progress.getUserId(), filterCode)
+                            .orElse(null);
+                }
+                if (preferred != null) {
+                    latestByUser.put(progress.getUserId(), preferred);
+                }
+            }
+        }
+
+        Map<Long, StudentExperimentProgress> progressLookup = progressByUser;
+        List<TeacherReportItemDto> items = latestByUser.values().stream()
+                .map(session -> toReportItem(session, progressLookup.get(session.getUserId())))
+                .toList();
+        if (filterCode.isBlank()) {
+            return items;
+        }
+        return items.stream().filter(TeacherReportItemDto::isReportCompleted).toList();
     }
 
     public Map<String, Object> getReport(User teacher, Long sessionId) {
-        com.wuxiaozhi.entity.LabSession session = getSessionForTeacher(teacher, sessionId);
-        return labSessionService.buildReportData(session.getId());
+        LabSession session = getSessionForTeacher(teacher, sessionId);
+        Map<String, Object> data = labSessionService.buildReportData(session.getId());
+        progressRepository.findByUserIdAndExperimentCode(session.getUserId(), session.getExperimentCode())
+                .ifPresent(progress -> {
+                    data.put("reportCompleted", progress.isReportCompleted());
+                    data.put("studentReportSections", readReportSections(progress.getReportSectionsJson()));
+                    data.put("aiReviewScore", progress.getAiReviewScore());
+                    data.put("aiReviewComment", progress.getAiReviewComment());
+                    data.put("aiReviewJson", parseJsonObject(progress.getAiReviewJson()));
+                    data.put("teacherScore", progress.getTeacherScore());
+                    data.put("teacherComment", progress.getTeacherComment());
+                    data.put("gradingCompleted", Boolean.TRUE.equals(progress.getGradingCompleted()));
+                    data.put("gradingAt", progress.getGradingAt());
+                });
+        return data;
     }
 
     public byte[] getReportDocx(User teacher, Long sessionId) throws Exception {
         Map<String, Object> data = getReport(teacher, sessionId);
+        Map<String, String> studentSections = readReportSectionsFromReport(data.get("studentReportSections"));
+        if (hasStudentReportText(studentSections)) {
+            return reportService.generateStudentReportDocx(data, studentSectionPayload(studentSections));
+        }
         return reportService.generateDocx(data);
     }
 
     /**
-     * 课堂态势：当前班级进行中的实验会话 + 预习就绪，供教师优先介入。
+     * 课堂态势：每个学生一行。已结束实验显示为已完成，不再把多次「新建对话」拆成重复卡片。
      */
     public TeacherClassroomDto classroom(User teacher, String experimentCode) {
         String managedClass = FeedbackService.managedClass(teacher);
-        List<LabSession> activeSessions = managedClass.isBlank()
-                ? sessionRepository.findByStatusOrderByStartTimeDesc("ACTIVE")
-                : sessionRepository.findByStatusAndStudentClassOrderByStartTimeDesc("ACTIVE", managedClass);
-
         String filterCode = experimentCode != null ? experimentCode.trim() : "";
-        if (!filterCode.isBlank()) {
-            activeSessions = activeSessions.stream()
-                    .filter(s -> filterCode.equals(s.getExperimentCode()))
-                    .toList();
-        }
-
-        Set<Long> userIds = activeSessions.stream().map(LabSession::getUserId).collect(Collectors.toSet());
-        // 未开课但未就绪的学生：同班已分配该实验
-        String focusCode = !filterCode.isBlank()
-                ? filterCode
-                : activeSessions.stream().map(LabSession::getExperimentCode).findFirst().orElse("");
-        Map<Long, Boolean> readyByUser = new HashMap<>();
-        if (!focusCode.isBlank() && !userIds.isEmpty()) {
-            progressRepository.findByExperimentCodeAndUserIdIn(focusCode, userIds)
-                    .forEach(p -> readyByUser.put(p.getUserId(), p.isPreLabCompleted()));
+        if (filterCode.isBlank()) {
+            return classroomFromActiveSessions(teacher, managedClass, "");
         }
 
         ExperimentConfig focusExp = null;
-        if (!focusCode.isBlank()) {
-            try {
-                focusExp = experimentConfigService.getByCode(focusCode);
-            } catch (RuntimeException ignored) {
-                focusExp = null;
-            }
+        try {
+            focusExp = experimentConfigService.getByCode(filterCode);
+        } catch (RuntimeException ignored) {
+            focusExp = null;
         }
+
+        Set<Long> assignedIds = assignmentRepository.findByExperimentCode(filterCode).stream()
+                .map(StudentExperimentAssignment::getUserId)
+                .collect(Collectors.toSet());
+        List<User> classStudents = managedClass.isBlank()
+                ? userRepository.findByRoleOrderByDisplayNameAsc(UserRole.STUDENT)
+                : userRepository.findByRoleAndStudentClassOrderByDisplayNameAsc(UserRole.STUDENT, managedClass);
+        Set<Long> classIds = classStudents.stream().map(User::getId).collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<Long> visibleIds = new LinkedHashSet<>(assignedIds);
+        visibleIds.retainAll(classIds);
+        if (!classIds.isEmpty()) {
+            sessionRepository.findByExperimentCodeAndUserIdInOrderByStartTimeDesc(filterCode, classIds).stream()
+                    .map(LabSession::getUserId)
+                    .filter(Objects::nonNull)
+                    .forEach(visibleIds::add);
+        }
+        List<User> students = classStudents.stream()
+                .filter(u -> visibleIds.contains(u.getId()))
+                .toList();
+
+        List<Long> userIds = students.stream().map(User::getId).toList();
+        List<LabSession> sessions = userIds.isEmpty()
+                ? List.of()
+                : sessionRepository.findByExperimentCodeAndUserIdInOrderByStartTimeDesc(filterCode, userIds);
+        Map<Long, List<LabSession>> sessionsByUser = sessions.stream()
+                .collect(Collectors.groupingBy(LabSession::getUserId));
+        Map<Long, Boolean> readyByUser = userIds.isEmpty()
+                ? Map.of()
+                : progressRepository.findByExperimentCodeAndUserIdIn(filterCode, userIds).stream()
+                .collect(Collectors.toMap(StudentExperimentProgress::getUserId,
+                        StudentExperimentProgress::isPreLabCompleted, (a, b) -> a || b));
+        Map<Long, StudentExperimentProgress> progressByUser = userIds.isEmpty()
+                ? Map.of()
+                : progressRepository.findByExperimentCodeAndUserIdIn(filterCode, userIds).stream()
+                .collect(Collectors.toMap(StudentExperimentProgress::getUserId, p -> p, (a, b) -> a));
 
         List<TeacherClassroomStudentDto> rows = new ArrayList<>();
-        for (LabSession session : activeSessions) {
-            rows.add(toClassroomRow(session, readyByUser.getOrDefault(session.getUserId(), false)));
+        for (User student : students) {
+            LabSession canonical = pickCanonicalSession(sessionsByUser.getOrDefault(student.getId(), List.of()));
+            boolean ready = readyByUser.getOrDefault(student.getId(), false);
+            TeacherClassroomStudentDto row;
+            if (canonical != null) {
+                row = toClassroomRow(canonical, ready);
+                row.setStudentName(displayName(student, canonical.getStudentName()));
+                row.setStudentClass(safeClass(student.getStudentClass()));
+            } else {
+                row = idleStudentRow(student, filterCode, focusExp, ready);
+            }
+            StudentExperimentProgress progress = progressByUser.get(student.getId());
+            if (progress != null) {
+                row.setReportCompleted(progress.isReportCompleted());
+            }
+            if ("FINISHED".equals(row.getStatus()) && !row.isDataIssue()) {
+                row.setPriority("normal");
+                row.setPriorityReason(row.isReportCompleted() ? "实验与报告已完成" : "实验已结束");
+            }
+            rows.add(row);
         }
 
-        // 补未开始会话但未就绪的已分配学生（仅当指定了实验）
-        if (!focusCode.isBlank()) {
-            Set<Long> activeUserIds = rows.stream().map(TeacherClassroomStudentDto::getUserId).collect(Collectors.toSet());
-            List<User> classStudents = managedClass.isBlank()
-                    ? userRepository.findByRoleOrderByDisplayNameAsc(UserRole.STUDENT)
-                    : userRepository.findByRoleAndStudentClassOrderByDisplayNameAsc(UserRole.STUDENT, managedClass);
-            Map<Long, List<String>> assigned = assignmentRepository.findByUserIdIn(
-                            classStudents.stream().map(User::getId).toList()).stream()
-                    .collect(Collectors.groupingBy(
-                            StudentExperimentAssignment::getUserId,
-                            Collectors.mapping(StudentExperimentAssignment::getExperimentCode, Collectors.toList())));
-            Map<Long, Boolean> allReady = progressRepository
-                    .findByExperimentCodeAndUserIdIn(focusCode,
-                            classStudents.stream().map(User::getId).toList()).stream()
-                    .collect(Collectors.toMap(StudentExperimentProgress::getUserId,
-                            StudentExperimentProgress::isPreLabCompleted, (a, b) -> a || b));
-            for (User student : classStudents) {
-                if (activeUserIds.contains(student.getId())) {
-                    continue;
-                }
-                List<String> codes = assigned.getOrDefault(student.getId(), List.of());
-                if (!codes.contains(focusCode)) {
-                    continue;
-                }
-                boolean ready = allReady.getOrDefault(student.getId(), false);
-                if (ready) {
-                    continue;
-                }
-                TeacherClassroomStudentDto idle = new TeacherClassroomStudentDto();
-                idle.setUserId(student.getId());
-                idle.setStudentName(student.getDisplayName() != null ? student.getDisplayName() : student.getUsername());
-                idle.setStudentClass(safeClass(student.getStudentClass()));
-                idle.setExperimentCode(focusCode);
-                idle.setExperimentName(focusExp != null ? focusExp.getName() : focusCode);
-                idle.setStatus("NOT_STARTED");
-                idle.setPreLabCompleted(false);
-                idle.setPriority("medium");
-                idle.setPriorityReason("未完成进门就绪");
-                rows.add(idle);
-            }
-        }
+        disambiguateStudentNames(rows, students);
 
         rows.sort(Comparator
                 .comparingInt((TeacherClassroomStudentDto r) -> priorityRank(r.getPriority()))
                 .thenComparing(TeacherClassroomStudentDto::getStudentName, Comparator.nullsLast(String::compareTo)));
 
         TeacherClassroomDto dto = new TeacherClassroomDto();
-        dto.setExperimentCode(focusCode);
-        dto.setExperimentName(focusExp != null ? focusExp.getName() : focusCode);
+        dto.setExperimentCode(filterCode);
+        dto.setExperimentName(focusExp != null ? focusExp.getName() : filterCode);
         dto.setManagedClass(managedClass);
         dto.setActiveCount((int) rows.stream().filter(r -> "ACTIVE".equals(r.getStatus())).count());
         dto.setHighPriorityCount((int) rows.stream().filter(r -> "high".equals(r.getPriority())).count());
@@ -225,6 +292,74 @@ public class TeacherService {
         dto.setDataIssueCount((int) rows.stream().filter(TeacherClassroomStudentDto::isDataIssue).count());
         dto.setStudents(rows);
         return dto;
+    }
+
+    private TeacherClassroomDto classroomFromActiveSessions(User teacher, String managedClass, String filterCode) {
+        List<LabSession> activeSessions = managedClass.isBlank()
+                ? sessionRepository.findByStatusOrderByStartTimeDesc("ACTIVE")
+                : sessionRepository.findByStatusAndStudentClassOrderByStartTimeDesc("ACTIVE", managedClass);
+        if (!filterCode.isBlank()) {
+            activeSessions = activeSessions.stream()
+                    .filter(s -> filterCode.equals(s.getExperimentCode()))
+                    .toList();
+        }
+        Map<Long, LabSession> unique = new LinkedHashMap<>();
+        for (LabSession session : activeSessions) {
+            if (session.getUserId() != null) {
+                unique.putIfAbsent(session.getUserId(), session);
+            }
+        }
+        List<TeacherClassroomStudentDto> rows = unique.values().stream()
+                .map(session -> toClassroomRow(session, false))
+                .toList();
+        TeacherClassroomDto dto = new TeacherClassroomDto();
+        dto.setManagedClass(managedClass);
+        dto.setActiveCount(rows.size());
+        dto.setStudents(new ArrayList<>(rows));
+        return dto;
+    }
+
+    private LabSession pickCanonicalSession(List<LabSession> sessions) {
+        if (sessions == null || sessions.isEmpty()) {
+            return null;
+        }
+        Optional<LabSession> finished = sessions.stream()
+                .filter(s -> "FINISHED".equals(s.getStatus()))
+                .max(Comparator.comparing(LabSession::getStartTime, Comparator.nullsLast(Comparator.naturalOrder())));
+        if (finished.isPresent()) {
+            return finished.get();
+        }
+        return sessions.stream()
+                .filter(s -> "ACTIVE".equals(s.getStatus()))
+                .max(Comparator.comparing(LabSession::getStartTime, Comparator.nullsLast(Comparator.naturalOrder())))
+                .orElse(sessions.stream()
+                        .max(Comparator.comparing(LabSession::getStartTime, Comparator.nullsLast(Comparator.naturalOrder())))
+                        .orElse(null));
+    }
+
+    private TeacherClassroomStudentDto idleStudentRow(User student, String experimentCode, ExperimentConfig exp,
+                                                      boolean preLabCompleted) {
+        TeacherClassroomStudentDto idle = new TeacherClassroomStudentDto();
+        idle.setUserId(student.getId());
+        idle.setStudentName(displayName(student, ""));
+        idle.setStudentClass(safeClass(student.getStudentClass()));
+        idle.setExperimentCode(experimentCode);
+        idle.setExperimentName(exp != null ? exp.getName() : experimentCode);
+        idle.setStatus("NOT_STARTED");
+        idle.setPreLabCompleted(preLabCompleted);
+        idle.setPriority(preLabCompleted ? "normal" : "medium");
+        idle.setPriorityReason(preLabCompleted ? "尚未开始实验" : "未完成进门就绪");
+        return idle;
+    }
+
+    private String displayName(User student, String fallback) {
+        if (student.getDisplayName() != null && !student.getDisplayName().isBlank()) {
+            return student.getDisplayName();
+        }
+        if (student.getUsername() != null && !student.getUsername().isBlank()) {
+            return student.getUsername();
+        }
+        return fallback != null ? fallback : "";
     }
 
     private TeacherClassroomStudentDto toClassroomRow(LabSession session, boolean preLabCompleted) {
@@ -244,7 +379,10 @@ public class TeacherService {
 
         long minutes = 0;
         if (session.getStartTime() != null) {
-            minutes = Math.max(0, Duration.between(session.getStartTime(), LocalDateTime.now()).toMinutes());
+            LocalDateTime end = "FINISHED".equals(session.getStatus()) && session.getEndTime() != null
+                    ? session.getEndTime()
+                    : LocalDateTime.now();
+            minutes = Math.max(0, Duration.between(session.getStartTime(), end).toMinutes());
         }
         row.setMinutesOnSession(minutes);
 
@@ -275,7 +413,7 @@ public class TeacherService {
             row.setRecentCorrectionTypes(list);
         }
 
-        List<SessionDataLog> dataLogs = sessionDataLogRepository.findBySessionIdOrderByCreatedAtAsc(session.getId());
+        List<SessionDataLog> dataLogs = sessionDataLogRepository.findOfficialBySessionIdOrderByCreatedAtAsc(session.getId());
         if (dataLogs != null && !dataLogs.isEmpty()) {
             SessionDataLog last = dataLogs.get(dataLogs.size() - 1);
             String validation = last.getValidationJson();
@@ -318,36 +456,62 @@ public class TeacherService {
 
     /**
      * 教师报告预评：基于过程报告上下文调用 report-review。
-     * AI 只给建议分档与批注，不直接终裁成绩。
+     * AI 只给建议分与批注，不直接终裁成绩。
      */
     public AiToolInvokeResponse reviewReport(User teacher, Long sessionId) {
-        getSessionForTeacher(teacher, sessionId);
-        Map<String, Object> report = labSessionService.buildReportData(sessionId);
+        Map<String, Object> report = getReport(teacher, sessionId);
+        String experimentCode = stringOrEmpty(report.get("experimentCode"));
+        String experimentName = stringOrEmpty(report.get("experimentName"));
+        String userId = "teacher-review-" + teacher.getId();
 
         Map<String, Object> inputs = new LinkedHashMap<>();
-        inputs.put("action", "review");
-        inputs.put("tool_code", "report-review");
-        inputs.put("tool_name", "报告批改");
-        inputs.put("sessionId", sessionId);
-        inputs.put("experiment_name", stringOrEmpty(report.get("experimentName")));
-        inputs.put("experimentName", stringOrEmpty(report.get("experimentName")));
+        inputs.put("experiment_name", experimentName);
         inputs.put("student_name", stringOrEmpty(report.get("studentName")));
         inputs.put("student_class", stringOrEmpty(report.get("studentClass")));
-        inputs.put("help_count", report.get("helpCount"));
-        inputs.put("error_point_count", report.get("errorPointCount"));
-        inputs.put("report_context", report);
-        inputs.put("data_logs_json", writeJson(report.get("dataLogEntries")));
-        inputs.put("corrections_json", writeJson(report.get("corrections")));
-        inputs.put("step_summaries_json", writeJson(report.get("stepSummaries")));
+        if (!experimentCode.isBlank()) {
+            try {
+                ExperimentConfig exp = experimentConfigService.getByCode(experimentCode);
+                String spec = experimentConfigService.buildExperimentSpec(exp);
+                if (spec != null && !spec.isBlank()) {
+                    inputs.put("experiment_spec", spec);
+                }
+            } catch (RuntimeException ignored) {
+                // unknown experiment code
+            }
+        }
+        try {
+            byte[] docx = getReportDocx(teacher, sessionId);
+            String safeName = (experimentName.isBlank() ? "实验报告" : experimentName).replaceAll("[\\\\/:*?\"<>|]", "_");
+            String fileId = difyService.uploadDocument(docx, safeName + ".docx", userId, "report-review");
+            inputs.put("student_report_file", difyService.documentFileRef(fileId));
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "学生报告文件上传失败，无法预评");
+        }
         inputs.put("query",
-                "请作为大学物理实验教师，对学生实验报告做预评（非终裁）。按以下维度给出："
-                        + "1) 完整性；2) 数据可信度；3) 误差分析；4) 结论质量；5) 思考题质量。"
-                        + "输出建议分档或分数区间、可编辑批注要点，并标记「疑似空套模板/数据异常」风险。"
-                        + "不要直接给出最终成绩，强调需教师确认。");
+                "请对照本实验的目的与步骤，阅读学生提交的实验报告文件，做预评（非终裁）。"
+                        + "按完整性、数据可信度、误差分析、结论质量、思考题与讨论五维评分，"
+                        + "输出建议分数（10 分制，一位小数）和可编辑评语。强调需教师确认后才作为正式成绩。");
 
         AiToolDefinition tool = aiToolCatalogService.requireTool("report-review");
         String workflowKey = aiToolCatalogService.resolveWorkflowKey(tool);
-        return difyService.invokeTool(workflowKey, inputs, "teacher-review-" + teacher.getId(), null);
+        AiToolInvokeResponse resp = difyService.invokeTool(workflowKey, inputs, userId, null);
+        persistAiReview(sessionId, resp);
+        return resp;
+    }
+
+    @Transactional
+    public Map<String, Object> completeGrade(User teacher, Long sessionId, CompleteGradeRequest request) {
+        LabSession session = getSessionForTeacher(teacher, sessionId);
+        StudentExperimentProgress progress = progressRepository
+                .findByUserIdAndExperimentCode(session.getUserId(), session.getExperimentCode())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "未找到该学生的实验进度"));
+        progress.setTeacherScore(request.getScore());
+        progress.setTeacherComment(request.getComment() == null ? "" : request.getComment().trim());
+        progress.setGradingCompleted(true);
+        progress.setGradingAt(LocalDateTime.now());
+        progress.setUpdatedAt(LocalDateTime.now());
+        progressRepository.save(progress);
+        return getReport(teacher, sessionId);
     }
 
     private String stringOrEmpty(Object value) {
@@ -365,12 +529,75 @@ public class TeacherService {
         }
     }
 
+    private Object parseJsonObject(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    private void persistAiReview(Long sessionId, AiToolInvokeResponse resp) {
+        if (resp == null || !resp.isFromDify()) {
+            return;
+        }
+        sessionRepository.findById(sessionId).ifPresent(session ->
+                progressRepository.findByUserIdAndExperimentCode(session.getUserId(), session.getExperimentCode())
+                        .ifPresent(progress -> {
+                            if (resp.getScore() != null) {
+                                progress.setAiReviewScore(resp.getScore());
+                            }
+                            if (resp.getComment() != null && !resp.getComment().isBlank()) {
+                                progress.setAiReviewComment(resp.getComment());
+                            }
+                            if (resp.getData() != null && !resp.getData().isEmpty()) {
+                                progress.setAiReviewJson(writeJson(resp.getData()));
+                            }
+                            progress.setUpdatedAt(LocalDateTime.now());
+                            progressRepository.save(progress);
+                        }));
+    }
+
+    private String buildStudentReportText(String experimentName, Map<String, String> sections) {
+        StringBuilder sb = new StringBuilder();
+        if (experimentName != null && !experimentName.isBlank()) {
+            sb.append(experimentName.trim()).append(" — 实验报告\n\n");
+        }
+        for (String[] def : STUDENT_REPORT_SECTIONS) {
+            String text = htmlToPlain(sections.getOrDefault(def[0], "")).trim();
+            if (!text.isBlank()) {
+                sb.append("## ").append(def[1].replaceFirst("^\\d+\\.\\s*", "")).append("\n\n")
+                        .append(text).append("\n\n");
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    private String htmlToPlain(String html) {
+        if (html == null || html.isBlank()) {
+            return "";
+        }
+        String text = html
+                .replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("(?i)</(p|div|h[1-6]|li|tr)>", "\n")
+                .replaceAll("(?i)<li[^>]*>", "- ")
+                .replaceAll("<[^>]+>", " ")
+                .replace("&nbsp;", " ")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&amp;", "&");
+        return text.replaceAll("[ \\t]+", " ").replaceAll("\\n{3,}", "\n\n").trim();
+    }
+
     public List<TeacherFeedbackItemDto> listFeedback(User teacher, String rating, Boolean processed, String experimentCode) {
         return feedbackService.listForTeacher(teacher, rating, processed, experimentCode);
     }
 
-    public TeacherFeedbackItemDto markFeedbackProcessed(User teacher, Long feedbackId) {
-        return feedbackService.markProcessed(feedbackId, teacher);
+    public TeacherFeedbackItemDto markFeedbackProcessed(User teacher, Long feedbackId, String rating) {
+        return feedbackService.markProcessed(feedbackId, teacher, rating);
     }
 
     public List<TeacherStudentItemDto> listStudents(User teacher) {
@@ -604,7 +831,7 @@ public class TeacherService {
         return lower.contains("username") || lower.contains("账号") || lower.contains("学号");
     }
 
-    private TeacherReportItemDto toReportItem(com.wuxiaozhi.entity.LabSession session) {
+    private TeacherReportItemDto toReportItem(LabSession session, StudentExperimentProgress progress) {
         TeacherReportItemDto dto = new TeacherReportItemDto();
         dto.setSessionId(session.getId());
         dto.setUserId(session.getUserId());
@@ -617,7 +844,85 @@ public class TeacherService {
         dto.setEndTime(session.getEndTime());
         dto.setHelpCount(session.getHelpCount());
         dto.setErrorPointCount(session.getErrorPointCount());
+        dto.setReportCompleted(progress != null && progress.isReportCompleted());
+        dto.setAiReviewScore(progress != null ? progress.getAiReviewScore() : null);
+        dto.setTeacherScore(progress != null ? progress.getTeacherScore() : null);
+        dto.setGradingCompleted(progress != null && Boolean.TRUE.equals(progress.getGradingCompleted()));
         return dto;
+    }
+
+    private void disambiguateStudentNames(List<TeacherClassroomStudentDto> rows, List<User> students) {
+        Map<String, Long> counts = new HashMap<>();
+        for (TeacherClassroomStudentDto row : rows) {
+            String name = row.getStudentName() == null ? "" : row.getStudentName();
+            counts.merge(name, 1L, Long::sum);
+        }
+        Map<Long, User> byId = students.stream().collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
+        for (TeacherClassroomStudentDto row : rows) {
+            String name = row.getStudentName() == null ? "" : row.getStudentName();
+            if (counts.getOrDefault(name, 0L) <= 1) {
+                continue;
+            }
+            User user = byId.get(row.getUserId());
+            if (user == null || user.getUsername() == null || user.getUsername().isBlank()) {
+                continue;
+            }
+            if (name.equals(user.getUsername())) {
+                row.setStudentName(name + " #" + row.getUserId());
+            } else {
+                row.setStudentName(name + "（" + user.getUsername() + "）");
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, String> readReportSectionsFromReport(Object raw) {
+        if (!(raw instanceof Map<?, ?> map) || map.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> sections = new LinkedHashMap<>();
+        map.forEach((k, v) -> {
+            if (k != null && v != null) {
+                sections.put(String.valueOf(k), String.valueOf(v));
+            }
+        });
+        return sections;
+    }
+
+    private boolean hasStudentReportText(Map<String, String> sections) {
+        return sections != null && sections.values().stream().anyMatch(v -> v != null && !v.isBlank());
+    }
+
+    private List<Map<String, String>> studentSectionPayload(Map<String, String> sections) {
+        List<Map<String, String>> payload = new ArrayList<>();
+        for (String[] def : STUDENT_REPORT_SECTIONS) {
+            Map<String, String> item = new LinkedHashMap<>();
+            String html = sections.getOrDefault(def[0], "");
+            item.put("label", def[1]);
+            item.put("contentHtml", html);
+            item.put("content", html);
+            payload.add(item);
+        }
+        return payload;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, String> readReportSections(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            Map<?, ?> raw = objectMapper.readValue(json, Map.class);
+            Map<String, String> sections = new LinkedHashMap<>();
+            raw.forEach((k, v) -> {
+                if (k != null && v != null) {
+                    sections.put(String.valueOf(k), String.valueOf(v));
+                }
+            });
+            return sections;
+        } catch (Exception e) {
+            return Map.of();
+        }
     }
 
     private String safeClass(String value) {
