@@ -1,6 +1,13 @@
 import { Capacitor } from '@capacitor/core'
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { studentExperimentApi } from '../api'
+import { lastExperiment } from '../utils/experimentFlow'
+import {
+  experimentCodeFromRoute,
+  labEntryBlockedRoute,
+  SIMULATION_GATED_ROUTE_NAMES
+} from '../utils/prepSimulation'
 
 const studentMeta = { requiresAuth: true, role: 'STUDENT' }
 
@@ -38,6 +45,12 @@ const routes = [
         path: 'prep/:code',
         name: 'prep-ready',
         component: () => import('../views/experiment/PrepareReadyView.vue'),
+        meta: studentMeta
+      },
+      {
+        path: 'prep/:code/simulation',
+        name: 'prep-simulation',
+        component: () => import('../views/experiment/SimulationPrepView.vue'),
         meta: studentMeta
       },
       {
@@ -129,6 +142,18 @@ router.beforeEach(async (to) => {
   }
   if (role === 'STUDENT' && auth.isTeacher) {
     return '/teacher'
+  }
+  if (SIMULATION_GATED_ROUTE_NAMES.includes(String(to.name)) && auth.token && !auth.isTeacher) {
+    const code = experimentCodeFromRoute(to, lastExperiment())
+    if (code) {
+      try {
+        const { data: progress } = await studentExperimentApi.getProgress(code)
+        const simBlock = labEntryBlockedRoute(progress, code)
+        if (simBlock) return simBlock
+      } catch {
+        // 进度拉取失败时不阻断，由目标页自行提示
+      }
+    }
   }
   return true
 })

@@ -31,4 +31,13 @@ public class TeacherClassroomStudentDto {
     private LocalDateTime startTime;
     /** 学生是否在监控页开启了摄像头（近期有心跳） */
     private boolean cameraActive;
+
+    /** 最近一次巡检等级 L0-L3 / NA */
+    private String latestEnvLevel;
+
+    /** 本会话巡检记录条数 */
+    private int envLogCount;
+
+    /** 是否开启自动安全巡检 */
+    private boolean envCheckEnabled;
 }

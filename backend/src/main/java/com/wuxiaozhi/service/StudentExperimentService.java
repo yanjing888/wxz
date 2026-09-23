@@ -100,6 +100,17 @@ public class StudentExperimentService {
     }
 
     @Transactional
+    public ExperimentProgressDto completeSimulation(Long userId, String experimentCode) {
+        requireAssigned(userId, experimentCode);
+        StudentExperimentProgress progress = progressRepository.findByUserIdAndExperimentCode(userId, experimentCode)
+                .orElseGet(() -> newProgress(userId, experimentCode));
+        progress.setSimulationCompleted(true);
+        progress.setUpdatedAt(LocalDateTime.now());
+        progressRepository.save(progress);
+        return getProgress(userId, experimentCode);
+    }
+
+    @Transactional
     public ExperimentProgressDto completeRecap(Long userId, String experimentCode) {
         requireAssigned(userId, experimentCode);
         StudentExperimentProgress progress = progressRepository.findByUserIdAndExperimentCode(userId, experimentCode)
@@ -217,6 +228,14 @@ public class StudentExperimentService {
         dto.setDataCollectionEnabled(dataEnabled);
         dto.setDataSubmitted(dataSubmitted);
         dto.setPreLabCompleted(progress != null && progress.isPreLabCompleted());
+        dto.setSimulationCompleted(progress != null && progress.isSimulationCompleted());
+        var simulation = config.getSimulation();
+        boolean simulationRequired = simulation != null
+                && Boolean.TRUE.equals(simulation.getRequired())
+                && simulation.getUrl() != null
+                && !simulation.getUrl().isBlank();
+        dto.setSimulationRequired(simulationRequired);
+        dto.setSimulationUrl(simulationRequired ? simulation.getUrl().trim() : null);
         dto.setLabCompleted(labDone);
         dto.setReportCompleted(reportDone);
         dto.setRecapCompleted(recapDone);
@@ -295,6 +314,7 @@ public class StudentExperimentService {
         progress.setUserId(userId);
         progress.setExperimentCode(experimentCode);
         progress.setPreLabCompleted(false);
+        progress.setSimulationCompleted(false);
         progress.setReportCompleted(false);
         progress.setRecapCompleted(false);
         return progress;

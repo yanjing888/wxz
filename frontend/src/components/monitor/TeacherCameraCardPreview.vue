@@ -1,7 +1,5 @@
 <template>
   <div class="cam-preview-mini">
-    <span class="cam-badge" :class="badgeClass">{{ badgeText }}</span>
-
     <video
       v-show="live"
       ref="videoRef"
@@ -31,35 +29,25 @@ import { useFlvLivePlayer } from '../../composables/useFlvLivePlayer'
 const props = defineProps({
   live: { type: Boolean, default: false },
   browserStreamUrl: { type: String, default: '' },
+  benchCamera: { type: Object, default: null },
   cameraConfigured: { type: Boolean, default: false }
 })
 
 const videoRef = ref(null)
-const { ready, error, start, stop } = useFlvLivePlayer()
-
-const badgeClass = computed(() => {
-  if (props.live && ready.value) return 'online'
-  if (props.cameraConfigured) return 'idle'
-  return 'offline'
-})
-
-const badgeText = computed(() => {
-  if (props.live && ready.value) return '直播中'
-  if (props.live) return '连接中'
-  if (props.cameraConfigured) return '未开启'
-  return '离线'
-})
+const { ready, error, start, startWithCamera, stop } = useFlvLivePlayer()
 
 const offlineHint = computed(() => {
   if (props.live) return ''
-  if (!props.cameraConfigured) return ''
-  return '学生未开摄像头'
+  if (!props.cameraConfigured) return '摄像头未配置'
+  return '点击开启画面'
 })
 
 async function syncStream(shouldPlay) {
   await nextTick()
   const video = videoRef.value
-  if (shouldPlay && props.browserStreamUrl) {
+  if (shouldPlay && props.benchCamera?.enabled) {
+    await startWithCamera(video, props.benchCamera)
+  } else if (shouldPlay && props.browserStreamUrl) {
     await start(video, props.browserStreamUrl)
   } else {
     stop(video)
@@ -67,7 +55,7 @@ async function syncStream(shouldPlay) {
 }
 
 watch(
-  () => [props.live, props.browserStreamUrl],
+  () => [props.live, props.browserStreamUrl, props.benchCamera],
   ([live]) => {
     syncStream(!!live)
   },
@@ -131,18 +119,4 @@ watch(
   color: rgba(148, 163, 184, 0.9);
   text-align: center;
 }
-.cam-badge {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  z-index: 2;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-}
-.cam-badge.online { background: rgba(16, 185, 129, 0.85); color: #fff; }
-.cam-badge.idle { background: rgba(100, 116, 139, 0.85); color: #e2e8f0; }
-.cam-badge.offline { background: rgba(100, 116, 139, 0.85); color: #cbd5e1; }
 </style>

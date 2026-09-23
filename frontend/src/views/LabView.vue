@@ -230,7 +230,8 @@ import ReadingAssistModal from '../components/modals/ReadingAssistModal.vue'
 import ScaleReadingModal from '../components/modals/ScaleReadingModal.vue'
 import AppConfirmDialog from '../components/modals/AppConfirmDialog.vue'
 import { rememberVisit } from '../utils/experimentFlow'
-import { studentFileApi } from '../api'
+import { labEntryBlockedRoute } from '../utils/prepSimulation'
+import { studentFileApi, studentExperimentApi } from '../api'
 
 const lab = useLabStore()
 const auth = useAuthStore()
@@ -253,7 +254,7 @@ watch(() => lab.session?.id, () => {
 watch(
   () => lab.submittingData,
   (busy, wasBusy) => {
-    if (wasBusy && !busy && sessionDataCount.value > 0) {
+    if (wasBusy && !busy && lab.lastDataSubmitMode === 'official' && sessionDataCount.value > 0) {
       workbenchTab.value = 'data'
     }
   }
@@ -379,6 +380,12 @@ async function bootstrap() {
       }
       const name = auth.displayName || localStorage.getItem('wxz_displayName') || '学生'
       await lab.loadExperiment(code)
+      const { data: progress } = await studentExperimentApi.getProgress(code)
+      const simBlock = labEntryBlockedRoute(progress, code)
+      if (simBlock) {
+        await router.replace(simBlock)
+        return
+      }
       await lab.loadLabProgress(code)
       const restart = route.query.restart === '1' && !lab.labCompleted
       const restored = restart ? null : await lab.restoreSessionForExperiment(code)
@@ -565,7 +572,7 @@ async function onCaptureCcdImage() {
     })
     workbenchTab.value = 'guide'
   } catch (e) {
-    await showAppAlert('获取成像失败', e.response?.data?.message || e.message || '请检查 UVC 相机连接后重试')
+    await showAppAlert('获取成像失败', e.response?.data?.message || e.message || '电子显微镜未连接或无法成像，请检查 USB 后重试')
   }
 }
 
@@ -592,10 +599,8 @@ async function onCheckStepData(values) {
     await showAppAlert('实验已结束', '结束实验后不能再检查数据，仅可查看历史记录。')
     return
   }
-  const ok = lab.attachStepDataForCorrection(values)
-  if (ok) {
-    workbenchTab.value = 'guide'
-  }
+  workbenchTab.value = 'guide'
+  await lab.submitStepData(values, { officialData: false, runCorrection: true, fromDevice: false })
 }
 
 async function onSaveOfficialData(values) {

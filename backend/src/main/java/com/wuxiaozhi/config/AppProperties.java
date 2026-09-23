@@ -37,6 +37,10 @@ public class AppProperties {
         private String protocol = "rtsp";
         private String rtspUrl = "";
         private String browserStreamUrl = "";
+        /** Alternate FLV path for direct Ethernet link (/ws-direct/...). */
+        private String browserStreamUrlDirect = "";
+        /** auto | lab | direct */
+        private String connectionMode = "auto";
     }
 
     @Data
@@ -47,12 +51,15 @@ public class AppProperties {
         private String scriptPath = "scripts/uvc_capture_server.py";
         private String host = "127.0.0.1";
         private int port = 8765;
-        private int index = 1;
+        private int index = 0;
         private String backend = "dshow";
         private int width = 1920;
         private int height = 1080;
         private int fps = 30;
-        private long startupTimeoutMs = 5000L;
-        private long captureTimeoutMs = 8000L;
+        private int warmupFrames = 5;
+        private boolean preferExternal = true;
+        private String nameKeyword = "UVC";
+        private long startupTimeoutMs = 15000L;
+        private long captureTimeoutMs = 25000L;
     }
 }

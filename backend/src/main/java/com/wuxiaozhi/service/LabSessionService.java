@@ -548,9 +548,9 @@ public class LabSessionService {
         }
 
         if (runCorrection) {
-            String submittedText = (officialData ? "【正式数据检查】" : "【过程检查】") + log.getStepTitle() + "\n" + values.entrySet().stream()
-                    .map(e -> e.getKey() + ": " + e.getValue())
-                    .collect(Collectors.joining("；"));
+            String submittedText = req.getDisplayMessage() != null && !req.getDisplayMessage().isBlank()
+                    ? req.getDisplayMessage().trim()
+                    : buildDataCorrectionUserMessage(validationStep, values, officialData);
             saveChatMessage(sessionId, "user", stepId, submittedText, null);
             saveChatMessage(sessionId, "ai", stepId, feedback, null);
         }
@@ -591,9 +591,11 @@ public class LabSessionService {
     private static List<DataFieldConfig> effectiveDataFields(ExperimentConfig exp, StepConfig step) {
         List<DataFieldConfig> fields = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
-        appendDataFields(fields, seen, exp != null ? exp.getCommonDataFields() : null);
-        if (step != null && !"image".equalsIgnoreCase(step.getDataSource())) {
-            appendDataFields(fields, seen, step.getDataFields());
+        List<DataFieldConfig> stepFields = step != null ? step.getDataFields() : null;
+        if (stepFields != null && !stepFields.isEmpty()) {
+            appendDataFields(fields, seen, stepFields);
+        } else {
+            appendDataFields(fields, seen, exp != null ? exp.getCommonDataFields() : null);
         }
         return fields;
     }
@@ -628,19 +630,98 @@ public class LabSessionService {
         return copy;
     }
 
-    private String buildDataAssistQuery(StepConfig step, DataValidationResult validation, Map<String, Object> values) {
-        StringBuilder q = new StringBuilder("请根据本步骤实验测量数据，检查操作与计算是否合理，并给出纠错建议。");
-        if (step != null && step.getTitle() != null) {
-            q.append("\n步骤：").append(step.getTitle());
+    private String buildDataCorrectionUserMessage(StepConfig step, Map<String, Object> values, boolean officialData) {
+        String stepTitle = step != null && step.getTitle() != null ? step.getTitle().trim() : "";
+        String stepPart = stepTitle.isBlank() ? "当前步骤" : "「" + stepTitle + "」";
+        boolean scaleOnly = isScaleReadingOnlyCheck(step, values);
+        String intent = officialData
+                ? "请检查以下正式实验数据是否合理、计算与记录是否正确："
+                : scaleOnly
+                ? "请帮我核对以下刻度读数是否合理、记录是否规范；若合理请简要确认，如有疑问请说明："
+                : "请检查以下测量读数是否合理、记录是否正确；若合理请确认，如有问题请说明：";
+
+        StringBuilder sb = new StringBuilder();
+        if (scaleOnly) {
+            sb.append("我在实验步骤").append(stepPart).append("记录了以下刻度读数。\n").append(intent).append("\n");
+        } else {
+            sb.append("我在实验步骤").append(stepPart).append("中填写了以下数据。\n").append(intent).append("\n");
         }
+        appendDataFieldLines(sb, step, values);
+        return sb.toString().trim();
+    }
+
+    private static boolean isScaleReadingOnlyCheck(StepConfig step, Map<String, Object> values) {
+        if (step == null || step.getDataFields() == null) {
+            return false;
+        }
+        boolean any = false;
+        for (DataFieldConfig field : step.getDataFields()) {
+            if (field == null || field.getKey() == null) {
+                continue;
+            }
+            Object raw = values.get(field.getKey());
+            if (raw == null || String.valueOf(raw).isBlank()) {
+                continue;
+            }
+            any = true;
+            if (!field.isScaleReading()) {
+                return false;
+            }
+        }
+        return any;
+    }
+
+    private String buildDataAssistQuery(StepConfig step, DataValidationResult validation, Map<String, Object> values) {
+        boolean scaleOnly = isScaleReadingOnlyCheck(step, values);
+        StringBuilder q = new StringBuilder();
+        if (scaleOnly) {
+            q.append("学生在本步骤记录了以下刻度读数，请判断读数是否合理、记录是否规范；若合理请简要确认，如有疑问请说明。");
+        } else {
+            q.append("学生在本步骤填写了以下实验测量数据，请判断读数是否合理、记录是否正确，并给出具体建议。");
+        }
+        if (step != null && step.getTitle() != null && !step.getTitle().isBlank()) {
+            q.append("\n\n当前步骤：").append(step.getTitle().trim());
+        }
+        q.append("\n\n读数明细：");
+        appendDataFieldLines(q, step, values);
+        q.append("\n\n请重点回答：1) 读数是否在合理范围；2) 记录方式是否规范；3) 如有问题，给出具体建议。");
         if (!validation.getErrors().isEmpty()) {
-            q.append("\n系统预检发现：").append(String.join("；", validation.getErrors()));
+            q.append("\n\n系统预检发现：").append(String.join("；", validation.getErrors()));
         }
         if (!validation.getWarnings().isEmpty()) {
             q.append("\n系统提示：").append(String.join("；", validation.getWarnings()));
         }
-        q.append("\n数据：").append(writeJson(values));
         return q.toString();
+    }
+
+    private void appendDataFieldLines(StringBuilder q, StepConfig step, Map<String, Object> values) {
+        List<DataFieldConfig> fields = step != null && step.getDataFields() != null ? step.getDataFields() : List.of();
+        boolean wroteAny = false;
+        for (DataFieldConfig field : fields) {
+            if (field == null || field.getKey() == null) {
+                continue;
+            }
+            Object raw = values.get(field.getKey());
+            if (raw == null || String.valueOf(raw).isBlank()) {
+                continue;
+            }
+            String label = field.getLabel() != null && !field.getLabel().isBlank() ? field.getLabel().trim() : field.getKey();
+            String unit = field.getUnit() != null && !field.getUnit().isBlank() ? " " + field.getUnit().trim() : "";
+            q.append("\n- ").append(label);
+            if (field.isScaleReading()) {
+                q.append("（刻度读数）");
+            }
+            q.append("：").append(raw).append(unit);
+            wroteAny = true;
+        }
+        if (!wroteAny) {
+            for (Map.Entry<String, Object> entry : values.entrySet()) {
+                if (entry.getValue() == null || String.valueOf(entry.getValue()).isBlank()) {
+                    continue;
+                }
+                q.append("\n- ").append(entry.getKey()).append("：").append(entry.getValue());
+            }
+        }
     }
 
     private String prependValidationSummary(String feedback, DataValidationResult validation) {
@@ -996,6 +1077,13 @@ public class LabSessionService {
     }
 
     @Transactional
+    public LabSession updateEnvCheckEnabled(Long sessionId, Long userId, boolean enabled) {
+        LabSession session = getSession(sessionId, userId);
+        session.setEnvCheckEnabled(enabled);
+        return sessionRepository.save(session);
+    }
+
+    @Transactional
     public LabSession incrementTutView(Long sessionId) {
         LabSession session = getSession(sessionId);
         return incrementTutView(session);
@@ -1095,6 +1183,7 @@ public class LabSessionService {
         report.put("labL3Count", session.getLabL3Count());
         report.put("reportKnowledge", exp.getReportKnowledge());
         report.put("reportPath", exp.getReportPath());
+        report.put("reportFillSections", experimentConfigService.buildReportFillSections(exp));
         report.put("stepSummaries", buildStepSummaries(exp));
         report.put("stepSchemas", buildStepDataSchemas(exp));
         report.put("dataLogEntries", buildDataLogEntries(dataLogs));
@@ -1117,6 +1206,13 @@ public class LabSessionService {
                     item.put("stepNo", entry.getKey());
                     item.put("title", step.getTitle() != null ? step.getTitle() : ("步骤 " + entry.getKey()));
                     item.put("desc", step.getDesc() != null ? step.getDesc() : "");
+                    if (step.getTut() != null) {
+                        item.put("tutSteps", step.getTut().getSteps() != null ? step.getTut().getSteps() : List.of());
+                        item.put("tutWarnings", step.getTut().getWarnings() != null ? step.getTut().getWarnings() : List.of());
+                    } else {
+                        item.put("tutSteps", List.of());
+                        item.put("tutWarnings", List.of());
+                    }
                     summaries.add(item);
                 });
         return summaries;

@@ -40,6 +40,7 @@ public class TeacherService {
     private final StudentExperimentProgressRepository progressRepository;
     private final CorrectionLogRepository correctionLogRepository;
     private final SessionDataLogRepository sessionDataLogRepository;
+    private final EnvCheckLogRepository envCheckLogRepository;
     private final LabSessionService labSessionService;
     private final ReportService reportService;
     private final FeedbackService feedbackService;
@@ -56,6 +57,7 @@ public class TeacherService {
                           StudentExperimentProgressRepository progressRepository,
                           CorrectionLogRepository correctionLogRepository,
                           SessionDataLogRepository sessionDataLogRepository,
+                          EnvCheckLogRepository envCheckLogRepository,
                           LabSessionService labSessionService,
                           ReportService reportService,
                           FeedbackService feedbackService,
@@ -71,6 +73,7 @@ public class TeacherService {
         this.progressRepository = progressRepository;
         this.correctionLogRepository = correctionLogRepository;
         this.sessionDataLogRepository = sessionDataLogRepository;
+        this.envCheckLogRepository = envCheckLogRepository;
         this.labSessionService = labSessionService;
         this.reportService = reportService;
         this.feedbackService = feedbackService;
@@ -277,6 +280,7 @@ public class TeacherService {
         }
 
         disambiguateStudentNames(rows, students);
+        enrichEnvLogStats(rows);
 
         rows.sort(Comparator
                 .comparingInt((TeacherClassroomStudentDto r) -> priorityRank(r.getPriority()))
@@ -312,6 +316,7 @@ public class TeacherService {
         List<TeacherClassroomStudentDto> rows = unique.values().stream()
                 .map(session -> toClassroomRow(session, false))
                 .toList();
+        enrichEnvLogStats(rows);
         TeacherClassroomDto dto = new TeacherClassroomDto();
         dto.setManagedClass(managedClass);
         dto.setActiveCount(rows.size());
@@ -445,6 +450,7 @@ public class TeacherService {
         row.setPriority(priority);
         row.setPriorityReason(reason);
         row.setCameraActive(labSessionService.isCameraActiveEffective(session));
+        row.setEnvCheckEnabled(session.isEnvCheckEnabled());
         return row;
     }
 
@@ -600,7 +606,7 @@ public class TeacherService {
         return feedbackService.markProcessed(feedbackId, teacher, rating);
     }
 
-    public List<TeacherStudentItemDto> listStudents(User teacher) {
+    public List<TeacherStudentItemDto> listStudents(User teacher, String experimentCode) {
         String managedClass = FeedbackService.managedClass(teacher);
         List<User> students = managedClass.isBlank()
                 ? userRepository.findByRoleOrderByDisplayNameAsc(UserRole.STUDENT)
@@ -612,8 +618,40 @@ public class TeacherService {
                         Collectors.mapping(StudentExperimentAssignment::getExperimentCode, Collectors.toList())
                 ));
         return students.stream()
+                .filter(u -> {
+                    if (experimentCode == null || experimentCode.isBlank()) {
+                        return true;
+                    }
+                    return codesByUser.getOrDefault(u.getId(), List.of()).contains(experimentCode.trim());
+                })
                 .map(u -> toStudentItem(u, codesByUser.getOrDefault(u.getId(), List.of())))
                 .toList();
+    }
+
+    @Transactional
+    public TeacherStudentItemDto createStudent(User teacher, CreateStudentRequest req) {
+        ImportStudentRow row = new ImportStudentRow();
+        row.setUsername(req.getUsername());
+        row.setDisplayName(req.getDisplayName());
+        row.setPassword(req.getPassword());
+        row.setStudentClass(req.getStudentClass());
+
+        ImportStudentsRequest importReq = new ImportStudentsRequest();
+        importReq.setStudents(List.of(row));
+        importReq.setExperimentCodes(req.getExperimentCodes());
+        importReq.setAssignMode(req.isAppendExperiments() ? "append" : "replace");
+
+        ImportStudentsResult result = importStudents(teacher, importReq);
+        if (result.getCreated() + result.getUpdated() == 0) {
+            String detail = result.getErrors().isEmpty() ? "创建学生失败" : result.getErrors().get(0);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, detail);
+        }
+        User student = userRepository.findByUsername(req.getUsername().trim())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "创建学生失败"));
+        List<String> codes = assignmentRepository.findByUserIdOrderByExperimentCodeAsc(student.getId()).stream()
+                .map(StudentExperimentAssignment::getExperimentCode)
+                .toList();
+        return toStudentItem(student, codes);
     }
 
     @Transactional
@@ -634,6 +672,7 @@ public class TeacherService {
                 : "123456";
         String managedClass = FeedbackService.managedClass(teacher);
         ImportStudentsResult result = new ImportStudentsResult();
+        List<Long> affectedUserIds = new ArrayList<>();
 
         for (ImportStudentRow row : rows) {
             String username = row.getUsername() != null ? row.getUsername().trim() : "";
@@ -675,6 +714,7 @@ public class TeacherService {
                 }
                 userRepository.save(user);
                 result.setUpdated(result.getUpdated() + 1);
+                affectedUserIds.add(user.getId());
                 continue;
             }
 
@@ -686,6 +726,18 @@ public class TeacherService {
             user.setRole(UserRole.STUDENT);
             userRepository.save(user);
             result.setCreated(result.getCreated() + 1);
+            affectedUserIds.add(user.getId());
+        }
+
+        List<String> experimentCodes = normalizeExperimentCodes(req.getExperimentCodes());
+        if (!experimentCodes.isEmpty() && !affectedUserIds.isEmpty()) {
+            boolean append = !"replace".equalsIgnoreCase(req.getAssignMode());
+            BulkAssignExperimentsRequest assignReq = new BulkAssignExperimentsRequest();
+            assignReq.setUserIds(affectedUserIds.stream().distinct().toList());
+            assignReq.setExperimentCodes(experimentCodes);
+            assignReq.setMode(append ? "append" : "replace");
+            result.setAssigned(bulkAssignExperiments(teacher, assignReq));
+            result.setUserIds(affectedUserIds.stream().distinct().toList());
         }
         return result;
     }
@@ -694,34 +746,102 @@ public class TeacherService {
     public TeacherStudentItemDto assignExperiments(User teacher, Long userId, AssignExperimentsRequest req) {
         User student = requireStudentForTeacher(teacher, userId);
         List<String> codes = normalizeExperimentCodes(req.getExperimentCodes());
-        assignmentRepository.deleteByUserId(student.getId());
-        for (String code : codes) {
-            StudentExperimentAssignment assignment = new StudentExperimentAssignment();
-            assignment.setUserId(student.getId());
-            assignment.setExperimentCode(code);
-            assignment.setAssignedByUserId(teacher.getId());
-            assignmentRepository.save(assignment);
-        }
+        replaceExperiments(student.getId(), codes, teacher.getId());
         return toStudentItem(student, codes);
     }
 
     @Transactional
     public int bulkAssignExperiments(User teacher, BulkAssignExperimentsRequest req) {
         List<String> codes = normalizeExperimentCodes(req.getExperimentCodes());
+        boolean append = "append".equalsIgnoreCase(req.getMode());
         int count = 0;
         for (Long userId : req.getUserIds()) {
             User student = requireStudentForTeacher(teacher, userId);
-            assignmentRepository.deleteByUserId(student.getId());
-            for (String code : codes) {
-                StudentExperimentAssignment assignment = new StudentExperimentAssignment();
-                assignment.setUserId(student.getId());
-                assignment.setExperimentCode(code);
-                assignment.setAssignedByUserId(teacher.getId());
-                assignmentRepository.save(assignment);
+            if (append) {
+                appendExperiments(student.getId(), codes, teacher.getId());
+            } else {
+                replaceExperiments(student.getId(), codes, teacher.getId());
             }
             count++;
         }
         return count;
+    }
+
+    @Transactional
+    public void unassignExperiment(User teacher, Long userId, String experimentCode) {
+        requireStudentForTeacher(teacher, userId);
+        if (experimentCode == null || experimentCode.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "实验 code 不能为空");
+        }
+        assignmentRepository.deleteByUserIdAndExperimentCode(userId, experimentCode.trim());
+    }
+
+    private void replaceExperiments(Long userId, List<String> codes, Long assignedByUserId) {
+        assignmentRepository.deleteByUserId(userId);
+        for (String code : codes) {
+            StudentExperimentAssignment assignment = new StudentExperimentAssignment();
+            assignment.setUserId(userId);
+            assignment.setExperimentCode(code);
+            assignment.setAssignedByUserId(assignedByUserId);
+            assignmentRepository.save(assignment);
+        }
+    }
+
+    private void appendExperiments(Long userId, List<String> codes, Long assignedByUserId) {
+        for (String code : codes) {
+            if (assignmentRepository.existsByUserIdAndExperimentCode(userId, code)) {
+                continue;
+            }
+            StudentExperimentAssignment assignment = new StudentExperimentAssignment();
+            assignment.setUserId(userId);
+            assignment.setExperimentCode(code);
+            assignment.setAssignedByUserId(assignedByUserId);
+            assignmentRepository.save(assignment);
+        }
+    }
+
+    public List<EnvCheckLog> getEnvLogsForTeacher(User teacher, Long sessionId) {
+        getSessionForTeacher(teacher, sessionId);
+        return labSessionService.getEnvCheckLogs(sessionId);
+    }
+
+    @Transactional
+    public TeacherClassroomStudentDto setEnvCheckEnabled(User teacher, Long sessionId, boolean enabled) {
+        LabSession session = getSessionForTeacher(teacher, sessionId);
+        session.setEnvCheckEnabled(enabled);
+        sessionRepository.save(session);
+        return toClassroomRow(session, false);
+    }
+
+    public EnvCheckResponse triggerEnvCheckForTeacher(User teacher, Long sessionId, EnvCheckRequest req) {
+        LabSession session = getSessionForTeacher(teacher, sessionId);
+        EnvCheckRequest body = req != null ? req : new EnvCheckRequest();
+        return labSessionService.envCheck(session.getId(), body);
+    }
+
+    private void enrichEnvLogStats(List<TeacherClassroomStudentDto> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+        List<Long> sessionIds = rows.stream()
+                .map(TeacherClassroomStudentDto::getSessionId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (sessionIds.isEmpty()) {
+            return;
+        }
+        Map<Long, List<EnvCheckLog>> logsBySession = envCheckLogRepository
+                .findBySessionIdInOrderByCreatedAtDesc(sessionIds).stream()
+                .collect(Collectors.groupingBy(EnvCheckLog::getSessionId));
+        for (TeacherClassroomStudentDto row : rows) {
+            if (row.getSessionId() == null) {
+                continue;
+            }
+            List<EnvCheckLog> logs = logsBySession.getOrDefault(row.getSessionId(), List.of());
+            row.setEnvLogCount(logs.size());
+            row.setLatestEnvLevel(logs.isEmpty() ? null : logs.get(0).getLevel());
+        }
     }
 
     public com.wuxiaozhi.entity.LabSession getSessionForTeacher(User teacher, Long sessionId) {

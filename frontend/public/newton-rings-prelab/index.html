@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>牛顿环虚拟仿真 · MKS-NHY</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div>
+          <p class="kicker">物小智 · MKS-NHY / JCD3</p>
+          <h1>牛顿环实验虚拟仿真</h1>
+          <p class="hero-copy">透明底真实仪器上直接操作目镜、物镜升降、测微鼓轮和钠光灯位置，CCD 视场实时响应。R = (Dₘ²−Dₙ²)/[4(m−n)λ]，λ = 589.3 nm。</p>
+        </div>
+        <div class="progress-card" aria-live="polite">
+          <strong id="progressText">0/5</strong>
+          <span>预习完成</span>
+        </div>
+      </header>
+
+      <nav class="tabs" aria-label="仿真步骤">
+        <button class="tab active" type="button" data-section="scene">认识设备</button>
+        <button class="tab" type="button" data-section="align">光路成像</button>
+        <button class="tab" type="button" data-section="measure">暗环读数</button>
+        <button class="tab" type="button" data-section="calc">计算 R</button>
+        <button class="tab" type="button" data-section="check">结束检查</button>
+      </nav>
+
+      <section class="section active" id="scene" data-section-panel>
+        <div class="scene-grid">
+          <article class="photo-panel">
+            <div class="toolbar">
+              <button class="tool-button active" type="button" data-view="front">正视图</button>
+              <button class="tool-button" type="button" data-view="angle">斜侧图</button>
+            </div>
+            <div class="photo-frame transparent-stage">
+              <img id="instrumentPhoto" src="./real-instrument-front.png" alt="MKS-NHY 牛顿环仪器（透明底）" />
+              <span class="photo-marker" id="photoMarker" aria-hidden="true"></span>
+            </div>
+          </article>
+          <aside class="coach">
+            <p class="kicker">Step 1</p>
+            <h2 id="partTitle">认识真实仪器部件</h2>
+            <p id="partBody">点击下方部件，在透明底实拍图上定位。重点：目镜(1)、调焦手轮(13)、测微鼓轮(15)、45°半反镜(9)、钠光灯、CCD。</p>
+            <div class="part-list" id="partList"></div>
+            <label class="check">
+              <input type="checkbox" data-ready="scene" />
+              <span>我能在真实仪器上指出目镜、鼓轮、物镜调焦、钠光灯和 CCD 的位置。</span>
+            </label>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section" id="align" data-section-panel>
+        <div class="bench-layout">
+          <article class="instrument-bench">
+            <div class="bench-head">
+              <span>真实仪器交互台</span>
+              <button class="tool-button" id="demoAlign" type="button">示范标准状态</button>
+            </div>
+            <div class="bench-stage transparent-stage" id="benchStage">
+              <img src="./real-instrument-front.png" alt="" class="bench-photo" draggable="false" />
+              <div class="ctrl-layer">
+                <div class="ctrl-zone zone-eyepiece" data-tip="目镜视度 (1)">
+                  <label>目镜</label>
+                  <input id="eyepiece" type="range" min="0" max="100" value="48" orient="vertical" />
+                  <output id="eyepieceOut">48</output>
+                </div>
+                <div class="ctrl-zone zone-objective" data-tip="调焦手轮 / 物镜升降 (13)">
+                  <label>升降</label>
+                  <input id="objectiveLift" type="range" min="0" max="40" step="0.1" value="16" />
+                  <output id="liftOut">16.0 mm</output>
+                </div>
+                <div class="ctrl-zone zone-drum" data-tip="测微鼓轮 (15)">
+                  <label>鼓轮</label>
+                  <input id="alignDrum" type="range" min="8" max="12" step="0.01" value="10" />
+                  <output id="drumOut">10.00 mm</output>
+                </div>
+                <div class="ctrl-zone zone-lamp" data-tip="钠光灯位置">
+                  <label>钠灯</label>
+                  <input id="lampPos" type="range" min="0" max="100" value="34" />
+                  <output id="lampOut">34</output>
+                </div>
+              </div>
+            </div>
+            <div class="readout-bar">
+              <span>主尺 <b id="mainScale">10</b> mm</span>
+              <span>鼓轮 <b id="fineScale">00</b></span>
+              <span>升降 <b id="liftScale">16.0</b> mm</span>
+              <span>钠灯 <b id="lampScale">34</b></span>
+            </div>
+            <div class="aux-controls">
+              <label class="slider-row compact">
+                <span>45° 半反镜 <b id="mirrorValue">38°</b></span>
+                <input id="mirror" type="range" min="25" max="60" value="38" />
+              </label>
+              <label class="check">
+                <input id="mirrorFolded" type="checkbox" />
+                <span>底座反光镜已收起 (12)</span>
+              </label>
+            </div>
+          </article>
+
+          <article class="monitor-card">
+            <div class="monitor-top">
+              <span>CCD 监视器视场</span>
+              <b id="scopeStatus">等待调节</b>
+            </div>
+            <canvas id="scopeCanvas" width="760" height="520" aria-label="牛顿环成像"></canvas>
+            <div class="feedback" id="alignFeedback" role="status"></div>
+            <label class="check monitor-check">
+              <input type="checkbox" data-ready="align" />
+              <span>调节顺序：目镜调十字丝 → 物镜升降找环纹 → 钠灯/半反镜调均匀 → 鼓轮居中环心。</span>
+            </label>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="measure" data-section-panel>
+        <div class="bench-layout">
+          <article class="instrument-bench">
+            <div class="bench-head"><span>测微鼓轮读数 — 十字丝固定，环纹随鼓轮移动</span></div>
+            <div class="bench-stage transparent-stage compact">
+              <img src="./real-instrument-front.png" alt="" class="bench-photo" draggable="false" />
+              <div class="ctrl-layer measure-layer">
+                <div class="ctrl-zone zone-drum wide" data-tip="同向转动测微鼓轮">
+                  <label>测微鼓轮 (15)</label>
+                  <input id="measureDrum" type="range" min="4" max="16" step="0.01" value="4" />
+                  <output id="measureDrumOut">4.00 mm</output>
+                </div>
+              </div>
+            </div>
+            <div class="readout-bar">
+              <span>主尺 <b id="measureMain">4</b> mm + 鼓轮 <b id="measureFine">00</b></span>
+            </div>
+            <aside class="control-card inline-card">
+              <label class="slider-row">
+                <span>目标暗环 m = <b id="ringValue">10</b></span>
+                <input id="ring" type="range" min="5" max="15" value="10" />
+              </label>
+              <div class="button-row">
+                <button class="primary" id="recordLeft" type="button">记录左侧读数</button>
+                <button class="primary" id="recordRight" type="button">记录右侧读数</button>
+              </div>
+              <button class="tool-button" id="restartMeasure" type="button">从左侧重新单向逼近</button>
+              <div class="feedback" id="measureFeedback" role="status"></div>
+            </aside>
+          </article>
+
+          <article class="monitor-card">
+            <div class="monitor-top">
+              <span>竖叉丝（固定）与暗环相切</span>
+              <b id="readout">4.00 mm</b>
+            </div>
+            <canvas id="measureCanvas" width="760" height="520" aria-label="暗环测量"></canvas>
+            <label class="check monitor-check">
+              <input type="checkbox" data-ready="measure" />
+              <span>全程同向转动鼓轮；左右读数之差为直径 D（不是弦长）。</span>
+            </label>
+          </article>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>暗环级数</th>
+                <th>左读数 / mm</th>
+                <th>右读数 / mm</th>
+                <th>直径 D / mm</th>
+                <th>D² / mm²</th>
+              </tr>
+            </thead>
+            <tbody id="dataRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="calc" data-section-panel>
+        <div class="calc-grid">
+          <article class="calc-card">
+            <p class="kicker">Step 4</p>
+            <h2>平方差法计算曲率半径</h2>
+            <form id="calcForm" class="calc-form">
+              <label><span>高级暗环 m</span><select id="mSelect"></select></label>
+              <label><span>低级暗环 n</span><select id="nSelect"></select></label>
+              <label><span>D<sub>m</sub> / mm</span><input id="dm" type="number" step="0.001" min="0" /></label>
+              <label><span>D<sub>n</sub> / mm</span><input id="dn" type="number" step="0.001" min="0" /></label>
+              <button class="primary" type="submit">计算</button>
+              <button class="tool-button" id="sampleData" type="button">载入示例数据</button>
+            </form>
+          </article>
+          <aside class="result-card" id="resultCard" aria-live="polite">
+            <h3>公式</h3>
+            <p>R = (D<sub>m</sub><sup>2</sup> − D<sub>n</sub><sup>2</sup>) / [4(m − n)λ]</p>
+          </aside>
+        </div>
+        <label class="check stage-check">
+          <input type="checkbox" data-ready="calc" />
+          <span>|m−n| ≥ 5；D 用 mm，λ = 0.0005893 mm。</span>
+        </label>
+      </section>
+
+      <section class="section" id="check" data-section-panel>
+        <article class="finish-card">
+          <p class="kicker">Step 5</p>
+          <h2>实验结束整理</h2>
+          <div class="finish-list">
+            <label class="finish-item"><input type="checkbox" data-ready="check" /><span>关闭钠光灯、监视器与 CCD 电源。</span></label>
+            <label class="finish-item"><input type="checkbox" id="lensSafe" /><span>不触摸透镜和平板玻璃光学面。</span></label>
+            <label class="finish-item"><input type="checkbox" id="focusSafe" /><span>调焦时镜筒只向上，避免物镜下压。</span></label>
+            <label class="finish-item"><input type="checkbox" id="backlashSafe" /><span>鼓轮转过头后不反转，应重新同向逼近。</span></label>
+          </div>
+          <div class="ready-box" id="readyBox" aria-live="polite">
+            <h3>还未完成预习</h3>
+            <p>完成五个阶段后，再进入真实实验。</p>
+          </div>
+        </article>
+      </section>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>

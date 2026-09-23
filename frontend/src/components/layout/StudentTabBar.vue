@@ -18,9 +18,11 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { studentExperimentApi } from '../../api'
 import { lastExperiment } from '../../utils/experimentFlow'
+import { requiresSimulation, simulationPrepRoute } from '../../utils/prepSimulation'
 
 const route = useRoute()
 
@@ -28,17 +30,66 @@ const currentCode = computed(() =>
   String(route.query.exp || route.params.code || '').trim() || lastExperiment() || ''
 )
 
+const simulationLocked = ref(false)
+
+async function refreshSimulationState(code) {
+  if (!code) {
+    simulationLocked.value = false
+    return
+  }
+  try {
+    const { data } = await studentExperimentApi.getProgress(code)
+    simulationLocked.value = requiresSimulation(data)
+  } catch {
+    simulationLocked.value = false
+  }
+}
+
+watch(currentCode, refreshSimulationState, { immediate: true })
+
+function onSimulationUpdated(event) {
+  const code = event.detail?.code
+  if (!code || code === currentCode.value) {
+    refreshSimulationState(currentCode.value)
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('wxz-simulation-updated', onSimulationUpdated)
+})
+onUnmounted(() => {
+  window.removeEventListener('wxz-simulation-updated', onSimulationUpdated)
+})
+
+const simulationTab = (code) => ({
+  key: 'simulation',
+  label: '仿真预习',
+  color: '#3b82f6',
+  icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+  iconFill: 'M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+  to: simulationPrepRoute(code)
+})
+
 const tabs = computed(() => {
-  const labTo = currentCode.value
-    ? { name: 'lab', query: { exp: currentCode.value } }
-    : { name: 'lab' }
-  const reportTo = currentCode.value
-    ? { name: 'after-center', params: { code: currentCode.value }, query: { tab: 'report' } }
+  const code = currentCode.value
+  const labTo = code ? { name: 'lab', query: { exp: code } } : { name: 'lab' }
+  const reportTo = code
+    ? { name: 'after-center', params: { code }, query: { tab: 'report' } }
     : labTo
-  const monitorTo = currentCode.value
-    ? { name: 'lab-monitor', query: { exp: currentCode.value } }
+  const monitorTo = code
+    ? { name: 'lab-monitor', query: { exp: code } }
     : { name: 'lab-monitor' }
-  return [
+
+  if (simulationLocked.value && code) {
+    return [simulationTab(code)]
+  }
+
+  const items = []
+  if (code) {
+    items.push(simulationTab(code))
+  }
+
+  items.push(
     {
       key: 'lab',
       label: '实验台',
@@ -63,14 +114,18 @@ const tabs = computed(() => {
       iconFill: 'M7 3a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5H7z',
       to: reportTo
     }
-  ]
+  )
+
+  return items
 })
 
 const LAB_ROUTES = ['lab']
+const SIMULATION_ROUTES = ['prep-simulation']
 const MONITOR_ROUTES = ['lab-monitor']
 const REPORT_ROUTES = ['after-center', 'after-report', 'after-review']
 
 function isActive(tab) {
+  if (tab.key === 'simulation') return SIMULATION_ROUTES.includes(route.name)
   if (tab.key === 'lab') return LAB_ROUTES.includes(route.name)
   if (tab.key === 'monitor') return MONITOR_ROUTES.includes(route.name)
   if (tab.key === 'report') return REPORT_ROUTES.includes(route.name)

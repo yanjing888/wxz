@@ -29,6 +29,7 @@ export const sessionApi = {
   attachLatestAiImage: (id, data) => http.patch(`/api/sessions/${id}/messages/latest-ai-image`, data),
   updateStep: (id, stepId) => http.patch(`/api/sessions/${id}/step?stepId=${stepId}`),
   updateCameraStatus: (id, data) => http.patch(`/api/sessions/${id}/camera-status`, data),
+  updateEnvCheckEnabled: (id, data) => http.patch(`/api/sessions/${id}/env-check-enabled`, data),
   assist: (id, data) => http.post(`/api/sessions/${id}/assist`, data),
   assistStream: (id, data, handlers, signal) =>
     postSse(`/api/sessions/${id}/assist/stream`, data, handlers, signal),
@@ -36,7 +37,7 @@ export const sessionApi = {
   envLogs: (id) => http.get(`/api/sessions/${id}/env-logs`),
   tutorialView: (id) => http.post(`/api/sessions/${id}/tutorial-view`),
   getData: (id) => http.get(`/api/sessions/${id}/data`),
-  submitData: (id, data) => http.post(`/api/sessions/${id}/data`, data),
+  submitData: (id, data) => http.post(`/api/sessions/${id}/data`, data, { timeout: 120000 }),
   deleteData: (id, dataLogId) => http.delete(`/api/sessions/${id}/data/${dataLogId}`),
   deviceConnect: (id, stepId) => http.post(`/api/sessions/${id}/device/connect?stepId=${stepId}`),
   deviceStatus: (id, stepId) => http.get(`/api/sessions/${id}/device/status?stepId=${stepId}`),
@@ -134,6 +135,7 @@ export const studentExperimentApi = {
   listProgress: () => http.get('/api/student/experiments/progress'),
   getProgress: (code) => http.get(`/api/student/experiments/${code}/progress`),
   completePreLab: (code) => http.post(`/api/student/experiments/${code}/progress/pre-lab`),
+  completeSimulation: (code) => http.post(`/api/student/experiments/${code}/progress/simulation`),
   completeReport: (code, data) => http.post(`/api/student/experiments/${code}/progress/report`, data || {}),
   completeRecap: (code) => http.post(`/api/student/experiments/${code}/progress/recap`)
 }
@@ -201,8 +203,13 @@ export const teacherApi = {
   classroom: (params = {}) => http.get('/api/teacher/classroom', { params }),
   feedback: (params = {}) => http.get('/api/teacher/feedback', { params }),
   markFeedbackProcessed: (feedbackId, data) => http.patch(`/api/teacher/feedback/${feedbackId}/processed`, data),
-  students: () => http.get('/api/teacher/students'),
+  students: (params = {}) => http.get('/api/teacher/students', { params }),
+  createStudent: (data) => http.post('/api/teacher/students', data),
   importStudents: (data) => http.post('/api/teacher/students/import', data),
   assignExperiments: (userId, data) => http.put(`/api/teacher/students/${userId}/experiments`, data),
-  bulkAssignExperiments: (data) => http.post('/api/teacher/students/assignments/bulk', data)
+  bulkAssignExperiments: (data) => http.post('/api/teacher/students/assignments/bulk', data),
+  unassignExperiment: (userId, experimentCode) => http.delete(`/api/teacher/students/${userId}/experiments/${experimentCode}`),
+  sessionEnvLogs: (sessionId) => http.get(`/api/teacher/sessions/${sessionId}/env-logs`),
+  setEnvCheckEnabled: (sessionId, data) => http.patch(`/api/teacher/sessions/${sessionId}/env-check-enabled`, data),
+  triggerEnvCheck: (sessionId, data = {}) => http.post(`/api/teacher/sessions/${sessionId}/env-check`, data)
 }

@@ -112,7 +112,7 @@
 
       <ChatBox
         :messages="messages"
-        :loading="loadingAssist"
+        :loading="loadingAssist || submittingData"
         :welcome-subtitle="subtitle"
         :student-name="studentName"
       />

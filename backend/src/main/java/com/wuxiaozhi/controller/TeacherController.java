@@ -1,6 +1,7 @@
 package com.wuxiaozhi.controller;
 
 import com.wuxiaozhi.dto.*;
+import com.wuxiaozhi.entity.EnvCheckLog;
 import com.wuxiaozhi.entity.User;
 import com.wuxiaozhi.security.AuthSupport;
 import com.wuxiaozhi.service.TeacherService;
@@ -95,10 +96,41 @@ public class TeacherController {
         return teacherService.markFeedbackProcessed(teacher, feedbackId, request.getRating());
     }
 
-    @GetMapping("/students")
-    public List<TeacherStudentItemDto> students(Authentication authentication) {
+    @GetMapping("/sessions/{sessionId}/env-logs")
+    public List<EnvCheckLog> sessionEnvLogs(@PathVariable Long sessionId, Authentication authentication) {
         User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
-        return teacherService.listStudents(teacher);
+        return teacherService.getEnvLogsForTeacher(teacher, sessionId);
+    }
+
+    @PatchMapping("/sessions/{sessionId}/env-check-enabled")
+    public TeacherClassroomStudentDto setEnvCheckEnabled(@PathVariable Long sessionId,
+                                                         @RequestBody UpdateEnvCheckEnabledRequest request,
+                                                         Authentication authentication) {
+        User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
+        boolean enabled = request != null && request.isEnabled();
+        return teacherService.setEnvCheckEnabled(teacher, sessionId, enabled);
+    }
+
+    @PostMapping("/sessions/{sessionId}/env-check")
+    public EnvCheckResponse triggerEnvCheck(@PathVariable Long sessionId,
+                                            @RequestBody(required = false) EnvCheckRequest request,
+                                            Authentication authentication) {
+        User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
+        return teacherService.triggerEnvCheckForTeacher(teacher, sessionId, request);
+    }
+
+    @GetMapping("/students")
+    public List<TeacherStudentItemDto> students(@RequestParam(required = false) String experimentCode,
+                                                Authentication authentication) {
+        User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
+        return teacherService.listStudents(teacher, experimentCode);
+    }
+
+    @PostMapping("/students")
+    public TeacherStudentItemDto createStudent(@Valid @RequestBody CreateStudentRequest request,
+                                               Authentication authentication) {
+        User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
+        return teacherService.createStudent(teacher, request);
     }
 
     @PostMapping("/students/import")
@@ -122,5 +154,14 @@ public class TeacherController {
         User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
         int count = teacherService.bulkAssignExperiments(teacher, request);
         return Map.of("updated", count);
+    }
+
+    @DeleteMapping("/students/{userId}/experiments/{experimentCode}")
+    public ResponseEntity<Void> unassignExperiment(@PathVariable Long userId,
+                                                   @PathVariable String experimentCode,
+                                                   Authentication authentication) {
+        User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
+        teacherService.unassignExperiment(teacher, userId, experimentCode);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -20,6 +20,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { studentExperimentApi } from '../../api'
 import { lastExperiment } from '../../utils/experimentFlow'
+import { labEntryBlockedRoute } from '../../utils/prepSimulation'
 import { syncSubmittedReportDrafts } from '../../utils/reportDraftSync'
 
 const router = useRouter()
@@ -45,6 +46,11 @@ async function resolveEntry() {
     const row = rows.find((r) => r.experimentCode === remembered) || rows[0]
     const code = row.experimentCode
 
+    const simBlock = labEntryBlockedRoute(row, code)
+    if (simBlock) {
+      await router.replace(simBlock)
+      return
+    }
     if (!row.preLabCompleted && !row.activeSessionId) {
       await router.replace({ name: 'prep-ready', params: { code } })
       return

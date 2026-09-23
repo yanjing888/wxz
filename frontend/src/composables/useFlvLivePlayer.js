@@ -1,14 +1,8 @@
 import flvjs from 'flv.js'
 import { onBeforeUnmount, ref } from 'vue'
+import { benchCameraStreamCandidates, resolveBenchStreamUrl } from '../utils/benchCamera'
 
-export function resolveBenchStreamUrl(url) {
-  if (!url) return ''
-  if (url.startsWith('/ws/')) {
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    return `${protocol}://${window.location.host}${url}`
-  }
-  return url
-}
+export { resolveBenchStreamUrl }
 
 function waitForVideoFrame(video, timeoutMs = 7000) {
   return new Promise((resolve, reject) => {
@@ -104,6 +98,20 @@ export function useFlvLivePlayer() {
     }
   }
 
+  async function startWithCamera(video, camera) {
+    const urls = benchCameraStreamCandidates(camera)
+    if (!urls.length) {
+      error.value = '摄像头未配置'
+      return false
+    }
+    for (const url of urls) {
+      const ok = await start(video, url)
+      if (ok) return true
+    }
+    error.value = '无法播放视频流（已尝试实验室网与网线直连）'
+    return false
+  }
+
   function stop(video) {
     cleanup()
     ready.value = false
@@ -116,5 +124,5 @@ export function useFlvLivePlayer() {
 
   onBeforeUnmount(() => cleanup())
 
-  return { ready, error, start, stop }
+  return { ready, error, start, startWithCamera, stop }
 }

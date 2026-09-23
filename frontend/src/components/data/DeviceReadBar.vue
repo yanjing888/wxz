@@ -8,7 +8,7 @@
           ? 'border-brand-200 bg-brand-50 text-brand-700'
           : 'border-line-soft bg-white text-ink-strong hover:border-brand-200 hover:bg-brand-50/50 hover:text-brand-700 shadow-card'"
         :disabled="disabled || busy"
-        title="获取当前 UVC 相机视场图像，并添加到右侧对话框"
+        title="仅采集电子显微镜（UVC）画面；显微镜未连接时将提示失败"
         @click="$emit('ccd-capture')"
       >
         <svg v-if="busy" class="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">

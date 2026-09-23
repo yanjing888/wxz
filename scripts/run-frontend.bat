@@ -1,14 +1,32 @@
 @echo off
-chcp 65001 >nul
 setlocal
 
 cd /d "%~dp0.."
 set "ROOT=%CD%"
 call "%~dp0_read-ports.bat"
 
-echo Frontend port %FRONTEND_PORT% (%ROOT%\config\ports.env)
-echo Bench camera IP %BENCH_CAMERA_IP% (%ROOT%\config\ports.env)
+where npm.cmd >nul 2>&1
+if errorlevel 1 (
+  echo npm.cmd not found. Install Node.js 18+.
+  pause
+  exit /b 1
+)
+
+if not exist "%ROOT%\frontend\node_modules" (
+  echo frontend\node_modules missing. Run scripts\npm-install.bat first.
+  pause
+  exit /b 1
+)
+
+echo ========================================
+echo  WXZ Frontend (dev)
+echo  Port %FRONTEND_PORT%
+echo  http://localhost:%FRONTEND_PORT%/
+echo ========================================
+echo.
 
 cd /d "%ROOT%\frontend"
-npm run dev -- --host 0.0.0.0 --port %FRONTEND_PORT%
-if errorlevel 1 pause
+call npm.cmd run dev -- --host 0.0.0.0 --port %FRONTEND_PORT%
+echo.
+echo Frontend exited with code %ERRORLEVEL%
+pause

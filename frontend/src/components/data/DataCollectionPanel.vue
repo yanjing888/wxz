@@ -56,7 +56,7 @@
         :disabled="readOnly || submitting || !fields.length || !hasAnyValue"
         @click="onCheck"
       >
-        {{ submitting ? '检查中…' : '检查并纠错' }}
+        {{ submitting ? '检查中…' : checkButtonLabel }}
       </button>
       <button
         type="button"
@@ -92,6 +92,12 @@ let syncingFromProps = false
 const fieldKeys = computed(() => props.fields.map((f) => f.key).join(','))
 const hasAnyValue = computed(() =>
   Object.values(payloadFromValues(withComputedValues(localValues.value))).some((v) => String(v).trim() !== '')
+)
+const hasScaleReadingField = computed(() =>
+  props.fields.some((field) => field.scaleReading && !field.computed && !field.readOnly)
+)
+const checkButtonLabel = computed(() =>
+  hasScaleReadingField.value ? '检查读数' : '检查数据'
 )
 
 watch(

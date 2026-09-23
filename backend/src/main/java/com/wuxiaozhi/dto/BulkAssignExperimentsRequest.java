@@ -12,4 +12,7 @@ public class BulkAssignExperimentsRequest {
     private List<Long> userIds = new ArrayList<>();
 
     private List<String> experimentCodes = new ArrayList<>();
+
+    /** replace=覆盖分配；append=追加实验（默认 append） */
+    private String mode = "append";
 }

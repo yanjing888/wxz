@@ -119,6 +119,19 @@ const benchCam = ref(null)
 const bootstrapping = ref(false)
 let didInit = false
 let cameraHeartbeatTimer = null
+let envSyncTimer = null
+
+function startEnvSyncPoll() {
+  stopEnvSyncPoll()
+  envSyncTimer = setInterval(() => lab.syncEnvCheckFromServer(), 10000)
+}
+
+function stopEnvSyncPoll() {
+  if (envSyncTimer) {
+    clearInterval(envSyncTimer)
+    envSyncTimer = null
+  }
+}
 
 function onCameraUiChange({ active }) {
   lab.reportCameraActive(active)
@@ -238,6 +251,7 @@ onMounted(async () => {
         lab.applyEnvDifyStatus()
         lab.startEnvTimer()
       })
+    startEnvSyncPoll()
   }
   await restoreMonitorCameraIfNeeded()
 })
@@ -252,12 +266,14 @@ onActivated(async () => {
       lab.applyEnvDifyStatus()
       lab.startEnvTimer()
     })
+  startEnvSyncPoll()
   await restoreMonitorCameraIfNeeded()
 })
 
 onDeactivated(() => {
   lab.stopDifyStatusTimer()
   lab.stopEnvTimer()
+  stopEnvSyncPoll()
   if (cameraHeartbeatTimer) {
     clearInterval(cameraHeartbeatTimer)
     cameraHeartbeatTimer = null
@@ -265,6 +281,7 @@ onDeactivated(() => {
 })
 
 onUnmounted(() => {
+  stopEnvSyncPoll()
   if (cameraHeartbeatTimer) {
     clearInterval(cameraHeartbeatTimer)
     cameraHeartbeatTimer = null
@@ -338,15 +355,6 @@ onUnmounted(() => {
   height: 36px !important;
 }
 .monitor-stage :deep(.bench-camera-preview .text-\[7px\]) {
-  font-size: 13px !important;
-}
-
-/* REC / LIVE 指示器放大 */
-.monitor-stage :deep(.bench-camera-preview .w-1\.5) {
-  width: 8px !important;
-  height: 8px !important;
-}
-.monitor-stage :deep(.bench-camera-preview .text-\[9px\]) {
   font-size: 13px !important;
 }
 

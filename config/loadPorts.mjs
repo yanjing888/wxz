@@ -8,7 +8,9 @@ const PORTS_FILE = resolve(CONFIG_DIR, 'ports.env')
 const DEFAULTS = {
   BACKEND_PORT: 8082,
   FRONTEND_PORT: 5174,
-  BENCH_CAMERA_IP: '188.18.31.195'
+  BENCH_CAMERA_IP: '188.18.31.195',
+  BENCH_CAMERA_IP_DIRECT: '188.18.31.195',
+  BENCH_CAMERA_MODE: 'auto'
 }
 
 export function loadPorts(filePath = PORTS_FILE) {
@@ -30,6 +32,15 @@ export function loadPorts(filePath = PORTS_FILE) {
     if (key === 'BENCH_CAMERA_IP' && rawValue) {
       ports[key] = rawValue
     }
+    if (key === 'BENCH_CAMERA_IP_DIRECT' && rawValue) {
+      ports[key] = rawValue
+    }
+    if (key === 'BENCH_CAMERA_MODE' && rawValue) {
+      ports[key] = rawValue
+    }
+  }
+  if (!ports.BENCH_CAMERA_IP_DIRECT) {
+    ports.BENCH_CAMERA_IP_DIRECT = ports.BENCH_CAMERA_IP
   }
   return ports
 }

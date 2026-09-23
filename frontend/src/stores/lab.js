@@ -3,7 +3,7 @@ import { experimentApi, feedbackApi, sessionApi, studentExperimentApi, studentFi
 import { mediaUrl } from '../api/runtime'
 import { sniffImageMime, readFileAsDataUrl } from '../utils/imageFile'
 import { blobToFile, composeMarkedImage } from '../utils/markedImage'
-import { buildComposerDataAttachment, formatDataValuesSummary } from '../utils/composerData'
+import { buildComposerDataAttachment, buildDataCorrectionPrompt, formatDataValuesSummary } from '../utils/composerData'
 import { countSessionDataLogs, normalizeSessionDataByStep } from '../utils/sessionReport'
 
 function sleep(ms) {
@@ -30,12 +30,12 @@ function clearStoredSessionId(experimentCode) {
 }
 
 function effectiveDataFields(experiment, step) {
+  const stepFields = Array.isArray(step?.dataFields) ? step.dataFields : []
   const common = Array.isArray(experiment?.commonDataFields) ? experiment.commonDataFields : []
-  const stepFields = step?.dataSource === 'image'
-    ? []
-    : (Array.isArray(step?.dataFields) ? step.dataFields : [])
+  // 优先使用步骤专属字段；无专属字段时才继承实验级 common（兼容旧配置）
+  const source = stepFields.length ? stepFields : common
   const seen = new Set()
-  return [...common, ...stepFields].filter((field) => {
+  return source.filter((field) => {
     if (!field?.key || seen.has(field.key)) return false
     seen.add(field.key)
     return true
@@ -57,7 +57,7 @@ const WELCOME_MESSAGE = `<div class="welcome-guide">
   <p class="welcome-guide-title">卡住就直接问我，或拍一张现场照片——不用先选工具。</p>
   <div class="welcome-guide-row"><strong>操作</strong><span>描述现象或拍照，我告诉你下一步怎么做。</span></div>
   <div class="welcome-guide-row"><strong>读数</strong><span>左侧可「拍照获取读数」，确认后再记入。</span></div>
-  <div class="welcome-guide-row"><strong>数据</strong><span>左侧「检查并纠错」会带入输入框，发送后纠错；「保存为实验数据」才进报告。</span></div>
+  <div class="welcome-guide-row"><strong>数据</strong><span>左侧「检查读数」会把刻度记录发给 AI 核对；「保存为实验数据」才进报告。</span></div>
   <p class="welcome-guide-foot">你也可以点上方推荐问题开始。</p>
 </div>`
 
@@ -162,6 +162,7 @@ export const useLabStore = defineStore('lab', {
     tutViewCount: 0,
     uploadingImage: false,
     ccdCaptureBusy: false,
+    lastDataSubmitMode: null,
     loadingAssist: false,
     assistStreamAbort: null,
     uploadSeq: 0,
@@ -562,6 +563,7 @@ export const useLabStore = defineStore('lab', {
       if (this.useDeviceData) {
         await this.prepareDeviceStep()
       }
+      this.applyEnvCheckFromSession(this.session)
       this.loadSessionHistory(experimentCode).catch(() => {})
     },
     async resumeSession(sessionOrId) {
@@ -588,6 +590,7 @@ export const useLabStore = defineStore('lab', {
         await this.prepareDeviceStep()
       }
       this.loadSessionHistory(session.experimentCode || '').catch(() => {})
+      this.applyEnvCheckFromSession(session)
       return true
     },
     async loadMessages() {
@@ -973,18 +976,26 @@ export const useLabStore = defineStore('lab', {
 
       const stepId = this.activeStep
       const stepTitle = this.stepConfig?.title || ''
-      const lines = formatDataValuesSummary(this.currentDataFields, values || {})
-      const summary = lines.join('，')
+      let displayText = ''
       let aiIndex = -1
+      this.lastDataSubmitMode = runCorrection && !officialData
+        ? 'check'
+        : (officialData ? 'official' : 'other')
+
       if (runCorrection) {
-        const prefix = fromDevice ? '【仪器采集检查】' : (officialData ? '【正式数据检查】' : '【过程检查】')
-        let text = `${prefix}${stepTitle}\n${summary || '(空)'}`
-        const note = String(extraMessage || '').trim()
-        if (note) text += `\n\n${note}`
-        this.pushUser(text)
+        displayText = buildDataCorrectionPrompt({
+          stepTitle,
+          fields: this.currentDataFields,
+          values: values || {},
+          fromDevice,
+          officialData,
+          extraMessage
+        })
+        const userMsg = { role: 'user', text: displayText, ts: Date.now() }
+        const aiMsg = { role: 'ai', text: '', streaming: true, ts: Date.now() }
+        this.messages = [...this.messages, userMsg, aiMsg]
+        aiIndex = this.messages.length - 1
         this.updateCurrentSessionHistoryTitle()
-        aiIndex = this.messages.length
-        this.messages.push({ role: 'ai', text: '', streaming: true, ts: Date.now() })
       }
 
       try {
@@ -992,7 +1003,8 @@ export const useLabStore = defineStore('lab', {
           stepId,
           values,
           officialData,
-          runCorrection
+          runCorrection,
+          displayMessage: runCorrection ? displayText : undefined
         })
         const feedback = data.assist?.feedback || ''
         if (runCorrection && aiIndex >= 0) {
@@ -1004,6 +1016,10 @@ export const useLabStore = defineStore('lab', {
 
         if (data.validation?.errors?.length) {
           this.dataSubmitErrors = data.validation.errors
+        }
+
+        if (runCorrection) {
+          await this.loadMessages()
         }
 
         await this.loadSessionData()
@@ -1087,7 +1103,7 @@ export const useLabStore = defineStore('lab', {
       } catch (e) {
         this.composerImageUrl = ''
         this.composerImagePreview = ''
-        const msg = e.response?.data?.message || e.message || '获取成像失败，请检查 UVC 相机连接后重试'
+        const msg = e.response?.data?.message || e.message || '电子显微镜未连接或无法成像，请检查 USB 后重试'
         this.uploadError = msg
         emitAppAlert('获取成像失败', msg)
         return false
@@ -1117,7 +1133,7 @@ export const useLabStore = defineStore('lab', {
       )
       if (!Object.keys(cleaned).length) {
         this.dataSubmitErrors = ['请至少填写一项数据']
-        emitAppAlert('暂无可检查的数据', '请先填写读数，再点击“检查并纠错”。')
+        emitAppAlert('暂无可检查的数据', '请先填写读数，再点击“检查读数”。')
         return false
       }
       this.dataSubmitErrors = []
@@ -1523,6 +1539,23 @@ export const useLabStore = defineStore('lab', {
       if (!blob) return
       await this.runEnvCheck(blob)
     },
+    applyEnvCheckFromSession(session) {
+      if (!session) return
+      const enabled = !!session.envCheckEnabled
+      if (enabled === this.envCheckEnabled) return
+      this.toggleEnvCheck(enabled, { skipApi: true })
+    },
+    async syncEnvCheckFromServer() {
+      if (!this.session?.id) return
+      try {
+        const { data } = await sessionApi.get(this.session.id)
+        if (!data?.id) return
+        this.session = { ...this.session, envCheckEnabled: !!data.envCheckEnabled }
+        this.applyEnvCheckFromSession(data)
+      } catch {
+        // 同步失败不阻断界面
+      }
+    },
     startEnvTimer() {
       this.stopEnvTimer()
       if (!this.envCheckAvailable) {
@@ -1538,7 +1571,7 @@ export const useLabStore = defineStore('lab', {
         this.envTimer = null
       }
     },
-    toggleEnvCheck(enabled) {
+    toggleEnvCheck(enabled, options = {}) {
       if (enabled && !this.envCheckAvailable) {
         this.applyEnvDifyStatus()
         return
@@ -1546,6 +1579,9 @@ export const useLabStore = defineStore('lab', {
       this.envCheckEnabled = enabled
       if (enabled) this.startEnvTimer()
       else this.stopEnvTimer()
+      if (!options.skipApi && this.session?.id) {
+        sessionApi.updateEnvCheckEnabled(this.session.id, { enabled }).catch(() => {})
+      }
     },
     async openTutorial() {
       if (this.session?.id) {

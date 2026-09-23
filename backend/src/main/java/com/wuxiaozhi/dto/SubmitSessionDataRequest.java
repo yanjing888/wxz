@@ -15,4 +15,6 @@ public class SubmitSessionDataRequest {
     private Boolean officialData;
     /** Defaults to true; official saves may set false to avoid duplicate AI messages. */
     private Boolean runCorrection;
+    /** User-visible question text stored in chat history (Chinese labels). */
+    private String displayMessage;
 }

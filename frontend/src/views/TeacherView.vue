@@ -173,7 +173,7 @@
               </div>
 
               <div class="detail-quick-actions">
-                <button type="button" @click="activeTab = 'camera'; openCameraModal(selectedStudent.userId)">查看摄像头</button>
+                <button type="button" @click="activeTab = 'camera'">查看摄像头</button>
                 <button type="button" @click="activeTab = 'feedback'; selectedFeedbackUserId = selectedStudent.userId">查看问答反馈</button>
               </div>
             </aside>
@@ -181,7 +181,18 @@
         </div>
       </div>
 
-      <!-- ========== Tab 2: 问答反馈 ========== -->
+      <!-- ========== Tab 2: 学生管理 ========== -->
+      <div v-show="activeTab === 'students'" class="tab-panel student-manage-panel">
+        <StudentManagePanel
+          :experiment-code="selectedExpCode"
+          :experiment-name="currentExperimentName"
+          :students="experimentStudents"
+          :all-students="students"
+          @refresh="refresh"
+        />
+      </div>
+
+      <!-- ========== Tab 3: 问答反馈 ========== -->
       <div v-show="activeTab === 'feedback'" class="tab-panel">
         <!-- 列表视图 -->
         <template v-if="!selectedFeedbackId">
@@ -296,79 +307,30 @@
         </template>
       </div>
 
-      <!-- ========== Tab 3: 摄像头监控 ========== -->
+      <!-- ========== Tab 4: 摄像头监控 ========== -->
       <div v-show="activeTab === 'camera'" class="tab-panel camera-tab">
-        <div class="grid-toolbar">
-          <h2>实验台摄像头</h2>
-          <span class="toolbar-exp">{{ benchCameraConfig?.enabled ? '摄像头已连接' : '摄像头未配置' }}</span>
-        </div>
-        <div v-if="!cameraStudents.length" class="empty-state">暂无学生。</div>
-        <div v-else class="camera-grid custom-scroll">
-          <button
-            v-for="row in cameraStudents"
-            :key="row.userId"
-            type="button"
-            class="camera-card"
-            @click="openCameraModal(row.userId)"
-          >
-            <TeacherCameraCardPreview
-              :live="!!row.cameraActive && benchCameraConfigured"
-              :browser-stream-url="benchCameraStreamUrl"
-              :camera-configured="benchCameraConfigured"
-            />
-            <div class="cam-info">
-              <strong>{{ row.studentName }}</strong>
-              <span>{{ row.status === 'ACTIVE' ? row.stepTitle || '实验中' : row.status === 'FINISHED' ? '已完成' : '未开始' }}</span>
-            </div>
-          </button>
-        </div>
-
-        <!-- 摄像头放大弹窗 -->
-        <div v-if="cameraModalOpen" class="cam-modal-overlay" @click.self="closeCameraModal">
-          <div class="cam-modal" :class="{ expanded: camExpanded }">
-            <div ref="camLargeRef" class="cam-large-preview">
-              <video v-show="camReady" ref="camVideoRef" class="cam-video" playsinline muted />
-              <div v-if="!camReady" class="cam-loading">
-                <div v-if="cameraSelectedStudent?.cameraActive && benchCameraConfigured" class="spinner" />
-                <p>{{ camError || (cameraSelectedStudent?.cameraActive ? '连接中…' : '学生尚未在监控页开启摄像头') }}</p>
-              </div>
-              <div v-if="camReady" class="cam-overlay-tl">
-                <span class="rec-dot" />
-                <span class="rec-text">REC</span>
-              </div>
-              <div v-if="camReady" class="cam-overlay-bl">
-                <span class="live-text">LIVE</span>
-              </div>
-              <div v-if="camReady" class="cam-overlay-tr">
-                <button type="button" class="cam-expand-btn" title="全屏" @click="toggleExpand">
-                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 3H3v5m13-5h5v5M8 21H3v-5m18 0v5h-5" />
-                  </svg>
-                </button>
-              </div>
-              <div class="cam-overlay-br">
-                <strong>{{ cameraSelectedStudent?.studentName }}</strong>
-                <span>{{ cameraSelectedStudent?.studentClass || '—' }} · {{ cameraSelectedStudent?.stepTitle || '—' }}</span>
-              </div>
-            </div>
-            <div class="cam-modal-bar">
-              <div class="cam-modal-actions">
-                <button
-                  type="button"
-                  @click="startCameraStream"
-                  :disabled="camReady || !cameraSelectedStudent?.cameraActive || !benchCameraConfigured"
-                >
-                  开启画面
-                </button>
-                <button type="button" @click="stopCameraStream" :disabled="!camReady">关闭画面</button>
-              </div>
-              <button type="button" class="cam-modal-close" @click="closeCameraModal">关闭</button>
-            </div>
-          </div>
+        <div v-if="!benchStations.length" class="empty-state">暂无工位学生。</div>
+        <div v-else class="bench-grid custom-scroll">
+          <TeacherBenchStationCard
+            v-for="(station, index) in benchStations"
+            :key="station.userId"
+            :station="station"
+            :bench-label="`工位 ${index + 1}`"
+            :stream-live="activeTab === 'camera'"
+            :stream-url="benchCameraStreamUrl"
+            :bench-camera="benchCameraConfig"
+            :camera-configured="benchCameraConfigured"
+            :logs="benchEnvLogs[station.sessionId] || []"
+            :env-check-enabled="!!station.envCheckEnabled"
+            :checking="!!benchChecking[station.sessionId]"
+            :env-check-available="envCheckAvailable"
+            @toggle-env="(enabled) => toggleStationEnvCheck(station, enabled)"
+            @manual-check="runStationEnvCheck(station)"
+          />
         </div>
       </div>
 
-      <!-- ========== Tab 4: 报告分析 ========== -->
+      <!-- ========== Tab 5: 报告分析 ========== -->
       <div v-show="activeTab === 'report'" class="tab-panel">
         <div class="report-layout">
           <section class="report-list-section">
@@ -400,9 +362,6 @@
                     :class="{ active: stu.report && selectedReportId === stu.report.sessionId }"
                     @click="stu.submitted && selectReportItem(stu.report?.sessionId || stu.sessionId)"
                   >
-                    <span class="stu-avatar" :class="stu.submitted ? 'submitted' : 'not-submitted'">
-                      {{ (stu.studentName || '?').charAt(0) }}
-                    </span>
                     <div class="stu-info">
                       <strong>{{ stu.studentName }}</strong>
                       <span>{{ stu.submitted ? formatTime(stu.report?.endTime || stu.report?.startTime) : '未提交' }}</span>
@@ -479,16 +438,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { experimentApi, teacherApi, systemApi } from '../api'
 import { useAuthStore } from '../stores/auth'
 import ReportModal from '../components/modals/ReportModal.vue'
 import ExperimentSelect from '../components/layout/ExperimentSelect.vue'
-import TeacherCameraCardPreview from '../components/monitor/TeacherCameraCardPreview.vue'
 import StudentReportDocument from '../components/teacher/StudentReportDocument.vue'
 import ReportGradingPanel from '../components/teacher/ReportGradingPanel.vue'
-import { useFlvLivePlayer } from '../composables/useFlvLivePlayer'
+import StudentManagePanel from '../components/teacher/StudentManagePanel.vue'
+import TeacherBenchStationCard from '../components/teacher/TeacherBenchStationCard.vue'
 
 const CURRENT_EXP_KEY = 'wxz_teacher_current_exp'
 const auth = useAuthStore()
@@ -536,20 +495,21 @@ const reviewDimensions = ref([])
 const gradingCompleted = ref(false)
 const savingGrade = ref(false)
 
-const cameraSelectedId = ref(null)
-const camExpanded = ref(false)
-const camLargeRef = ref(null)
-const camVideoRef = ref(null)
-const cameraModalOpen = ref(false)
-const flv = useFlvLivePlayer()
-const camReady = flv.ready
-const camError = flv.error
+const benchEnvLogs = ref({})
+const benchChecking = ref({})
+const difyStatus = ref(null)
 let cameraPollTimer = null
 
 const benchCameraStreamUrl = computed(() => benchCameraConfig.value?.browserStreamUrl || '')
-const benchCameraConfigured = computed(() =>
-  !!benchCameraConfig.value?.enabled && !!benchCameraStreamUrl.value
-)
+const benchCameraConfigured = computed(() => {
+  const cfg = benchCameraConfig.value
+  if (!cfg?.enabled) return false
+  return !!(cfg.browserStreamUrl || cfg.browserStreamUrlDirect)
+})
+
+const envCheckAvailable = computed(() => difyStatus.value?.available !== false)
+
+const benchStations = computed(() => cameraStudents.value)
 
 const experimentOptions = computed(() => {
   if (experiments.value.length) return experiments.value
@@ -568,6 +528,13 @@ const currentExperimentName = computed(() =>
     || selectedExpCode.value
     || '实验'
 )
+
+const experimentStudents = computed(() => {
+  if (!selectedExpCode.value) return students.value
+  return students.value.filter((s) =>
+    (s.assignedExperimentCodes || []).includes(selectedExpCode.value)
+  )
+})
 
 const classroomStudents = computed(() => classroom.value?.students || [])
 
@@ -613,10 +580,6 @@ const cameraStudents = computed(() => {
 
 const selectedStudent = computed(() =>
   classroomStudents.value.find((s) => s.userId === selectedUserId.value) || null
-)
-
-const cameraSelectedStudent = computed(() =>
-  cameraStudents.value.find((s) => s.userId === cameraSelectedId.value) || null
 )
 
 const unprocessedCount = computed(() =>
@@ -716,6 +679,12 @@ const navTabs = computed(() => [
     badge: ''
   },
   {
+    key: 'students', label: '学生管理', color: '#0ea5e9',
+    icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+    iconFill: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1z',
+    badge: ''
+  },
+  {
     key: 'feedback', label: '问答反馈', color: '#10b981',
     icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 20l1.3-3.9A7.96 7.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
     iconFill: 'M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 20l1.3-3.9A7.96 7.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
@@ -731,7 +700,7 @@ const navTabs = computed(() => [
     key: 'report', label: '报告分析', color: '#ec4899',
     icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
     iconFill: 'M7 3a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2',
-    badge: submittedReportCount.value ? String(submittedReportCount.value) : ''
+    badge: ''
   }
 ])
 
@@ -739,11 +708,12 @@ watch(activeTab, (tab) => {
   if (tab === 'report' && !selectedReportId.value && sortedReports.value.length) {
     selectedReportId.value = sortedReports.value[0].sessionId
   }
-  if (tab !== 'camera') {
-    stopCameraStream()
-    stopCameraPoll()
-  } else {
+  if (tab === 'camera') {
+    loadDifyStatus()
+    loadAllBenchEnvLogs()
     startCameraPoll()
+  } else {
+    stopCameraPoll()
   }
 })
 
@@ -759,7 +729,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  stopCameraStream()
   stopCameraPoll()
 })
 
@@ -768,6 +737,9 @@ async function refreshClassroomForCamera() {
   try {
     const { data } = await teacherApi.classroom({ experimentCode: selectedExpCode.value })
     classroom.value = data
+    if (activeTab.value === 'camera') {
+      await loadAllBenchEnvLogs()
+    }
   } catch {
     // 轮询失败不阻断界面
   }
@@ -852,26 +824,59 @@ function selectReportItem(sessionId) {
   selectedReportId.value = sessionId
 }
 
-function openCameraModal(userId) {
-  cameraSelectedId.value = userId
-  cameraModalOpen.value = true
-  camError.value = ''
-  nextTick(() => {
-    const student = cameraStudents.value.find((s) => s.userId === userId)
-    if (student?.cameraActive && benchCameraConfigured.value) {
-      startCameraStream()
-    } else if (!student?.cameraActive) {
-      camError.value = '学生尚未在监控页开启摄像头'
-    } else if (!benchCameraConfigured.value) {
-      camError.value = '摄像头未配置或不可用'
-    }
-  })
+async function loadDifyStatus() {
+  try {
+    const { data } = await systemApi.difyStatus()
+    difyStatus.value = data
+  } catch {
+    difyStatus.value = { available: false }
+  }
 }
 
-function closeCameraModal() {
-  stopCameraStream()
-  cameraModalOpen.value = false
-  cameraSelectedId.value = null
+async function loadAllBenchEnvLogs() {
+  const sessionIds = benchStations.value.map((s) => s.sessionId).filter(Boolean)
+  if (!sessionIds.length) {
+    benchEnvLogs.value = {}
+    return
+  }
+  const results = await Promise.allSettled(
+    sessionIds.map((sid) => teacherApi.sessionEnvLogs(sid))
+  )
+  const next = {}
+  sessionIds.forEach((sid, i) => {
+    const result = results[i]
+    next[sid] = result.status === 'fulfilled' ? (result.value.data || []) : (benchEnvLogs.value[sid] || [])
+  })
+  benchEnvLogs.value = next
+}
+
+async function toggleStationEnvCheck(station, enabled) {
+  if (!station?.sessionId) return
+  try {
+    await teacherApi.setEnvCheckEnabled(station.sessionId, { enabled })
+    if (classroom.value?.students) {
+      const target = classroom.value.students.find((s) => s.sessionId === station.sessionId)
+      if (target) target.envCheckEnabled = enabled
+    }
+  } catch (e) {
+    window.alert(e.response?.data?.message || e.message || '更新巡检开关失败')
+  }
+}
+
+async function runStationEnvCheck(station) {
+  const sessionId = station?.sessionId
+  if (!sessionId || benchChecking.value[sessionId]) return
+  benchChecking.value = { ...benchChecking.value, [sessionId]: true }
+  try {
+    await teacherApi.triggerEnvCheck(sessionId, {})
+    const { data } = await teacherApi.sessionEnvLogs(sessionId)
+    benchEnvLogs.value = { ...benchEnvLogs.value, [sessionId]: data || [] }
+    await refreshClassroomForCamera()
+  } catch (e) {
+    window.alert(e.response?.data?.message || e.message || '巡检检查失败')
+  } finally {
+    benchChecking.value = { ...benchChecking.value, [sessionId]: false }
+  }
 }
 
 async function loadPreviewReport(sessionId) {
@@ -1044,37 +1049,6 @@ async function loadBenchCameraConfig() {
   }
 }
 
-async function startCameraStream() {
-  stopCameraStream()
-  camError.value = ''
-  const student = cameraSelectedStudent.value
-  if (!student?.cameraActive) {
-    camError.value = '学生尚未在监控页开启摄像头'
-    return
-  }
-  const cfg = benchCameraConfig.value
-  if (!cfg?.enabled || !cfg.browserStreamUrl) {
-    camError.value = '摄像头未配置或不可用'
-    return
-  }
-  await nextTick()
-  const video = camVideoRef.value
-  if (!video) return
-  const ok = await flv.start(video, cfg.browserStreamUrl)
-  if (!ok && !camError.value) {
-    camError.value = '无法播放摄像头视频流，请确认摄像头在线'
-  }
-}
-
-function stopCameraStream() {
-  flv.stop(camVideoRef.value)
-  camExpanded.value = false
-}
-
-function toggleExpand() {
-  camExpanded.value = !camExpanded.value
-}
-
 function priorityLabel(p) {
   return { high: '高', medium: '中', normal: '低' }[p] || '低'
 }
@@ -1217,6 +1191,7 @@ function logout() {
 .terminal-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 .tab-panel { height: 100%; overflow: hidden; display: flex; flex-direction: column; padding: 14px 24px 20px; }
 .tab-panel:has(.report-layout) { padding: 0; }
+.student-manage-panel { padding: 0; }
 
 /* ====== 统计栏 ====== */
 .stat-bar {
@@ -1245,10 +1220,22 @@ function logout() {
 
 .overview-body { display: grid; grid-template-columns: 1fr 300px; gap: 0; flex: 1; min-height: 0; }
 .student-grid-section { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid #e4e9f3; }
-.class-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.class-list { flex: 1; overflow-y: auto; padding: 10px 10px 16px; display: flex; flex-direction: column; gap: 8px; }
 
-/* 班级分组 */
-.class-group { border: 1px solid #e4e9f3; border-radius: 8px; overflow: hidden; background: #fff; }
+/* 班级分组（学情总览：不用 overflow:hidden，避免卡片底部边框/阴影被裁切） */
+.overview-panel .class-group {
+  border: 1px solid #e4e9f3;
+  border-radius: 8px;
+  background: #fff;
+  overflow: visible;
+}
+.overview-panel .class-group:not(.expanded) .class-group-header {
+  border-radius: 8px;
+}
+.overview-panel .class-group.expanded .class-group-header {
+  border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid #eef2f7;
+}
 .class-group-header {
   display: flex; align-items: center; gap: 6px; width: 100%;
   padding: 9px 12px; background: #f8f9fc; border: none; cursor: pointer;
@@ -1269,7 +1256,7 @@ function logout() {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 10px;
-  padding: 10px;
+  padding: 10px 10px 14px;
 }
 .learn-card {
   display: flex; flex-direction: column; gap: 8px;
@@ -1485,95 +1472,22 @@ function logout() {
 .processed-tag { color: #94a3b8; font-size: 12px; }
 
 /* ====== 摄像头监控 ====== */
-.camera-tab { display: flex; flex-direction: column; }
-.camera-grid {
-  flex: 1; overflow-y: auto; padding: 14px;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 14px; align-content: start;
+.camera-tab {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
-.camera-card {
-  display: flex; flex-direction: column; gap: 8px; padding: 12px;
-  border: 1px solid #e4e9f3; border-radius: 12px; background: #fff;
-  color: inherit; text-align: left;
-  transition: all 0.18s; cursor: pointer;
+.bench-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+  align-content: start;
 }
-.camera-card:hover { border-color: #c7d2fe; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.1); transform: translateY(-1px); }
-.cam-preview-mini {
-  position: relative; aspect-ratio: 16 / 10; border-radius: 8px; overflow: hidden;
-  background: linear-gradient(135deg, #1e293b, #0f172a);
-}
-.cam-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; }
-.cam-placeholder svg { width: 36px; height: 36px; color: rgba(255, 255, 255, 0.2); }
-.cam-badge {
-  position: absolute; top: 6px; left: 6px; padding: 2px 8px;
-  border-radius: 4px; font-size: 9px; font-weight: 700; letter-spacing: 0.05em;
-}
-.cam-badge.online { background: rgba(16, 185, 129, 0.85); color: #fff; }
-.cam-badge.offline { background: rgba(100, 116, 139, 0.85); color: #cbd5e1; }
-.cam-info strong { display: block; color: #0f172a; font-size: 14px; font-weight: 700; }
-.cam-info span { display: block; color: #94a3b8; font-size: 12px; margin-top: 2px; }
-
-/* 摄像头放大弹窗 */
-.cam-modal-overlay {
-  position: fixed; inset: 0; z-index: 200;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(3px);
-}
-.cam-modal {
-  display: flex; flex-direction: column;
-  width: 720px; max-width: 92vw; height: 480px; max-height: 80vh;
-  background: #fff; border-radius: 14px; overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-}
-.cam-modal.expanded { width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
-.cam-large-preview { flex: 1; position: relative; background: #0a0e1a; overflow: hidden; }
-.cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; background: #000; }
-.cam-loading {
-  position: absolute; inset: 0; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 12px;
-  color: #64748b; font-size: 14px;
-}
-.spinner {
-  width: 32px; height: 32px; border: 3px solid #e4e9f3;
-  border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-.cam-overlay-tl, .cam-overlay-tr, .cam-overlay-bl, .cam-overlay-br { position: absolute; z-index: 10; pointer-events: none; }
-.cam-overlay-tl { top: 12px; left: 12px; }
-.cam-overlay-tr { top: 12px; right: 12px; pointer-events: auto; }
-.cam-overlay-bl { bottom: 12px; left: 12px; }
-.cam-overlay-br { bottom: 12px; right: 12px; }
-.rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; animation: pulse 1.5s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: 0.4; } }
-.rec-text { margin-left: 6px; color: #f87171; font-size: 11px; font-family: monospace; font-weight: 700; }
-.live-text { color: #34d399; font-size: 11px; font-family: monospace; font-weight: 700; }
-.cam-expand-btn {
-  width: 32px; height: 32px; border-radius: 8px;
-  background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px);
-  color: #fff; display: flex; align-items: center; justify-content: center; transition: background 0.15s;
-}
-.cam-expand-btn:hover { background: rgba(0, 0, 0, 0.6); }
-.cam-expand-btn svg { width: 16px; height: 16px; }
-.cam-overlay-br { background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(6px); padding: 8px 14px; border-radius: 8px; }
-.cam-overlay-br strong { display: block; color: #fff; font-size: 14px; font-weight: 700; }
-.cam-overlay-br span { display: block; color: rgba(255, 255, 255, 0.7); font-size: 11px; margin-top: 2px; }
-.cam-modal-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; border-top: 1px solid #e4e9f3; flex-shrink: 0; background: #f8f9fc;
-}
-.cam-modal-actions { display: flex; gap: 8px; }
-.cam-modal-actions button {
-  height: 32px; padding: 0 16px; border-radius: 8px;
-  border: 1px solid #e4e9f3; background: #fff; color: #64748b;
-  font-size: 13px; font-weight: 600; transition: all 0.15s;
-}
-.cam-modal-actions button:hover:not(:disabled) { color: #4f46e5; border-color: #a5b4fc; background: #eef2ff; }
-.cam-modal-actions button:disabled { opacity: 0.4; cursor: default; }
-.cam-modal-close {
-  height: 32px; padding: 0 18px; border-radius: 8px;
-  background: #4f46e5; color: #fff; font-size: 13px; font-weight: 600; transition: background 0.15s;
-}
-.cam-modal-close:hover { background: #4338ca; }
 
 /* ====== 报告分析 ====== */
 .report-layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; flex: 1; min-height: 0; }
@@ -1589,8 +1503,8 @@ function logout() {
   background: #fff; padding: 16px; overflow: hidden;
 }
 
-/* 班级分组 */
-.class-group { border: 1px solid #e4e9f3; border-radius: 10px; overflow: hidden; }
+/* 班级分组（报告分析页） */
+.report-layout .class-group { border: 1px solid #e4e9f3; border-radius: 10px; overflow: hidden; }
 .class-group-header {
   display: flex; align-items: center; gap: 6px; width: 100%;
   padding: 10px 12px; background: #f8f9fc; border: none; cursor: pointer;
@@ -1615,13 +1529,6 @@ function logout() {
 .student-report-row:last-child { border-bottom: none; }
 .student-report-row:hover { background: #f5f7fc; }
 .student-report-row.active { background: #eef2ff; }
-.stu-avatar {
-  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; color: #fff;
-}
-.stu-avatar.submitted { background: linear-gradient(135deg, #6366f1, #818cf8); }
-.stu-avatar.not-submitted { background: #cbd5e1; }
 .stu-info { flex: 1; min-width: 0; }
 .stu-info strong { display: block; font-size: 13px; font-weight: 600; color: #1e293b; }
 .stu-info span { display: block; font-size: 11px; color: #94a3b8; margin-top: 1px; }

@@ -191,14 +191,46 @@ function buildStepDataTable(stepTitle, fields, rows) {
 </table>`
 }
 
+function buildEmptyDataTable(stepTitle, fields, rowCount = 3) {
+  if (!fields.length) return ''
+  const head = fields.map((f) => `<th>${f.label}</th>`).join('')
+  const emptyRow = fields.map(() => '<td>&nbsp;</td>').join('')
+  const body = Array.from({ length: rowCount }, (_, i) =>
+    `<tr><td>${i + 1}</td>${emptyRow}</tr>`
+  ).join('')
+  return `<p><strong>${stepTitle}</strong>（可在下方直接填写或修改）</p>
+<table class="report-data-table">
+<thead><tr><th>序号</th>${head}</tr></thead>
+<tbody>${body}</tbody>
+</table>`
+}
+
+function buildDataProcessingAppendix(report) {
+  const guide = report?.reportFillSections?.dataProcessing
+  const text = typeof guide === 'string' ? guide.trim() : ''
+  if (!text) return ''
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean)
+  const html = lines.map((line) => {
+    if (line.startsWith('```')) return ''
+    if (line.startsWith('- ') || line.startsWith('• ')) {
+      return `<p>${line.replace(/^[-•]\s*/, '• ')}</p>`
+    }
+    if (/^\d+\./.test(line)) return `<p>${line}</p>`
+    return `<p>${line}</p>`
+  }).join('')
+  return `<h4>数据处理说明（参考，请补充具体计算过程）</h4>${html}`
+}
+
 export function buildExperimentDataHtml(report) {
   const stepSchemas = report?.stepSchemas || {}
   const rows = parseDataLogRows(report)
-  if (!rows.length) {
-    return '<p>（本次实验暂无提交的结构化数据，请在实验工作台各步骤提交测量值。）</p>'
-  }
-
   const parts = []
+
+  const schemaStepIds = Object.keys(stepSchemas)
+    .map((k) => Number(k))
+    .filter((n) => Number.isFinite(n))
+    .sort((a, b) => a - b)
+
   const grouped = new Map()
   rows.forEach((row) => {
     const sid = row.stepId
@@ -206,86 +238,92 @@ export function buildExperimentDataHtml(report) {
     grouped.get(sid).push(row)
   })
 
-  const schemaStepIds = Object.keys(stepSchemas)
-    .map((k) => Number(k))
-    .filter((n) => Number.isFinite(n))
-    .sort((a, b) => a - b)
-
-  for (const stepId of schemaStepIds) {
-    const dataRows = grouped.get(stepId) || []
-    if (!dataRows.length) continue
-    const schema = stepSchemas[String(stepId)] || stepSchemas[stepId]
-    const fields = resolveStepDataFields(stepId, stepSchemas)
-    const stepTitle = schema?.stepTitle || dataRows[0].stepTitle || `步骤 ${stepId}`
-    parts.push(buildStepDataTable(
-      stepTitle,
-      fields.length ? fields : inferFieldsFromRows(dataRows),
-      dataRows
-    ))
+  if (schemaStepIds.length) {
+    for (const stepId of schemaStepIds) {
+      const dataRows = grouped.get(stepId) || []
+      const schema = stepSchemas[String(stepId)] || stepSchemas[stepId]
+      const fields = resolveStepDataFields(stepId, stepSchemas)
+      const stepTitle = schema?.stepTitle || dataRows[0]?.stepTitle || `步骤 ${stepId}`
+      if (dataRows.length) {
+        parts.push(buildStepDataTable(
+          stepTitle,
+          fields.length ? fields : inferFieldsFromRows(dataRows),
+          dataRows
+        ))
+      } else if (fields.length) {
+        parts.push(buildEmptyDataTable(stepTitle, fields))
+      }
+    }
+  } else if (rows.length) {
+    grouped.forEach((dataRows, stepId) => {
+      const fields = inferFieldsFromRows(dataRows)
+      if (!fields.length) return
+      parts.push(buildStepDataTable(dataRows[0].stepTitle || `步骤 ${stepId}`, fields, dataRows))
+    })
   }
 
-  grouped.forEach((dataRows, stepId) => {
-    if (schemaStepIds.includes(Number(stepId))) return
-    const fields = inferFieldsFromRows(dataRows)
-    if (!fields.length) return
-    parts.push(buildStepDataTable(dataRows[0].stepTitle || `步骤 ${stepId}`, fields, dataRows))
-  })
+  if (!parts.length && schemaStepIds.length) {
+    for (const stepId of schemaStepIds) {
+      const schema = stepSchemas[String(stepId)] || stepSchemas[stepId]
+      const fields = resolveStepDataFields(stepId, stepSchemas)
+      if (!fields.length) continue
+      const stepTitle = schema?.stepTitle || `步骤 ${stepId}`
+      parts.push(buildEmptyDataTable(stepTitle, fields))
+    }
+  }
 
   if (!parts.length) {
-    return '<p>（数据已提交，但未能解析为表格；请检查实验工作台的数据格式。）</p>'
+    parts.push('<p>（暂无自动填入的数据表，请根据实验步骤自行录入原始数据与计算过程。）</p>')
+  } else {
+    parts.push('<p><em>说明：带数据的表格由实验记录自动整理；空白表格可自行填写。下方可补充计算过程与不确定度。</em></p>')
   }
 
-  parts.push('<p><em>说明：上表由本次实验会话自动整理，可在下方补充计算过程与不确定度。</em></p>')
+  const processing = buildDataProcessingAppendix(report)
+  if (processing) parts.push(processing)
+
   return parts.join('\n')
 }
 
 export function buildResultsSection(report, experimentCode) {
   const code = experimentCode || report?.experimentCode || ''
   const rows = parseDataLogRows(report)
-  if (!rows.length) return '（暂无测量数据，请先在实验工作台提交数据。）'
+  const hints = []
 
-  const lastCalc = [...rows].reverse().find((r) => {
-    const v = r.values || {}
-    return v.average_R_mm != null || v.average_thickness_um != null || v.average_length_mm != null
-      || v.radius_R_mm != null || v.thickness_um != null || v.length_mm != null
-  })
-  const v = lastCalc?.values || rows[rows.length - 1]?.values || {}
-
-  if (code === 'newton_rings') {
-    const R = v.average_R_mm ?? v.radius_R_mm
-    if (R != null && R !== '') {
-      return `由直径平方差法计算得平凸透镜曲率半径：\nR = ${R} mm\n\n（请补充不确定度评定与结果表示，如 R = (${R} ± ΔR) mm。）`
+  if (rows.length) {
+    const lastCalc = [...rows].reverse().find((r) => {
+      const v = r.values || {}
+      return v.average_R_mm != null || v.average_thickness_um != null || v.average_length_mm != null
+        || v.radius_R_mm != null || v.thickness_um != null || v.length_mm != null
+    })
+    const v = lastCalc?.values || {}
+    if (code === 'newton_rings' && (v.average_R_mm != null || v.radius_R_mm != null)) {
+      hints.push(`（参考：工作台计算值 R ≈ ${v.average_R_mm ?? v.radius_R_mm} mm，请在此给出正式结果与不确定度。）`)
+    } else if (code === 'air_wedge_thickness' && (v.average_thickness_um != null || v.thickness_um != null)) {
+      hints.push(`（参考：工作台计算值 d ≈ ${v.average_thickness_um ?? v.thickness_um} μm，请在此给出正式结果与不确定度。）`)
+    } else if (code === 'microscope_length_measurement' && (v.average_length_mm != null || v.length_mm != null)) {
+      hints.push(`（参考：工作台计算值 L̄ ≈ ${v.average_length_mm ?? v.length_mm} mm，请在此给出正式结果与不确定度。）`)
     }
-    return '（请在「曲率半径计算」步骤提交 R 或平均曲率半径，并在此给出最终结果及不确定度。）'
-  }
-  if (code === 'air_wedge_thickness') {
-    const d = v.average_thickness_um ?? v.thickness_um
-    if (d != null && d !== '') {
-      return `由空气劈尖干涉测得薄片厚度：\nd = ${d} μm\n\n（请补充不确定度评定与结果表示。）`
-    }
-    return '（请在「厚度计算」步骤提交厚度结果，并在此给出最终结果及不确定度。）'
-  }
-  if (code === 'microscope_length_measurement') {
-    const L = v.average_length_mm ?? v.length_mm
-    if (L != null && L !== '') {
-      return `读数显微镜测得被测长度：\nL̄ = ${L} mm\n\n（请补充 A 类/B 类不确定度合成与结果表示。）`
-    }
-    return '（请在「数据处理」步骤提交平均长度，并在此给出最终结果及不确定度。）'
   }
 
-  return '（请根据本次实验数据给出最终测量结果及不确定度表示。）'
+  const hint = hints[0] || '（请根据「数据与处理」中的计算，写出最终测量结果及不确定度表示，如 R = (数值 ± ΔR) 单位。）'
+  return hint
 }
 
-export function formatDataLogTable(entries) {
-  if (!entries?.length) return '（本次实验暂无提交的结构化数据，请在实验工作台各步骤提交测量值。）'
-  return entries
-    .map((row, i) => {
-      const title = row.stepTitle || `步骤 ${i + 1}`
-      const data = row.valuesSummary || '—'
-      const check = row.validationSummary || '—'
-      return `${title}\n  数据：${data}\n  校验：${check}`
-    })
-    .join('\n\n')
+function buildProcedureFromSteps(steps = []) {
+  if (!steps.length) return ''
+  return steps.map((s, i) => {
+    const lines = [`步骤 ${s.stepNo || i + 1}：${s.title || ''}`]
+    if (s.desc) lines.push(`【目标】${s.desc}`)
+    if (Array.isArray(s.tutSteps) && s.tutSteps.length) {
+      lines.push('【操作指引】')
+      s.tutSteps.forEach((item, idx) => lines.push(`  ${idx + 1}. ${item}`))
+    }
+    if (Array.isArray(s.tutWarnings) && s.tutWarnings.length) {
+      lines.push('【注意事项】')
+      s.tutWarnings.forEach((item) => lines.push(`  • ${item}`))
+    }
+    return lines.join('\n')
+  }).join('\n\n')
 }
 
 export function buildReportSections(report, experimentCode) {
@@ -293,34 +331,32 @@ export function buildReportSections(report, experimentCode) {
   const code = experimentCode || report.experimentCode || ''
   const name = report.experimentName || '本次实验'
   const steps = report.stepSummaries || []
+  const fill = report.reportFillSections || {}
   const knowledge = report.reportKnowledge || []
-  const path = report.reportPath || []
 
-  const purpose =
-    steps.length > 0
-      ? `通过「${name}」实验，掌握${steps.map((s) => s.title).slice(0, 2).join('、')}等操作技能，理解相关物理规律并完成数据处理。`
-      : `完成「${name}」规定的测量与数据处理，验证相关物理规律。`
+  const purpose = (fill.purpose || '').trim()
+    || (steps.length > 0
+      ? `通过「${name}」实验，掌握${steps.map((s) => s.title).slice(0, 3).join('、')}等操作技能，理解相关物理规律并完成数据处理。`
+      : `完成「${name}」规定的测量与数据处理，验证相关物理规律。`)
 
-  const principle =
-    knowledge.length > 0
+  const principle = (fill.principle || '').trim()
+    || (knowledge.length > 0
       ? knowledge.join('\n')
-      : steps.find((s) => s.desc)?.desc || '（请补充本实验所依据的物理原理与核心公式。）'
+      : steps.find((s) => s.desc)?.desc || '（请补充本实验所依据的物理原理与核心公式。）')
 
-  const apparatus = steps.length
-    ? `本实验主要涉及以下环节与仪器：\n${steps.map((s, i) => `${i + 1}. ${s.title}`).join('\n')}`
-    : '（请列出主要仪器名称与型号。）'
+  const apparatus = (fill.apparatus || '').trim()
+    || (steps.length
+      ? `本实验主要使用以下仪器与材料（请核对型号并补充）：\n${steps.map((s, i) => `${i + 1}. ${s.title}`).join('\n')}`
+      : '（请列出主要仪器名称与型号。）')
 
-  const procedure = steps.length
-    ? steps.map((s, i) => `${i + 1}. ${s.title}${s.desc ? '：' + s.desc : ''}`).join('\n')
-    : '（请按实际操作顺序简述步骤。）'
+  const procedure = (fill.procedure || '').trim()
+    || buildProcedureFromSteps(steps)
+    || '（请按实际操作顺序简述各步骤、操作要点与注意事项。）'
 
   const data = buildExperimentDataHtml(report)
   const results = buildResultsSection(report, code)
 
-  const discussion =
-    path.length > 0
-      ? `建议从以下方面展开误差分析与讨论：\n${path.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
-      : '（请结合误差来源分析结果合理性，并提出改进措施。）'
+  const discussion = '（请结合本次实验数据，撰写误差来源分析、结果合理性讨论、实验中的问题与改进措施，以及个人思考与反思。）'
 
   return {
     purpose,
@@ -347,13 +383,13 @@ export function defaultSections() {
 }
 
 export const REPORT_SECTION_DEFS = [
-  { key: 'purpose', label: '1. 实验目的' },
-  { key: 'principle', label: '2. 实验原理' },
-  { key: 'apparatus', label: '3. 实验仪器' },
-  { key: 'procedure', label: '4. 实验步骤' },
-  { key: 'data', label: '5. 数据与处理' },
-  { key: 'results', label: '6. 实验结果' },
-  { key: 'discussion', label: '7. 分析与讨论' }
+  { key: 'purpose', label: '1. 实验目的', autoFill: true },
+  { key: 'principle', label: '2. 实验原理', autoFill: true },
+  { key: 'apparatus', label: '3. 实验仪器', autoFill: true },
+  { key: 'procedure', label: '4. 实验步骤', autoFill: true },
+  { key: 'data', label: '5. 数据与处理', autoFill: true },
+  { key: 'results', label: '6. 实验结果', autoFill: false },
+  { key: 'discussion', label: '7. 分析与讨论', autoFill: false }
 ]
 
 export function sectionsToFullText(sections, experimentName) {

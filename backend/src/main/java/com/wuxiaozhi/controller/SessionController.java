@@ -98,6 +98,14 @@ public class SessionController {
         labSessionService.updateCameraStatus(sessionId, currentUserId(authentication), active);
     }
 
+    @PatchMapping("/{sessionId:\\d+}/env-check-enabled")
+    public LabSession updateEnvCheckEnabled(@PathVariable Long sessionId,
+                                            @RequestBody UpdateEnvCheckEnabledRequest req,
+                                            Authentication authentication) {
+        boolean enabled = req != null && req.isEnabled();
+        return labSessionService.updateEnvCheckEnabled(sessionId, currentUserId(authentication), enabled);
+    }
+
     @GetMapping("/{sessionId:\\d+}/data")
     public Map<String, Object> getData(@PathVariable Long sessionId, Authentication authentication) {
         return labSessionService.getSessionData(sessionId, currentUserId(authentication));

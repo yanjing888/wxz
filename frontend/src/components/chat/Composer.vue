@@ -228,7 +228,7 @@ const inputPlaceholder = computed(() => {
     return '实验已结束，仅可查看历史对话'
   }
   if (props.dataAttachment) {
-    return '可补充说明或提问，Enter 发送读数并纠错…（Shift+Enter 换行）'
+    return '可补充说明或提问，Enter 发送读数检查…（Shift+Enter 换行）'
   }
   return '问物小智：实验中遇到的问题，都可以在这里说…（Enter 发送，Shift+Enter 换行）'
 })

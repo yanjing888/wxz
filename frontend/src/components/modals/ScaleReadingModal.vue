@@ -45,7 +45,7 @@
             <input ref="fileInput" type="file" accept="image/*" capture="environment" class="hidden" @change="onFileChange" />
             <div class="flex items-center justify-between gap-2">
               <p class="text-[11.5px] text-ink-faint leading-relaxed">
-                识别后会先填入当前输入框，可先检查纠错，确认无误后再保存为实验数据。
+                识别后会先填入当前输入框，可先检查读数，确认无误后再保存为实验数据。
               </p>
               <button v-if="previewUrl" type="button" class="link-btn shrink-0" @click="retake">重拍</button>
             </div>

@@ -26,6 +26,10 @@ public class StudentExperimentProgress {
     @Column(nullable = false)
     private boolean preLabCompleted;
 
+    /** 虚拟仿真预习已完成（部分实验进实验台前必做） */
+    @Column(nullable = false)
+    private boolean simulationCompleted;
+
     @Column(nullable = false)
     private boolean reportCompleted;
 

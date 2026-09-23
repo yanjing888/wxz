@@ -44,6 +44,11 @@ public class StudentExperimentController {
         return studentExperimentService.completePreLab(AuthSupport.currentUserId(authentication), experimentCode);
     }
 
+    @PostMapping("/{experimentCode}/progress/simulation")
+    public ExperimentProgressDto completeSimulation(@PathVariable String experimentCode, Authentication authentication) {
+        return studentExperimentService.completeSimulation(AuthSupport.currentUserId(authentication), experimentCode);
+    }
+
     @PostMapping("/{experimentCode}/progress/report")
     public ExperimentProgressDto completeReport(@PathVariable String experimentCode,
                                                 @RequestBody(required = false) CompleteReportRequest request,

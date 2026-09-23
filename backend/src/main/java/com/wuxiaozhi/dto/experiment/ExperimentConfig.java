@@ -22,4 +22,6 @@ public class ExperimentConfig {
     private DataCollectionConfig dataCollection;
     /** Dify 侧配置：知识库 ID 等 */
     private ExperimentDifyConfig dify;
+    /** 虚拟仿真预习（完成后再进真实实验台） */
+    private SimulationConfig simulation;
 }

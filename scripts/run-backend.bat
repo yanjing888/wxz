@@ -25,6 +25,8 @@ if /I "%MYSQL_ENABLED%"=="true" (
   set "PROFILE_ARG="
 )
 
+python -m pip install -q -r "%ROOT%\backend\scripts\requirements-uvc.txt" 2>nul
+
 cd /d "%ROOT%\backend"
 "%MVN%" -DskipTests spring-boot:run %PROFILE_ARG% -Dspring-boot.run.arguments=--server.port=%BACKEND_PORT%
 if errorlevel 1 pause

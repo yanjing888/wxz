@@ -281,6 +281,80 @@ public class ExperimentConfigService {
         return sb.toString().trim();
     }
 
+    /** 学生报告编辑器「从实验记录填充」用的结构化章节（来自 teaching-knowledge + manifest 分步指引） */
+    public Map<String, String> buildReportFillSections(ExperimentConfig exp) {
+        Map<String, String> sections = new LinkedHashMap<>();
+        if (exp == null) {
+            return sections;
+        }
+        String teaching = readTeachingKnowledge(exp.getCode());
+        sections.put("purpose", extractMarkdownSection(teaching, "实验目的"));
+        sections.put("principle", extractMarkdownSection(teaching, "实验原理"));
+        sections.put("apparatus", extractMarkdownSection(teaching, "仪器与材料"));
+        sections.put("procedure", buildReportProcedure(exp, teaching));
+        String dataProcessing = extractMarkdownSection(teaching, "数据处理规范");
+        if (dataProcessing.isBlank()) {
+            dataProcessing = extractMarkdownSection(teaching, "数据处理");
+        }
+        if (dataProcessing.isBlank()) {
+            dataProcessing = extractMarkdownSection(teaching, "数据记录");
+        }
+        sections.put("dataProcessing", dataProcessing);
+        return sections;
+    }
+
+    private String buildReportProcedure(ExperimentConfig exp, String teaching) {
+        StringBuilder sb = new StringBuilder();
+        if (exp.getSteps() != null && !exp.getSteps().isEmpty()) {
+            exp.getSteps().entrySet().stream()
+                    .sorted(Comparator.comparingInt(e -> parseStepNo(e.getKey())))
+                    .forEach(entry -> {
+                        StepConfig step = entry.getValue();
+                        sb.append("步骤 ").append(entry.getKey()).append("：")
+                                .append(step.getTitle() != null ? step.getTitle() : "").append("\n");
+                        if (step.getDesc() != null && !step.getDesc().isBlank()) {
+                            sb.append("【目标】").append(step.getDesc().trim()).append("\n");
+                        }
+                        if (step.getTut() != null && step.getTut().getSteps() != null && !step.getTut().getSteps().isEmpty()) {
+                            sb.append("【操作指引】\n");
+                            int index = 1;
+                            for (String item : step.getTut().getSteps()) {
+                                if (item != null && !item.isBlank()) {
+                                    sb.append("  ").append(index++).append(". ").append(item.trim()).append("\n");
+                                }
+                            }
+                        }
+                        if (step.getTut() != null && step.getTut().getWarnings() != null && !step.getTut().getWarnings().isEmpty()) {
+                            sb.append("【注意事项】\n");
+                            for (String warning : step.getTut().getWarnings()) {
+                                if (warning != null && !warning.isBlank()) {
+                                    sb.append("  • ").append(warning.trim()).append("\n");
+                                }
+                            }
+                        }
+                        if (step.getDataFields() != null && !step.getDataFields().isEmpty()) {
+                            sb.append("【需记录数据】");
+                            step.getDataFields().forEach(field -> {
+                                if (field.getLabel() != null && !field.getLabel().isBlank()) {
+                                    sb.append(field.getLabel().trim());
+                                    if (field.getUnit() != null && !field.getUnit().isBlank()) {
+                                        sb.append("(").append(field.getUnit().trim()).append(")");
+                                    }
+                                    sb.append("、");
+                                }
+                            });
+                            if (sb.charAt(sb.length() - 1) == '、') {
+                                sb.setLength(sb.length() - 1);
+                            }
+                            sb.append("\n");
+                        }
+                        sb.append("\n");
+                    });
+            return sb.toString().trim();
+        }
+        return extractMarkdownSection(teaching, "实验步骤");
+    }
+
     private static String extractMarkdownSection(String markdown, String headingKeyword) {
         if (markdown == null || markdown.isBlank() || headingKeyword == null) {
             return "";

@@ -16,4 +16,6 @@ public interface StudentExperimentAssignmentRepository extends JpaRepository<Stu
     boolean existsByUserIdAndExperimentCode(Long userId, String experimentCode);
 
     void deleteByUserId(Long userId);
+
+    void deleteByUserIdAndExperimentCode(Long userId, String experimentCode);
 }

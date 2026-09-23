@@ -27,38 +27,44 @@ function assertNotContains(body, text, message) {
 const appConfig = readFromProject('backend/src/main/resources/application.yml')
 const viteConfig = readFromFrontend('vite.config.js')
 const panel = readFromFrontend('src/components/monitor/BenchCameraPanel.vue')
+const benchUtil = readFromFrontend('src/utils/benchCamera.js')
+const portsEnv = readFromProject('config/ports.env')
 
 assertContains(
   appConfig,
   'browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:/ws/hdl/hlsram/live0.flv}',
   'default browser stream URL should use the camera WebSocket path through the laptop origin'
 )
+assertContains(
+  appConfig,
+  'browser-stream-url-direct:',
+  'application config should expose a direct-link browser stream URL'
+)
+assertContains(
+  appConfig,
+  'connection-mode: ${BENCH_CAMERA_MODE:auto}',
+  'application config should expose bench camera connection mode'
+)
 assertNotContains(
   appConfig,
   'browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:ws://192.168.0.15',
   'default browser stream URL should not point tablets directly at the camera IP'
 )
-assertNotContains(
-  appConfig,
-  '/bench-camera-proxy/ws/hdl/hlsram/live0.flv',
-  'default browser stream URL should avoid a rewritten WebSocket proxy prefix'
-)
 
 assertContains(viteConfig, 'cameraProxyTarget', 'vite should define a camera proxy target')
-assertContains(viteConfig, 'BENCH_CAMERA_IP', 'vite should read the camera IP from shared local config')
-assertContains(viteConfig, '`ws://${BENCH_CAMERA_IP}`', 'vite should build the WebSocket proxy target from the configured camera IP')
+assertContains(viteConfig, 'cameraDirectProxyTarget', 'vite should define a direct camera proxy target')
+assertContains(viteConfig, 'BENCH_CAMERA_IP_DIRECT', 'vite should read the direct camera IP from shared local config')
+assertContains(viteConfig, "'/ws-direct'", 'vite should expose the direct camera WebSocket path')
 assertContains(viteConfig, "'/ws'", 'vite should expose the camera WebSocket path at the same origin')
 assertContains(viteConfig, 'ws: true', 'camera proxy should support WebSocket streaming')
-assertNotContains(viteConfig, "rewrite: (path) => path.replace(/^\\/bench-camera-proxy/, '')", 'camera WebSocket proxy should not depend on upgrade path rewriting')
 
-assertContains(panel, 'resolveBrowserStreamUrl', 'camera panel should normalize proxy URLs before flv.js playback')
-assertContains(panel, "url.startsWith('/ws/')", 'camera panel should recognize same-origin camera WebSocket URLs')
-assertContains(panel, 'window.location.protocol === \'https:\' ? \'wss\' : \'ws\'', 'camera panel should choose ws or wss from the page protocol')
-assertContains(panel, 'window.location.host', 'camera panel should use the tablet-visible frontend host for proxied streams')
-assertContains(panel, 'stashMaxSize: 32', 'camera player should use the native page stash limit')
-assertContains(panel, 'maxBackoffMs: 2000', 'camera player should use the native page reconnect limit')
-assertContains(panel, 'deferredBlob: false', 'camera player should avoid deferred WebSocket blobs')
+assertContains(benchUtil, 'benchCameraStreamCandidates', 'bench camera util should build stream URL candidates')
+assertContains(benchUtil, '/ws-direct/', 'bench camera util should support direct proxy paths')
+assertContains(panel, 'benchCameraStreamCandidates', 'camera panel should try lab and direct stream URLs')
+assertContains(panel, 'resolveBenchStreamUrl', 'camera panel should normalize proxy URLs before flv.js playback')
 assertContains(panel, 'startLiveBufferMonitor', 'camera panel should monitor and trim accumulated live buffer')
-assertContains(panel, 'video.playbackRate = 1', 'camera panel should keep normal playback speed')
+
+assertContains(portsEnv, 'BENCH_CAMERA_IP_DIRECT', 'ports.env should document direct camera IP')
+assertContains(portsEnv, 'BENCH_CAMERA_MODE', 'ports.env should document camera connection mode')
 
 console.log('bench camera proxy wiring present')

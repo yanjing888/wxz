@@ -18,4 +18,10 @@ public class ImportStudentsRequest {
 
     @Valid
     private List<ImportStudentRow> students = new ArrayList<>();
+
+    /** 导入完成后自动分配到这些实验（默认追加，不覆盖已有分配） */
+    private List<String> experimentCodes = new ArrayList<>();
+
+    /** append=追加实验分配；replace=覆盖为该列表 */
+    private String assignMode = "append";
 }

@@ -19,13 +19,6 @@
           <div class="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           <p class="text-[7px] text-slate-400">连接中…</p>
         </div>
-        <div v-if="camUiActive && camReady" class="absolute top-2 left-2 flex items-center gap-1 pointer-events-none">
-          <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-          <span class="text-[9px] text-red-400 font-mono font-bold">REC</span>
-        </div>
-        <div v-if="camUiActive && camReady" class="absolute bottom-2 left-2 pointer-events-none">
-          <p class="text-[9px] text-emerald-400 font-mono">LIVE</p>
-        </div>
         <button
           v-if="camUiActive && !isExpanded"
           type="button"
@@ -158,6 +151,7 @@
 <script setup>
 import flvjs from 'flv.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { benchCameraStreamCandidates, resolveBenchStreamUrl } from '../../utils/benchCamera'
 
 const previewRef = ref(null)
 const videoRef = ref(null)
@@ -187,7 +181,7 @@ let liveBufferMonitorTimer = null
 const configuredCamera = computed(() => {
   const cfg = props.benchCamera || {}
   if (!cfg.enabled) return null
-  if (!cfg.browserStreamUrl && !cfg.rtspUrl) return null
+  if (!cfg.browserStreamUrl && !cfg.browserStreamUrlDirect && !cfg.rtspUrl) return null
   return cfg
 })
 
@@ -231,14 +225,6 @@ function logLevelClass(level) {
   if (level === 'L2') return 'text-red-500 bg-red-50'
   if (level === 'L1') return 'text-amber-500 bg-amber-50'
   return 'text-emerald-500 bg-emerald-50'
-}
-
-function resolveBrowserStreamUrl(url) {
-  if (url.startsWith('/ws/')) {
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    return `${protocol}://${window.location.host}${url}`
-  }
-  return url
 }
 
 function stopMediaTracks() {
@@ -300,10 +286,46 @@ async function startCamUi() {
   await startLocalCamera()
 }
 
+async function playConfiguredStream(video, streamUrl) {
+  video.muted = true
+  flvPlayer = flvjs.createPlayer({
+    type: 'flv',
+    url: resolveBenchStreamUrl(streamUrl),
+    isLive: true,
+    cors: true
+  }, {
+    enableWorker: false,
+    enableStashBuffer: false,
+    stashInitialSize: 32,
+    stashMaxSize: 32,
+    maxBufferLength: 0.3,
+    maxBackoffMs: 2000,
+    backoffMultiplier: 1.5,
+    maxRetries: 3,
+    liveBufferLatencyChasing: true,
+    loadStatisticsInterval: 100,
+    autoCleanupSourceBuffer: true,
+    deferredBlob: false,
+    fixAudioTimestampGap: true,
+    acousticEchoCancellation: false,
+    noiseSuppression: false,
+    audioWorkletEnabled: false,
+    autoplay: true,
+    muted: true
+  })
+  flvPlayer.attachMediaElement(video)
+  flvPlayer.load()
+  video.playbackRate = 1
+  await video.play()
+  startLiveBufferMonitor(video)
+  await waitForVideoFrame(video, 7000)
+}
+
 async function startConfiguredCamera(camera) {
   stopMediaTracks()
 
-  if (!camera.browserStreamUrl) {
+  const streamUrls = benchCameraStreamCandidates(camera)
+  if (!streamUrls.length) {
     camUiActive.value = false
     notifyCameraUi(false)
     camError.value = '已配置 RTSP 地址，但浏览器不能直接播放 RTSP；请配置 browserStreamUrl 后再预览'
@@ -317,50 +339,30 @@ async function startConfiguredCamera(camera) {
     return
   }
 
-  try {
-    const video = videoRef.value
-    if (!video) throw new Error('video element missing')
-    video.muted = true
-    flvPlayer = flvjs.createPlayer({
-      type: 'flv',
-      url: resolveBrowserStreamUrl(camera.browserStreamUrl),
-      isLive: true,
-      cors: true
-    }, {
-      enableWorker: false,
-      enableStashBuffer: false,
-      stashInitialSize: 32,
-      stashMaxSize: 32,
-      maxBufferLength: 0.3,
-      maxBackoffMs: 2000,
-      backoffMultiplier: 1.5,
-      maxRetries: 3,
-      liveBufferLatencyChasing: true,
-      loadStatisticsInterval: 100,
-      autoCleanupSourceBuffer: true,
-      deferredBlob: false,
-      fixAudioTimestampGap: true,
-      acousticEchoCancellation: false,
-      noiseSuppression: false,
-      audioWorkletEnabled: false,
-      autoplay: true,
-      muted: true
-    })
-    flvPlayer.attachMediaElement(video)
-    flvPlayer.load()
-    video.playbackRate = 1
-    await video.play()
-    startLiveBufferMonitor(video)
-    await waitForVideoFrame(video, 7000)
-    camReady.value = true
-    notifyCameraUi(true)
-  } catch (e) {
-    stopMediaTracks()
+  const video = videoRef.value
+  if (!video) {
     camUiActive.value = false
-    camReady.value = false
     notifyCameraUi(false)
-    camError.value = '无法播放实验台摄像头视频流，请确认摄像头在线或检查配置地址'
+    camError.value = '无法初始化视频区域'
+    return
   }
+
+  for (const streamUrl of streamUrls) {
+    stopMediaTracks()
+    try {
+      await playConfiguredStream(video, streamUrl)
+      camReady.value = true
+      notifyCameraUi(true)
+      return
+    } catch {
+      /* try next candidate */
+    }
+  }
+
+  camUiActive.value = false
+  camReady.value = false
+  notifyCameraUi(false)
+  camError.value = '无法连接摄像头。WiFi 不可达时可网线直连，并将电脑网卡设为 188.18.31.x 同网段静态 IP'
 }
 
 async function startLocalCamera() {

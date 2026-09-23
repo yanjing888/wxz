@@ -52,6 +52,10 @@ public class LabSession {
 
     private LocalDateTime cameraActiveAt;
 
+    /** 是否开启自动安全巡检（教师端/学生端均可控制，持久化到会话） */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean envCheckEnabled = false;
+
     /** 从实验台「最近对话」列表归档隐藏，数据仍保留 */
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean historyArchived = false;

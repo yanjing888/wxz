@@ -1,5 +1,10 @@
 node_modules/
 dist/
+.codex-tmp/
+.codex-ppt-work/
+evidence_screenshots/
+ppt_edit_tmp/
+logs/
 .vite/
 tmp/
 frontend/android/**/build/

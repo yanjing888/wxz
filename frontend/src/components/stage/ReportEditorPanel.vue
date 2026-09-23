@@ -226,13 +226,13 @@ const auth = useAuthStore()
 
 const sectionDefs = REPORT_SECTION_DEFS
 const placeholders = {
-  purpose: '本实验要验证什么物理规律…',
-  principle: '核心公式与物理意义…',
-  apparatus: '主要仪器名称与型号…',
-  procedure: '按实际操作顺序简述…',
-  data: '原始数据表、必要计算过程、单位和有效数字…',
-  results: '最终测量结果及不确定度表示…',
-  discussion: '误差分析、结果合理性、改进措施…'
+  purpose: '系统会从本实验讲义自动填入，可按需修改…',
+  principle: '含核心公式、符号说明与物理意义，系统会自动填入…',
+  apparatus: '主要仪器名称、型号与用途…',
+  procedure: '各步骤目标、操作指引与注意事项，系统会自动填入…',
+  data: '原始数据表、计算过程、单位与有效数字；有实验记录时会自动填入，也可自行修改或补充…',
+  results: '最终测量结果及不确定度表示（如 R = (数值 ± ΔR) mm）…',
+  discussion: '误差分析、结果讨论、实验反思与改进措施…'
 }
 
 const form = reactive(defaultSections())
@@ -648,15 +648,18 @@ async function confirmSubmit() {
 }
 .header-left h2 { @apply text-[13px] font-bold text-ink-strong; }
 .header-left span { @apply text-[10px] text-ink-faint ml-1.5; }
-.header-actions { @apply flex items-center gap-1; }
+.header-actions { @apply flex items-center gap-2 flex-wrap; }
 
 .btn-plain {
-  @apply border border-line-soft bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-muted
-    hover:text-ink-strong hover:border-brand-200 disabled:opacity-40 disabled:cursor-not-allowed;
+  @apply rounded-xl border border-line-soft bg-white px-3 py-1.5 text-[11px] font-semibold text-ink-muted
+    shadow-sm transition-colors
+    hover:text-ink-strong hover:border-brand-200 hover:bg-surface-soft/50
+    disabled:opacity-40 disabled:cursor-not-allowed;
 }
 .btn-primary {
-  @apply bg-brand-600 px-2 py-0.5 text-[11px] font-semibold text-white
-    hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed;
+  @apply rounded-xl bg-brand-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm
+    transition-colors hover:bg-brand-700
+    disabled:opacity-40 disabled:cursor-not-allowed;
 }
 
 /* ===== 工具栏 ===== */
