@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" fill="none">
+  <rect width="640" height="360" fill="#f8fafc"/>
+  <rect x="40" y="60" width="200" height="240" rx="12" fill="#fff" stroke="#cbd5e1"/>
+  <text x="140" y="90" text-anchor="middle" fill="#334155" font-size="14" font-weight="700" font-family="sans-serif">鼓轮读数</text>
+  <text x="140" y="170" text-anchor="middle" fill="#0f172a" font-size="28" font-weight="700" font-family="monospace">2.134</text>
+  <text x="140" y="200" text-anchor="middle" fill="#64748b" font-size="12" font-family="sans-serif">mm</text>
+  <rect x="280" y="80" width="320" height="200" rx="12" fill="#0f172a"/>
+  <circle cx="440" cy="180" r="50" stroke="#64748b" fill="none"/>
+  <line x1="390" y1="180" x2="490" y2="180" stroke="#22c55e" stroke-width="2"/>
+  <text x="400" y="172" fill="#86efac" font-size="11" font-family="sans-serif">左</text>
+  <text x="478" y="172" fill="#86efac" font-size="11" font-family="sans-serif">右</text>
+  <text x="440" y="48" text-anchor="middle" fill="#334155" font-size="16" font-weight="700" font-family="sans-serif">暗环直径测量</text>
+</svg>

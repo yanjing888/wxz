@@ -1,0 +1,433 @@
+.student-simulation .workspace {
+  grid-template-columns: 300px minmax(340px, 1fr) 300px;
+  height: calc(100dvh - 188px);
+  min-height: 540px;
+}
+#modelInteraction {
+  position: absolute;
+  bottom: 108px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 85%;
+  width: max-content;
+  padding: 9px 13px;
+  border: 1px solid #4c827e;
+  border-radius: 8px;
+  color: #b9f7e9;
+  background: #0b2130f2;
+  font-size: 11px;
+  line-height: 1.6;
+  pointer-events: none;
+  z-index: 4;
+}
+#modelInteraction:empty {
+  display: none;
+}
+.student-simulation #viewport > canvas {
+  touch-action: none;
+}
+.student-simulation .parts-dock {
+  height: 130px;
+}
+.student-simulation .part-card {
+  flex: 1;
+  min-width: 105px;
+}
+.student-simulation .part-card img {
+  height: 42px;
+  width: 70px;
+}
+.student-simulation .part-card span {
+  font-size: 11px;
+}
+.student-simulation .part-card small {
+  position: static;
+  color: #82b4bb;
+  font-size: 9px;
+}
+.part-card.pending {
+  border-style: dashed;
+}
+.part-card.current {
+  border-color: #d9b574;
+  background: #342e21;
+}
+.part-card.installed {
+  border-color: #315e56;
+}
+.student-simulation .left-panel {
+  display: flex;
+}
+.student-simulation #guideContent {
+  flex: 0 0 auto;
+}
+.student-simulation .guide-footer {
+  margin-top: auto;
+}
+.student-simulation .view-tools {
+  top: 80px;
+}
+.student-simulation .view-tools button {
+  font-size: 10px;
+  padding: 9px;
+}
+.assembly-status {
+  position: absolute;
+  left: 50%;
+  bottom: 45px;
+  transform: translateX(-50%);
+  min-width: 65%;
+  max-width: 90%;
+  padding: 11px 15px;
+  background: #0b2130ee;
+  border: 1px solid #315361;
+  border-radius: 8px;
+  text-align: center;
+  z-index: 2;
+}
+.assembly-status b {
+  font-size: 11px;
+  color: #91ded2;
+}
+.assembly-status span {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  color: #95b3c2;
+}
+.student-simulation .toast {
+  bottom: 112px;
+}
+.student-simulation .observation {
+  margin-top: 14px;
+}
+.quality-row {
+  display: flex;
+  justify-content: space-between;
+  color: #8eaaba;
+  margin: 15px 0 8px;
+  font-size: 10px;
+}
+.quality-row b {
+  color: #77e1cc;
+}
+.field-note {
+  font-size: 11px;
+  color: #8ea6b5;
+  line-height: 1.8;
+  margin-bottom: 18px;
+}
+.part-summary {
+  margin-top: 20px;
+}
+.part-summary h2 {
+  font-size: 18px;
+}
+.part-summary > p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #91afbf;
+}
+.part-summary #partTip {
+  border-left: 2px solid #4bbcae;
+  padding-left: 10px;
+  color: #b8d9d8;
+}
+.component-editor {
+  border: 1px solid #3b706f;
+  border-radius: 9px;
+  background: #102d36;
+  padding: 14px;
+  margin: 15px 0;
+}
+.component-editor h3 {
+  font-size: 13px;
+  margin: 0 0 12px;
+  color: #b3eee0;
+}
+.component-editor .control-row {
+  margin: 12px 0;
+  font-size: 11px;
+}
+.control-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.control-buttons button {
+  padding: 9px;
+  font-size: 11px;
+}
+.wheel-hint {
+  font-size: 10px;
+  color: #82b7ba;
+  line-height: 1.7;
+  margin: 10px 0 0;
+}
+.install-list {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0;
+}
+.install-list li {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  align-items: center;
+  color: #668999;
+  font-size: 11px;
+}
+.install-list li.active {
+  color: #f1d7a4;
+}
+.install-list li.done {
+  color: #7cdcc6;
+}
+.install-list .number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 22px;
+  height: 22px;
+  border: 1px solid #37505e;
+  border-radius: 50%;
+  font-size: 10px;
+}
+.install-list .done .number {
+  border-color: #4eaa98;
+}
+.goal-list {
+  padding: 0;
+  list-style: none;
+}
+.goal-list li {
+  font-size: 11px;
+  line-height: 1.7;
+  padding: 8px 0;
+  border-bottom: 1px solid #1d3947;
+  color: #91acba;
+}
+.goal-list li.passed {
+  color: #7bd6bd;
+}
+.help-toggle {
+  font-size: 11px;
+  color: #9cbfbf;
+  line-height: 1.8;
+  margin: 12px 0;
+}
+.help-toggle summary {
+  cursor: pointer;
+  color: #6fdcc6;
+}
+.challenge-box {
+  background: #2b2920;
+  border: 1px solid #6b5940;
+  padding: 13px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.8;
+  color: #dfc9a4;
+}
+.challenge-timer {
+  font: 24px monospace;
+  color: #edc381;
+  margin: 12px 0;
+}
+.quiz-type {
+  font-size: 10px;
+  color: #7de0ce;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+.student-simulation .answer {
+  font-size: 12px;
+  padding: 12px;
+}
+.student-simulation .answer.selected:before {
+  content: "✓ ";
+  color: #6be8cd;
+}
+.quiz-result {
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 7px;
+  background: #102d34;
+  color: #a4d4cd;
+}
+.quiz-result.wrong {
+  background: #34271e;
+  color: #dec0a1;
+}
+.rubric {
+  list-style: none;
+  padding: 0;
+  font-size: 11px;
+}
+.rubric li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  gap: 10px;
+  border-bottom: 1px solid #27424e;
+}
+.rubric .passed {
+  color: #78d9c1;
+}
+.rubric .failed {
+  color: #dfb187;
+}
+.challenge-submit {
+  width: 100%;
+  margin-top: 14px;
+}
+.student-simulation .score {
+  font-size: 44px;
+}
+.student-simulation .progress-track {
+  margin: 16px 0;
+}
+.student-simulation .muted {
+  font-size: 11px;
+}
+.student-simulation .part-label {
+  font-size: 10px;
+  padding: 5px 8px;
+}
+.student-simulation .journey button {
+  font-size: 12px;
+  padding: 8px 20px;
+}
+.student-simulation #componentControl:empty {
+  display: none;
+}
+@media (min-width: 1600px) {
+  .student-simulation .workspace {
+    grid-template-columns: 330px minmax(440px, 1fr) 330px;
+  }
+}
+@media (max-width: 1150px) {
+  .student-simulation .workspace {
+    grid-template-columns: 255px minmax(300px, 1fr) 250px;
+  }
+  .student-simulation .panel {
+    padding: 17px 14px;
+  }
+  .student-simulation .journey button {
+    padding: 8px 11px;
+    font-size: 11px;
+  }
+  .student-simulation .part-card {
+    min-width: 110px;
+  }
+  .assembly-status {
+    min-width: 80%;
+    padding: 10px;
+  }
+  .student-simulation .view-tools button {
+    padding: 7px;
+    font-size: 9px;
+  }
+  .student-simulation .scene-bottom span {
+    max-width: 240px;
+    line-height: 1.6;
+  }
+  .quality-row {
+    font-size: 9px;
+    gap: 5px;
+  }
+}
+@media (max-width: 850px) {
+  .student-simulation .workspace {
+    height: auto;
+    grid-template-columns: 255px minmax(0, 1fr);
+    min-height: 0;
+  }
+  .student-simulation .scene-panel,
+  .student-simulation .left-panel {
+    height: 650px;
+  }
+  .student-simulation .right-panel {
+    grid-column: 1/-1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 25px;
+  }
+  .student-simulation .right-panel > .section-label,
+  .student-simulation .observation,
+  .student-simulation .quality-row,
+  .student-simulation .field-note {
+    grid-column: 1;
+  }
+  .student-simulation .connection-panel {
+    grid-column: 2;
+    grid-row: 1/5;
+    margin: 0;
+  }
+  .student-simulation .part-summary {
+    grid-column: 1/-1;
+    margin: 0;
+  }
+  .student-simulation .model-note {
+    grid-column: 1/-1;
+  }
+  .student-simulation .parts-dock {
+    height: auto;
+  }
+  .student-simulation .view-tools {
+    top: 80px;
+  }
+  .student-simulation .scene-panel {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+@media (max-width: 540px) {
+  .student-simulation .workspace {
+    display: flex;
+  }
+  .student-simulation .scene-panel {
+    height: 500px;
+    order: 0;
+  }
+  .student-simulation .left-panel {
+    height: auto;
+    min-height: 470px;
+    order: 1;
+  }
+  .student-simulation .right-panel {
+    display: block;
+    order: 2;
+  }
+  .student-simulation .observation {
+    max-width: 100%;
+  }
+  .student-simulation .connection-panel {
+    margin: 18px 0;
+  }
+  .student-simulation .scene-bottom span {
+    max-width: 250px;
+    font-size: 8px;
+  }
+  .student-simulation .part-card {
+    min-width: 120px;
+  }
+  .assembly-status {
+    max-width: 85%;
+    min-width: 80%;
+  }
+  .assembly-status span {
+    font-size: 9px;
+  }
+  .student-simulation .view-tools button {
+    padding: 6px;
+  }
+  .student-simulation .journey button {
+    flex-shrink: 0;
+    padding: 8px 12px;
+  }
+  .student-simulation .guide-footer {
+    margin-top: 15px;
+  }
+}

@@ -1,28 +1,5 @@
 <template>
   <div class="sim-page flex flex-col flex-1 min-h-0 bg-[#0a0e17]">
-    <header class="sim-head shrink-0">
-      <div class="sim-head-inner">
-        <div class="min-w-0">
-          <p class="eyebrow">虚拟仿真 · 预习</p>
-          <h1 class="title">{{ experimentName || simulationTitle }}</h1>
-          <p v-if="viewMode === 'active'" class="sub">
-            完成下方全部 5 步并计算出曲率半径 R 后，系统自动标记预习完成。
-            <span v-if="simulationCompleted" class="ready-pill">已完成</span>
-          </p>
-        </div>
-        <div v-if="viewMode === 'active'" class="head-actions">
-          <button
-            type="button"
-            class="btn-enter"
-            :disabled="!simulationCompleted || saving"
-            @click="enterLab"
-          >
-            {{ simulationCompleted ? '进入实验台' : '请先完成仿真' }}
-          </button>
-        </div>
-      </div>
-    </header>
-
     <div v-if="loadError" class="sim-placeholder flex-1 flex items-center justify-center px-6">
       <div class="placeholder-box">
         <p class="placeholder-title">加载失败</p>
@@ -106,9 +83,15 @@ async function load() {
 }
 
 function onFrameMessage(event) {
+  if (event.origin !== window.location.origin || event.source !== frameRef.value?.contentWindow) return
   const data = event.data
+  if (data?.type === 'wxz-enter-lab' && data.experiment === code.value) {
+    if (simulationCompleted.value && !saving.value) enterLab()
+    return
+  }
   if (!data || data.type !== 'wxz-simulation-complete') return
-  if (data.experiment && data.experiment !== code.value) return
+  if (data.experiment !== code.value) return
+  if (code.value === 'newton_rings' && (data.version !== 3 || !Number.isFinite(data.score) || data.score < 80 || data.score > 100 || data.completedStages !== 4 || data.challengePassed !== true)) return
   markSimulationComplete()
 }
 

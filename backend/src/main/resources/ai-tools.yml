@@ -1,0 +1,30 @@
+tools:
+  - code: theory-chat
+    name: 原理答疑
+    description: 概念、公式与实验原理，随时提问
+    workflowKey: theory-chat
+    category: theory
+    suggestions:
+      - 这个实验的物理原理是什么？
+      - 如何理解测量中的系统误差？
+      - 不确定度与误差有什么区别？
+
+  - code: error-analysis
+    name: 误差分析
+    description: 测量数据处理与误差传播分析
+    workflowKey: error-analysis
+    category: error
+    suggestions:
+      - 如何计算A类不确定度？
+      - 多组数据求平均时误差怎么合成？
+      - 相对误差和绝对误差怎么选？
+
+  - code: report-helper
+    name: 报告助手
+    description: 梳理实验报告结构与结论表达
+    workflowKey: report-helper
+    category: report
+    suggestions:
+      - 实验结论应该怎么写？
+      - 讨论部分需要包含哪些内容？
+      - 如何把数据表格写进报告？

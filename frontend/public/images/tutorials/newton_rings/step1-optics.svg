@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" fill="none">
+  <rect width="640" height="360" fill="#f8fafc"/>
+  <rect x="24" y="24" width="592" height="312" rx="16" fill="#fff" stroke="#e2e8f0"/>
+  <text x="48" y="58" fill="#334155" font-size="18" font-family="sans-serif" font-weight="700">光路调节示意</text>
+  <circle cx="120" cy="200" r="28" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="120" y="205" text-anchor="middle" fill="#92400e" font-size="12" font-family="sans-serif">光源</text>
+  <rect x="220" y="170" width="56" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="248" y="203" text-anchor="middle" fill="#1e40af" font-size="11" font-family="sans-serif">反射镜</text>
+  <ellipse cx="400" cy="200" rx="70" ry="70" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="400" y="205" text-anchor="middle" fill="#047857" font-size="11" font-family="sans-serif">牛顿环仪</text>
+  <rect x="500" y="160" width="90" height="80" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+  <text x="545" y="205" text-anchor="middle" fill="#5b21b6" font-size="11" font-family="sans-serif">显微镜</text>
+  <path d="M148 200 H220 M276 200 H330 M470 200 H500" stroke="#94a3b8" stroke-width="2" marker-end="url(#a)"/>
+  <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+</svg>

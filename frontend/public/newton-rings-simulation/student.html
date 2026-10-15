@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>牛顿环 · 学生仿真预习</title>
+    <link rel="stylesheet" href="./simulation.css" />
+    <link rel="stylesheet" href="./student.css" />
+  </head>
+  <body class="student-simulation">
+    <nav id="journey" class="journey" aria-label="学习步骤"></nav>
+    <main class="workspace">
+      <aside class="left-panel panel">
+        <div class="section-label">实验任务 <span id="stageCount"></span></div>
+        <h2 id="stageTitle"></h2>
+        <p class="muted" id="stageIntro"></p>
+        <div class="progress-track"><div id="progressBar"></div></div>
+        <div id="guideContent"></div>
+        <div id="componentControl"></div>
+        <div class="guide-footer">
+          <span id="progressText"></span
+          ><button id="nextStage" class="primary"></button>
+        </div>
+      </aside>
+      <section class="scene-panel" aria-label="三维实验台">
+        <div class="scene-top">
+          <div>
+            <span class="live-dot"></span><b id="sceneTitle">逐步搭建实验装置</b
+            ><small id="sceneSubtitle">按住实际部件拖动 · 滚轮微调</small>
+          </div>
+          <span class="tag" id="elapsed">00:00</span>
+        </div>
+        <div id="viewport">
+          <div id="loading">正在准备实验组件…</div>
+          <div id="labels"></div>
+          <div id="filmExplanation" hidden>
+            <b>空气膜的两束反射光</b>
+            <p>
+              黄色：入射光；绿色与紫色：空气膜上下界面的反射光。两束光叠加产生干涉。
+            </p>
+            <p>
+              膜厚与两束光间距放大示意。中心接触处，一次反射的半波损失使反射光相消。
+            </p>
+          </div>
+        </div>
+        <div class="view-tools">
+          <button data-view="home">整体视图</button
+          ><button data-view="optics">光学组件</button
+          ><button data-view="film">空气膜剖面</button
+          ><button id="raysToggle" aria-pressed="true">显示光路 ✓</button
+          ><button id="xrayToggle" aria-pressed="false">镜筒透视</button
+          ><button id="labelToggle" aria-pressed="true">部件标注</button
+          ><button id="fullscreen">⛶ 全屏</button>
+        </div>
+        <div class="assembly-status">
+          <b id="assemblyStatus">组件安装 0 / 6</b
+          ><span id="modelHint">点击待安装组件模型，按步骤就位</span>
+        </div>
+        <div class="scene-bottom">
+          <span>空白处拖动旋转 / 滚轮缩放 · 部件上拖动调节</span
+          ><button id="reset" class="text-button">重新预习</button>
+        </div>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      </section>
+      <aside class="right-panel panel">
+        <div class="section-label">
+          实时观察 <span id="observationMode">装置未完成</span>
+        </div>
+        <div class="observation">
+          <canvas
+            id="rings"
+            width="480"
+            height="270"
+            aria-label="干涉环实时观察视场"
+          ></canvas
+          ><span id="fieldStatus" role="status"></span>
+        </div>
+        <div class="quality-row">
+          <span>亮度 <b id="brightnessMetric">—</b></span
+          ><span>清晰度 <b id="sharpnessMetric">—</b></span
+          ><span>对比度 <b id="contrastMetric">—</b></span>
+        </div>
+        <p class="field-note">
+          十字丝固定。转动鼓轮，观察环纹相对十字丝的位置变化。
+        </p>
+        <section class="connection-panel">
+          <b>光源与示教连接</b
+          ><label class="switch-row prominent-switch"
+            >钠光灯<input id="lampSwitch" type="checkbox" /></label
+          ><label class="switch-row"
+            >CCD 电源<input id="cameraPowerSwitch" type="checkbox" /></label
+          ><label class="switch-row"
+            >视频线连接<input id="videoCableSwitch" type="checkbox" /></label
+          ><label class="switch-row"
+            >显示器电源<input id="monitorPowerSwitch" type="checkbox"
+          /></label>
+          <p id="signalStatus" role="status"></p>
+          <small>接线只传输图像，图像需要通过部件调节。</small>
+        </section>
+        <div class="part-summary">
+          <div class="section-label">
+            当前部件 <span id="partReference"></span>
+          </div>
+          <h2 id="partName">牛顿环组件</h2>
+          <p id="partDescription"></p>
+          <p id="partTip"></p>
+        </div>
+        <details class="model-note">
+          <summary>原理与教学模型说明</summary>
+          <p>
+            模型外形依据厂家 MKS-NHY / JCD3 说明书和实拍图。学生操作合并为 8
+            个单元；支架和紧固件保留外形，不单独拆装。
+          </p>
+          <p>
+            反射暗环 rₘ²=mλR；λ=589.3 nm，R=1000
+            mm。光学剖面放大，亮度与模糊采用教学相对模型。物镜升降、目镜视度、相机调焦分别影响不同的像面。
+          </p>
+          <p>挑战会改变焦点参考与初始失调状态，以最终视场为准调节。</p>
+        </details>
+      </aside>
+    </main>
+    <section class="parts-dock">
+      <div class="dock-heading">
+        <b>学生操作部件</b><span>6 个安装组件 · 2 个已装调节机构</span>
+      </div>
+      <div id="partsList" class="parts-list"></div>
+    </section>
+    <dialog id="reportDialog">
+      <div class="report-actions">
+        <b>预习结果报告</b><button id="closeReport">✕</button>
+      </div>
+      <div id="reportBody"></div>
+      <div class="report-buttons">
+        <button id="downloadReport" class="primary">下载报告 HTML</button
+        ><button id="downloadJson">下载数据 JSON</button
+        ><button id="printReport">打印 / 存为 PDF</button>
+      </div>
+    </dialog>
+    <script type="module" src="./student.js"></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "inputs": {
+    "query": "newton rings step 4 what to confirm",
+    "experiment_code": "newton_rings",
+    "experiment_type": "newton rings",
+    "experiment_name": "newton rings",
+    "step_id": "4",
+    "step_title": "curvature radius",
+    "category": "teaching",
+    "correction_mode": "auto"
+  },
+  "query": "newton rings step 4 what to confirm",
+  "user": "debug-user",
+  "response_mode": "streaming"
+}

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" fill="none">
+  <rect width="640" height="360" fill="#f8fafc"/>
+  <text x="320" y="48" text-anchor="middle" fill="#334155" font-size="16" font-weight="700" font-family="sans-serif">数据处理 · D² 与 Δm</text>
+  <rect x="80" y="80" width="480" height="220" rx="16" fill="#fff" stroke="#e2e8f0"/>
+  <text x="120" y="130" fill="#64748b" font-size="13" font-family="sans-serif">D_m² − D_n²</text>
+  <text x="120" y="170" fill="#64748b" font-size="13" font-family="sans-serif">Δm = m − n</text>
+  <text x="120" y="230" fill="#64748b" font-size="13" font-family="sans-serif">R = (D_m² − D_n²) / (4λΔm)</text>
+  <path d="M360 120 L520 120 L520 260" stroke="#4f46e5" stroke-width="2" fill="none"/>
+  <circle cx="360" cy="120" r="5" fill="#4f46e5"/>
+  <circle cx="520" cy="260" r="5" fill="#4f46e5"/>
+</svg>

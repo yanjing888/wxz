@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .codex-tmp/
+.codex-logs/
 .codex-ppt-work/
 evidence_screenshots/
 ppt_edit_tmp/
