@@ -9,5 +9,8 @@
         "**/META-INF/maven/**",
         "**/frontend/android/**"
     ],
-    "gradle.nestedProjects": false
+    "gradle.nestedProjects": false,
+    "git.autorefresh": true,
+    "problems.decorations.enabled": false,
+    "problems.autoReveal": false
 }
