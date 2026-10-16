@@ -35,9 +35,10 @@ public class TeacherController {
 
     @GetMapping("/reports")
     public List<TeacherReportItemDto> reports(@RequestParam(required = false) String experimentCode,
+                                              @RequestParam(required = false) String className,
                                               Authentication authentication) {
         User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
-        return teacherService.listReports(teacher, experimentCode);
+        return teacherService.listReports(teacher, experimentCode,className);
     }
 
     @GetMapping("/reports/{sessionId}")
@@ -74,9 +75,10 @@ public class TeacherController {
 
     @GetMapping("/classroom")
     public TeacherClassroomDto classroom(@RequestParam(required = false) String experimentCode,
+                                         @RequestParam(required = false) String className,
                                          Authentication authentication) {
         User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
-        return teacherService.classroom(teacher, experimentCode);
+        return teacherService.classroom(teacher, experimentCode,className);
     }
 
     @GetMapping("/feedback")
@@ -121,10 +123,14 @@ public class TeacherController {
 
     @GetMapping("/students")
     public List<TeacherStudentItemDto> students(@RequestParam(required = false) String experimentCode,
+                                                @RequestParam(required = false) String className,
                                                 Authentication authentication) {
         User teacher = teacherService.requireTeacher(AuthSupport.currentUserId(authentication));
-        return teacherService.listStudents(teacher, experimentCode);
+        return teacherService.listStudents(teacher, experimentCode,className);
     }
+
+    @GetMapping("/classes")
+    public List<String> classes(Authentication authentication){return teacherService.listClasses(teacherService.requireTeacher(AuthSupport.currentUserId(authentication)));}
 
     @PostMapping("/students")
     public TeacherStudentItemDto createStudent(@Valid @RequestBody CreateStudentRequest request,

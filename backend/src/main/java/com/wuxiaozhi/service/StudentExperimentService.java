@@ -91,6 +91,7 @@ public class StudentExperimentService {
     @Transactional
     public ExperimentProgressDto completePreLab(Long userId, String experimentCode) {
         requireAssigned(userId, experimentCode);
+        accessService.requireCurrentIfStudent(userId,experimentCode);
         StudentExperimentProgress progress = progressRepository.findByUserIdAndExperimentCode(userId, experimentCode)
                 .orElseGet(() -> newProgress(userId, experimentCode));
         progress.setPreLabCompleted(true);
@@ -102,6 +103,7 @@ public class StudentExperimentService {
     @Transactional
     public ExperimentProgressDto completeSimulation(Long userId, String experimentCode) {
         requireAssigned(userId, experimentCode);
+        accessService.requireCurrentIfStudent(userId,experimentCode);
         StudentExperimentProgress progress = progressRepository.findByUserIdAndExperimentCode(userId, experimentCode)
                 .orElseGet(() -> newProgress(userId, experimentCode));
         progress.setSimulationCompleted(true);
@@ -129,9 +131,22 @@ public class StudentExperimentService {
     @Transactional
     public ExperimentProgressDto completeReport(Long userId, String experimentCode, CompleteReportRequest request) {
         requireAssigned(userId, experimentCode);
+        LabSession reportSession=request!=null&&request.getSessionId()!=null
+            ?sessionRepository.findByIdAndUserId(request.getSessionId(),userId).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"报告对应的实验记录不存在"))
+            :sessionRepository.findFirstByUserIdAndExperimentCodeAndStatusOrderByStartTimeDesc(userId,experimentCode,"FINISHED").orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"请先结束实操，再提交实验报告"));
+        if(!experimentCode.equals(reportSession.getExperimentCode())||!"FINISHED".equals(reportSession.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"只能为已结束的对应实验提交报告");
+        if(request==null||request.getSections()==null||!hasReportText(request.getSections()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请填写实验报告内容后再提交");
         StudentExperimentProgress progress = progressRepository.findByUserIdAndExperimentCode(userId, experimentCode)
                 .orElseGet(() -> newProgress(userId, experimentCode));
+        if(progress.isReportCompleted()&&hasReportText(readReportSections(progress)))return getProgress(userId,experimentCode);
+        if(!progress.isReportCompleted()){
+            progress.setGradingCompleted(false);
+            progress.setTeacherScore(null);
+            progress.setTeacherComment(null);
+            progress.setGradingAt(null);
+        }
         progress.setReportCompleted(true);
+        progress.setReportSessionId(reportSession.getId());
         if (request != null) {
             if (request.getSessionId() != null) {
                 progress.setReportSessionId(request.getSessionId());
@@ -154,12 +169,25 @@ public class StudentExperimentService {
         }
         StudentExperimentProgress progress = progressRepository.findByUserIdAndExperimentCode(userId, experimentCode)
                 .orElseGet(() -> newProgress(userId, experimentCode));
+        if(progress.isReportCompleted())return;
         if (sessionId != null) {
             progress.setReportSessionId(sessionId);
         }
         writeReportSections(progress, sections);
         progress.setUpdatedAt(LocalDateTime.now());
         progressRepository.save(progress);
+    }
+
+    @Transactional
+    public ExperimentProgressDto saveDraft(Long userId,String code,CompleteReportRequest request) {
+        requireAssigned(userId,code);
+        if(request==null||request.getSessionId()==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"缺少报告对应的实验记录");
+        var session=sessionRepository.findByIdAndUserId(request.getSessionId(),userId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"实验记录不存在"));
+        if(!code.equals(session.getExperimentCode())||!"FINISHED".equals(session.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"请先结束对应实验后保存报告");
+        var progress=progressRepository.findByUserIdAndExperimentCode(userId,code).orElseGet(()->newProgress(userId,code));
+        if(progress.isReportCompleted())throw new ResponseStatusException(HttpStatus.CONFLICT,"报告已提交，不能覆盖已提交正文");
+        progress.setReportSessionId(session.getId());writeReportSections(progress,request.getSections());progress.setUpdatedAt(LocalDateTime.now());progressRepository.save(progress);
+        return getProgress(userId,code);
     }
 
     public static Map<String, String> sectionsFromDocxItems(List<Map<String, String>> items) {
@@ -194,6 +222,10 @@ public class StudentExperimentService {
         LabSession finished = sessionRepository
                 .findFirstByUserIdAndExperimentCodeAndStatusOrderByStartTimeDesc(userId, code, "FINISHED")
                 .orElse(null);
+        if(progress!=null&&progress.getReportSessionId()!=null){
+            var reportSource=sessionRepository.findByIdAndUserId(progress.getReportSessionId(),userId).orElse(null);
+            if(reportSource!=null&&code.equals(reportSource.getExperimentCode())&&"FINISHED".equals(reportSource.getStatus()))finished=reportSource;
+        }
         boolean labDone = finished != null;
         Long dataSessionId = finished != null ? finished.getId() : (active != null ? active.getId() : null);
         boolean dataSubmitted = dataSessionId != null
@@ -220,6 +252,13 @@ public class StudentExperimentService {
         String currentStep = resolveCurrentStep(labDone, dataEnabled, dataSubmitted, reportDone, recapDone);
 
         ExperimentProgressDto dto = new ExperimentProgressDto();
+        var assignment=assignmentRepository.findByUserIdAndExperimentCode(userId,code).orElse(null);
+        boolean current=accessService.currentAssignment(userId).map(a->a.getExperimentCode().equals(code)).orElse(false);
+        dto.setCurrentTask(current);
+        dto.setClassName(finished!=null?ClassRosterService.classKey(finished.getStudentClass()):accessService.assignmentClass(userId,code));
+        if(assignment!=null){dto.setInstructions(assignment.getInstructions());dto.setReportDueAt(assignment.getReportDueAt());dto.setAssignedAt(assignment.getAssignedAt());}
+        dto.setTaskState(labDone?(reportDone?(progress!=null&&Boolean.TRUE.equals(progress.getGradingCompleted())?"GRADED":"SUBMITTED"):"REPORT_PENDING"):(current?"CURRENT":"QUEUED"));
+        if(progress!=null){dto.setTeacherScore(progress.teacherScoreAsPercent());dto.setTeacherComment(progress.getTeacherComment());dto.setGradingCompleted(Boolean.TRUE.equals(progress.getGradingCompleted()));dto.setReportUpdatedAt(progress.getUpdatedAt());}
         dto.setExperimentCode(code);
         dto.setExperimentName(config.getName());
         dto.setCurrentStep(currentStep);

@@ -95,6 +95,8 @@ cd backend && mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=$BAC
 
 所有 Dify 相关配置集中在项目根目录 **`config/dify.env`**（与 `config/ports.env` 同级，格式相同）。部署时实施人员只需修改该文件并重启后端。
 
+仓库同时提供 `config/dify.env.example` 作为配置模板。独立部署时，可参考模板修改 `config/dify.env` 中的地址与 API Key。
+
 ```env
 # config/dify.env
 DIFY_BASE_URL=http://你的dify地址/v1
@@ -118,7 +120,7 @@ DIFY_KB_TOP_K=5
 
 如果后续某个独立 Dify 应用也是 Workflow 类型，给它增加对应的 `DIFY_WF_XXX_MODE=workflow` 配置，不需要把全局 `DIFY_APP_MODE` 改成 workflow。
 
-**重要：** Dify 工作流开始节点需包含输入变量 `query`（后端会自动将用户问题写入 `inputs.query`）。若调用失败，系统会回退到 JSON Mock。
+普通对话工作流使用输入变量 `query`（后端将用户问题写入 `inputs.query`）。教师报告预评使用独立 Workflow，输入为报告文件等五个字段，输出仅为百分制 `score` 和 `comment`，配置步骤见 [教师报告预评说明](docs/dify/SETUP-REPORT-REVIEW-WORKFLOW.md)。教师预评失败会显示错误，不生成 Mock 成绩。
 
 启动后可通过 `GET /api/system/dify-status` 查看各工作流是否已配置 Key。
 

@@ -12,6 +12,7 @@
     "test:composer-copy": "node scripts/check-composer-copy.mjs",
     "test:tablet-viewport": "node scripts/check-tablet-viewport.mjs",
     "test:chat-bubbles": "node scripts/check-chat-bubble-width.mjs",
+    "test:report-review": "node scripts/check-report-review.mjs",
     "test:resizable-workspace": "node scripts/check-resizable-workspace.mjs"
   },
   "dependencies": {

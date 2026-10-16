@@ -21,4 +21,6 @@ backend/src/main/resources/application-local.yml
 config/*.env
 !config/dify.env
 !config/ports.env
+__pycache__/
+*.py[cod]
 .DS_Store

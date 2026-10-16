@@ -381,6 +381,7 @@ async function bootstrap() {
       const name = auth.displayName || localStorage.getItem('wxz_displayName') || '学生'
       await lab.loadExperiment(code)
       const { data: progress } = await studentExperimentApi.getProgress(code)
+      if(progress?.currentTask===false&&!progress.labCompleted){await router.replace({name:'student-tasks'});return}
       const simBlock = labEntryBlockedRoute(progress, code)
       if (simBlock) {
         await router.replace(simBlock)

@@ -20,14 +20,16 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useTaskStore } from '../../stores/tasks'
 import { studentExperimentApi } from '../../api'
 import { lastExperiment } from '../../utils/experimentFlow'
 import { requiresSimulation, simulationPrepRoute } from '../../utils/prepSimulation'
 
 const route = useRoute()
+const tasks = useTaskStore()
 
 const currentCode = computed(() =>
-  String(route.query.exp || route.params.code || '').trim() || lastExperiment() || ''
+  String(route.query.exp || route.params.code || '').trim() || tasks.current?.experimentCode || lastExperiment() || ''
 )
 
 const simulationLocked = ref(false)
@@ -39,7 +41,7 @@ async function refreshSimulationState(code) {
   }
   try {
     const { data } = await studentExperimentApi.getProgress(code)
-    simulationLocked.value = requiresSimulation(data)
+    simulationLocked.value = !data?.labCompleted && requiresSimulation(data)
   } catch {
     simulationLocked.value = false
   }
@@ -73,16 +75,10 @@ const simulationTab = (code) => ({
 const tabs = computed(() => {
   const code = currentCode.value
   const labTo = code ? { name: 'lab', query: { exp: code } } : { name: 'lab' }
-  const reportTo = code
-    ? { name: 'after-center', params: { code }, query: { tab: 'report' } }
-    : labTo
+  const reportTo = { name: 'student-reports' }
   const monitorTo = code
     ? { name: 'lab-monitor', query: { exp: code } }
     : { name: 'lab-monitor' }
-
-  if (simulationLocked.value && code) {
-    return [simulationTab(code)]
-  }
 
   const items = []
   if (code) {
@@ -116,13 +112,15 @@ const tabs = computed(() => {
     }
   )
 
-  return items
+  return simulationLocked.value && code
+    ? items.filter(item => ['simulation', 'report'].includes(item.key))
+    : items
 })
 
 const LAB_ROUTES = ['lab']
 const SIMULATION_ROUTES = ['prep-simulation']
 const MONITOR_ROUTES = ['lab-monitor']
-const REPORT_ROUTES = ['after-center', 'after-report', 'after-review']
+const REPORT_ROUTES = ['student-reports', 'after-center', 'after-report', 'after-review']
 
 function isActive(tab) {
   if (tab.key === 'simulation') return SIMULATION_ROUTES.includes(route.name)

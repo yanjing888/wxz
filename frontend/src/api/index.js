@@ -137,6 +137,7 @@ export const studentExperimentApi = {
   completePreLab: (code) => http.post(`/api/student/experiments/${code}/progress/pre-lab`),
   completeSimulation: (code) => http.post(`/api/student/experiments/${code}/progress/simulation`),
   completeReport: (code, data) => http.post(`/api/student/experiments/${code}/progress/report`, data || {}),
+  saveReportDraft: (code,data) => http.put(`/api/student/experiments/${code}/progress/report/draft`,data),
   completeRecap: (code) => http.post(`/api/student/experiments/${code}/progress/recap`)
 }
 
@@ -194,6 +195,7 @@ export const scaleReadingApi = {
 }
 
 export const teacherApi = {
+  classes: () => http.get('/api/teacher/classes'),
   overview: () => http.get('/api/teacher/overview'),
   reports: (params = {}) => http.get('/api/teacher/reports', { params }),
   report: (sessionId) => http.get(`/api/teacher/reports/${sessionId}`),

@@ -205,8 +205,11 @@ class AuthSessionIntegrationTest {
         JsonNode authB = login("studentB", "secret123");
 
         long aNewton = startSession(authA, "newton_rings", "Student A").get("id").asLong();
-        long aTensile = startSession(authA, "tensile_steel", "Student A").get("id").asLong();
         startSession(authA, "newton_rings", "Student A");
+        mockMvc.perform(post("/api/sessions/" + aNewton + "/finish")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + authA.get("token").asText()))
+                .andExpect(status().isOk());
+        long aTensile = startSession(authA, "tensile_steel", "Student A").get("id").asLong();
         long bNewton = startSession(authB, "newton_rings", "Student B").get("id").asLong();
 
         saveChatMessage(aNewton, "A newton question");

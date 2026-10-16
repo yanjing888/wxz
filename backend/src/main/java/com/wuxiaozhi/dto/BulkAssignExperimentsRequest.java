@@ -8,6 +8,9 @@ import java.util.List;
 
 @Data
 public class BulkAssignExperimentsRequest {
+    private String className;
+    private String instructions;
+    private java.time.LocalDateTime reportDueAt;
     @NotEmpty
     private List<Long> userIds = new ArrayList<>();
 

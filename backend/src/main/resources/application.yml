@@ -201,6 +201,7 @@ wuxiaozhi:
       data-entry: ${DIFY_WF_DATA_ENTRY:${DIFY_WF_INSTRUMENT_READING:}}
       think-questions: ${DIFY_WF_THINK_QUESTIONS:${DIFY_WF_REPORT_ASSIST:${DIFY_WF_TEXT_ASSIST:}}}
     workflow-modes:
+      report-review: workflow
       env-check: ${DIFY_WF_ENV_CHECK_MODE:${DIFY_APP_MODE:chat}}
     knowledge:
       top-k: ${DIFY_KB_TOP_K:5}

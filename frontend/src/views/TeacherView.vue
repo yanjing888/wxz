@@ -4,12 +4,6 @@
     <header class="terminal-head">
       <div class="head-left">
         <img src="/images/jyd-logo.png" alt="JYD" />
-        <span class="head-sep" />
-        <ExperimentSelect
-          :experiments="experimentOptions"
-          :experiment-code="selectedExpCode"
-          @experiment-change="onExperimentChange"
-        />
       </div>
       <div class="head-right">
         <div class="user-avatar brand-gradient">{{ userInitial }}</div>
@@ -37,6 +31,15 @@
       </nav>
     </header>
 
+    <div class="experiment-context">
+      <span>实验</span>
+      <ExperimentSelect
+        :experiments="experimentOptions"
+        :experiment-code="selectedExpCode"
+        @experiment-change="onExperimentChange"
+      />
+    </div>
+    <p v-if="loadError" class="teacher-load-error" role="alert">{{ loadError }} <button @click="refresh">重试</button></p>
     <!-- ====== 加载/空 ====== -->
     <div v-if="loading && !loadedOnce" class="terminal-state">加载中…</div>
     <div v-else-if="!selectedExpCode" class="terminal-state">暂无可查看的实验。</div>
@@ -47,11 +50,11 @@
       <!-- ========== Tab 1: 学情总览 ========== -->
       <div v-show="activeTab === 'overview'" class="tab-panel overview-panel">
         <div class="overview-toolbar">
-          <h2>{{ classroom?.experimentName || currentExperimentName }}</h2>
+          <input v-model.trim="overviewSearch" class="class-search" type="search" aria-label="搜索学情" placeholder="搜索班级、学号或姓名" />
           <div class="overview-summary">
-            <span>共 {{ classroomStudents.length }} 人</span>
+            <span>共 {{ overviewStudents.length }} 条记录</span>
             <span class="sep">·</span>
-            <span>{{ classroom?.activeCount ?? 0 }} 进行中</span>
+            <span>{{ overviewStudents.filter(s => s.status === 'ACTIVE').length }} 进行中</span>
             <span class="sep">·</span>
             <span>{{ finishedCount }} 已完成</span>
           </div>
@@ -60,7 +63,7 @@
         <div class="overview-body">
           <!-- 按班级分组的学情列表 -->
           <section class="student-grid-section">
-            <div v-if="!classroomStudents.length" class="empty-state">暂无学生进行此实验。</div>
+            <div v-if="!studentsByClass.length" class="empty-state">{{ overviewSearch ? '无匹配班级或学生。' : '暂无班级。' }}</div>
             <div v-else class="class-list custom-scroll">
               <div
                 v-for="grp in studentsByClass"
@@ -81,24 +84,25 @@
                 </button>
                 <div v-if="expandedClasses[grp.name] !== false" class="class-group-body">
                   <!-- 学生学情卡片网格 -->
-                  <div class="learn-card-grid">
+                  <div v-if="grp.students.length" class="learn-card-grid">
                     <button
                       v-for="row in grp.students"
-                      :key="row.userId"
+                      :key="row.studentClass + '|' + row.userId"
                       type="button"
                       class="learn-card"
                       :class="{
-                        'learn-card--active': selectedUserId === row.userId,
+                        'learn-card--active': selectedUserId === row.userId && selectedStudentClass === row.studentClass,
                         'learn-card--online': row.status === 'ACTIVE',
                         'learn-card--done': row.status === 'FINISHED',
                         'learn-card--warn': (row.helpCount > 0 || row.errorPointCount > 0) && row.status === 'ACTIVE'
                       }"
-                      @click="selectedUserId = row.userId"
+                      @click="selectClassStudent(row)"
                     >
                       <div class="learn-card-top">
                         <span class="learn-name">{{ row.studentName }}</span>
                         <span class="learn-dot" :class="row.status === 'ACTIVE' ? 'dot-on' : row.status === 'FINISHED' ? 'dot-done' : 'dot-off'"></span>
                       </div>
+                      <p class="learn-identity">{{ row.username || '学号未填写' }} · {{ row.studentClass || '未分班' }}</p>
                       <div class="learn-card-step">{{ row.stepTitle || '未开始' }}</div>
                       <div class="learn-card-bottom">
                         <span class="learn-stat">
@@ -116,6 +120,7 @@
                       </div>
                     </button>
                   </div>
+                  <p v-else class="class-empty">本实验未分配学生</p>
                 </div>
               </div>
             </div>
@@ -127,7 +132,8 @@
               <div class="detail-header">
                 <div>
                   <h2>{{ selectedStudent.studentName }}</h2>
-                  <p class="detail-class">{{ selectedStudent.studentClass || '—' }}</p>
+                  <p class="detail-class">班级：{{ selectedStudent.studentClass || '未分班' }}</p>
+                  <p class="detail-class">学号：{{ selectedStudent.username || '—' }}</p>
                 </div>
                 <span class="state-pill" :class="selectedStudent.status === 'ACTIVE' ? 'active' : selectedStudent.status === 'FINISHED' ? 'done' : 'idle'">
                   {{ selectedStudent.status === 'ACTIVE' ? '进行中' : selectedStudent.status === 'FINISHED' ? '已完成' : '未开始' }}
@@ -184,9 +190,9 @@
       <!-- ========== Tab 2: 学生管理 ========== -->
       <div v-show="activeTab === 'students'" class="tab-panel student-manage-panel">
         <StudentManagePanel
+          :experiment-steps="experiments.find(e => e.code === selectedExpCode)?.steps || []"
           :experiment-code="selectedExpCode"
           :experiment-name="currentExperimentName"
-          :students="experimentStudents"
           :all-students="students"
           @refresh="refresh"
         />
@@ -313,7 +319,7 @@
         <div v-else class="bench-grid custom-scroll">
           <TeacherBenchStationCard
             v-for="(station, index) in benchStations"
-            :key="station.userId"
+            :key="station.studentClass + '|' + station.userId"
             :station="station"
             :bench-label="`工位 ${index + 1}`"
             :stream-live="activeTab === 'camera'"
@@ -331,91 +337,69 @@
       </div>
 
       <!-- ========== Tab 5: 报告分析 ========== -->
-      <div v-show="activeTab === 'report'" class="tab-panel">
+      <div v-show="activeTab === 'report'" class="tab-panel report-workspace" :class="{ immersive: reportImmersive, 'compact-list': reportCompactList }">
+        <div class="report-workspace-toolbar">
+          <span>{{ submittedReportCount }} 份已提交<span class="toolbar-muted"> / {{ cameraStudents.length }} 条记录</span></span>
+          <div class="workspace-actions">
+            <button type="button" :aria-pressed="reportCompactList" @click="reportCompactList = !reportCompactList">{{ reportCompactList ? '卡片视图' : '紧凑视图' }}</button>
+            <button type="button" :aria-pressed="reportImmersive" @click="reportImmersive = !reportImmersive">{{ reportImmersive ? '退出沉浸' : '沉浸批改' }}</button>
+          </div>
+        </div>
         <div class="report-layout">
-          <section class="report-list-section">
-            <h2>实验报告 ({{ submittedReportCount }}/{{ cameraStudents.length }})</h2>
-            <div v-if="!reportsByClass.length" class="empty-state">暂无学生数据。</div>
+          <section class="report-list-section" aria-label="学生报告列表">
+            <div class="report-status-tabs" role="group" aria-label="报告状态">
+              <button v-for="status in reportStatuses" :key="status.key" type="button" :class="{ active: reportStateFilter === status.key }" :aria-pressed="reportStateFilter === status.key" :disabled="reportBusy" @click="reportStateFilter = status.key">{{ status.label }} <span>{{ status.count }}</span></button>
+            </div>
+            <div class="report-list-filters">
+              <input v-model.trim="reportSearch" :disabled="reportBusy" type="search" aria-label="搜索报告" placeholder="搜索班级、学号或姓名" />
+              <select v-model="reportClassFilter" :disabled="reportBusy" aria-label="筛选报告班级">
+                <option value="">全部班级</option>
+                <option v-for="group in reportsByClass" :key="group.className" :value="group.className">{{ group.className }}</option>
+              </select>
+              <select v-model="reportSortField" :disabled="reportBusy" aria-label="报告排序字段"><option value="time">提交时间</option><option value="name">学生姓名</option><option value="score">实验得分</option></select>
+              <select v-model="reportSortDirection" :disabled="reportBusy" aria-label="报告排序方向"><option value="desc">降序</option><option value="asc">升序</option></select>
+            </div>
+            <div v-if="!filteredReportsByClass.length" class="empty-state">暂无符合条件的学生。</div>
             <div v-else class="report-class-list custom-scroll">
-              <div
-                v-for="grp in reportsByClass"
-                :key="grp.className"
-                class="class-group"
-                :class="{ expanded: expandedClasses[grp.className] !== false }"
-              >
-                <button type="button" class="class-group-header" @click="toggleClassExpand(grp.className)">
-                  <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  <span class="class-name">{{ grp.className }}</span>
-                  <span class="class-stats">
-                    <span class="stat-chip submitted">{{ grp.submitted }}/{{ grp.total }} 已提交</span>
-                    <span v-if="grp.total - grp.submitted > 0" class="stat-chip pending">{{ grp.total - grp.submitted }} 未提交</span>
-                  </span>
+              <div v-for="grp in filteredReportsByClass" :key="grp.className" class="class-group" :class="{ expanded: expandedClasses[grp.className] !== false }">
+                <button type="button" class="class-group-header" :aria-expanded="expandedClasses[grp.className] !== false" @click="toggleClassExpand(grp.className)">
+                  <span class="class-name">{{ grp.className }}</span><span class="class-stats">{{ grp.students.length }} 人</span>
                 </button>
                 <div v-if="expandedClasses[grp.className] !== false" class="class-group-body">
-                  <button
-                    v-for="stu in grp.students"
-                    :key="stu.userId"
-                    type="button"
-                    class="student-report-row"
-                    :class="{ active: stu.report && selectedReportId === stu.report.sessionId }"
-                    @click="stu.submitted && selectReportItem(stu.report?.sessionId || stu.sessionId)"
-                  >
-                    <div class="stu-info">
-                      <strong>{{ stu.studentName }}</strong>
-                      <span>{{ stu.submitted ? formatTime(stu.report?.endTime || stu.report?.startTime) : '未提交' }}</span>
-                    </div>
-                    <span v-if="stu.submitted" class="stu-badges">
-                      <span v-if="stu.report?.gradingCompleted" class="badge-ok">已批改</span>
-                      <span v-else-if="stu.report?.aiReviewScore != null" class="badge-help">已预评</span>
-                      <span v-if="stu.report?.helpCount" class="badge-help">求助 {{ stu.report.helpCount }}</span>
-                      <span v-if="stu.report?.errorPointCount" class="badge-err">纠错 {{ stu.report.errorPointCount }}</span>
-                      <span v-if="!stu.report?.helpCount && !stu.report?.errorPointCount && !stu.report?.gradingCompleted && stu.report?.aiReviewScore == null" class="badge-ok">正常</span>
-                    </span>
-                    <span v-else class="stu-status pending">未提交</span>
+                  <button v-for="stu in grp.students" :key="stu.studentClass + '|' + stu.userId" type="button" class="student-report-row"
+                    :class="{ active: stu.report && selectedReportId === stu.report.sessionId }" :disabled="reportBusy || !stu.submitted"
+                    :aria-pressed="!!stu.report && selectedReportId === stu.report.sessionId" @click="selectReportItem(stu.report?.sessionId || stu.sessionId)">
+                    <span class="report-student-heading"><strong>{{ stu.studentName }}</strong><span class="report-status-badge" :class="stu.report?.gradingCompleted ? 'graded' : stu.submitted ? 'waiting' : 'unsubmitted'">{{ stu.report?.gradingCompleted ? '已批改' : stu.submitted ? '待批改' : '未提交' }}</span></span>
+                    <span class="report-student-id">{{ stu.username || '—' }}</span>
+                    <span class="report-submission-time">{{ stu.submitted ? '提交：' + formatTime(stu.report?.endTime || stu.report?.startTime) : '报告尚未提交' }}</span>
+                    <span class="report-student-scores"><span>AI 预评 <b>{{ stu.report?.aiReviewScore ?? '—' }}</b></span><span>实验得分 <b>{{ stu.report?.teacherScore ?? '—' }}</b><small>/100</small></span></span>
                   </button>
                 </div>
               </div>
             </div>
           </section>
-
-          <section class="report-detail-section">
-            <div v-if="!selectedReportItem" class="empty-state">请选择左侧学生查看报告详情。</div>
+          <section class="report-detail-section" aria-label="报告正文">
+            <div v-if="!selectedReportItem" class="empty-state">{{ reportStateFilter === 'pending' ? '学生提交后可查看报告。' : '请选择左侧学生查看报告。' }}</div>
             <template v-else>
               <header class="rd-head">
-                <div>
-                  <h2>{{ selectedReportItem.studentName }}</h2>
-                  <p>{{ selectedReportItem.studentClass }} · {{ selectedReportItem.experimentName }} · {{ formatTime(selectedReportItem.endTime || selectedReportItem.startTime) }}</p>
-                </div>
-                <div class="rd-actions">
-                  <button type="button" @click="openReport(selectedReportItem.sessionId)">查看完整报告</button>
-                  <button type="button" @click="downloadReport(selectedReportItem.sessionId, selectedReportItem.experimentName)">下载</button>
-                </div>
+                <div><h2>{{ selectedReportItem.studentName }}</h2><p>{{ selectedReportItem.studentClass }} · {{ selectedReportItem.username || '报告 #' + selectedReportItem.sessionId }}</p></div>
+                <div class="rd-actions"><button type="button" @click="downloadReport(selectedReportItem.sessionId, selectedReportItem.experimentName)">下载报告</button></div>
               </header>
-
-              <div class="rd-split">
-                <div v-if="previewLoading" class="empty-state">正在读取报告数据…</div>
-                <div v-else-if="selectedReportPreview" class="rd-body custom-scroll">
-                  <StudentReportDocument :report="selectedReportPreview" compact />
-                </div>
-                <div v-else class="empty-state">暂无报告数据。</div>
-                <ReportGradingPanel
-                  :session-id="selectedReportItem.sessionId"
-                  v-model:score="gradeScore"
-                  v-model:comment="gradeComment"
-                  :max-score="10"
-                  :review-error="reviewError"
-                  :reviewing="reviewingReport"
-                  :saving="savingGrade"
-                  :grading-completed="gradingCompleted"
-                  :grade-band="gradeBand"
-                  @ai-review="runAiReviewInPlace"
-                  @finish="finishGrade"
-                />
-              </div>
+              <nav class="report-section-nav custom-scroll" aria-label="报告章节">
+                <button v-for="(section, index) in reportSections" :key="section.key" type="button" :class="{ active: reportActiveSection === section.key }" :aria-current="reportActiveSection === section.key ? 'location' : undefined" :disabled="previewLoading || !selectedReportPreview" @click="goToReportSection(section.key)"><span>{{ index + 1 }}</span>{{ section.label.replace(/^\d+\.\s*/, '') }}</button>
+              </nav>
+              <div v-if="previewLoading" class="empty-state" role="status">正在读取报告…</div>
+              <div v-else-if="selectedReportPreview" class="rd-body custom-scroll"><StudentReportDocument ref="reportDocument" :report="selectedReportPreview" compact /></div>
+              <div v-else class="empty-state">报告读取失败，请<button type="button" @click="loadPreviewReport(selectedReportId)">重试</button>。</div>
             </template>
           </section>
+          <ReportGradingPanel v-if="selectedReportItem"
+            :session-id="selectedReportItem.sessionId" v-model:score="gradeScore" v-model:comment="gradeComment" :max-score="100"
+            :ai-score="aiReviewScore" :ai-comment="aiReviewComment" :review-error="reviewError" :reviewing="reviewingReport" :saving="savingGrade"
+            :loading="previewLoading || !selectedReportPreview" :grading-completed="gradingCompleted" :draft-pending="gradeDraftPending"
+            :has-previous="reportSelectionIndex > 0" :has-next="reportSelectionIndex >= 0 && reportSelectionIndex < reportNavigation.length - 1"
+            @ai-review="runAiReviewInPlace" @finish="finishGrade" @previous="navigateReport(-1)" @next="navigateReport(1)" />
+          <aside v-else class="report-grade-empty empty-state">选择报告后开始批改</aside>
         </div>
       </div>
     </div>
@@ -428,7 +412,7 @@
       :review-text="reviewText"
       :review-from-dify="reviewFromDify"
       :review-error="reviewError"
-      :review-score="gradeScore"
+      :review-score="aiReviewScore"
       :review-comment="aiReviewComment"
       @close="closeReport"
       @download-docx="downloadSelectedReport"
@@ -441,6 +425,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { experimentApi, teacherApi, systemApi } from '../api'
+import { REPORT_SECTION_DEFS } from '../utils/sessionReport'
 import { useAuthStore } from '../stores/auth'
 import ReportModal from '../components/modals/ReportModal.vue'
 import ExperimentSelect from '../components/layout/ExperimentSelect.vue'
@@ -470,6 +455,66 @@ const students = ref([])
 const benchCameraConfig = ref(null)
 const selectedExpCode = ref('')
 const activeTab = ref('overview')
+const loadError=ref('')
+let teachingLoadSequence=0,previewSequence=0
+const selectedStudentClass = ref(''), reportStateFilter = ref('all')
+const reportClassFilter = ref(''), reportSortField = ref('time'), reportSortDirection = ref('desc')
+const reportCompactList = ref(false), reportImmersive = ref(false)
+const reportActiveSection = ref('purpose'), reportDocument = ref(null)
+const reportSections = REPORT_SECTION_DEFS
+const aiReviewScore = ref(null)
+const gradeDrafts = ref({})
+const gradeBaseline = ref({ score: null, comment: '' })
+const reportBusy = computed(() => reviewingReport.value || savingGrade.value)
+const gradeDraftPending = computed(() => gradeScore.value !== gradeBaseline.value.score || gradeComment.value !== gradeBaseline.value.comment)
+const reportStatuses = computed(() => {
+  const rows = reportsByClass.value.filter(group => !reportClassFilter.value || group.className === reportClassFilter.value)
+    .flatMap(group => group.students).filter(student => matchesStudent(student, reportSearch.value))
+  return [
+    { key: 'all', label: '全部', count: rows.length },
+    { key: 'submitted', label: '待批改', count: rows.filter(s => s.submitted && !s.report?.gradingCompleted).length },
+    { key: 'graded', label: '已批改', count: rows.filter(s => s.submitted && s.report?.gradingCompleted).length },
+    { key: 'pending', label: '未提交', count: rows.filter(s => !s.submitted).length }
+  ]
+})
+const reportNavigation = computed(() => filteredReportsByClass.value.flatMap(group => group.students).filter(s => s.submitted && s.report).map(s => s.report.sessionId))
+const reportSelectionIndex = computed(() => reportNavigation.value.indexOf(selectedReportId.value))
+function goToReportSection(key) {
+  reportActiveSection.value = key
+  reportDocument.value?.scrollToSection(key)
+}
+function navigateReport(direction) {
+  const id = reportNavigation.value[reportSelectionIndex.value + direction]
+  if (id != null) selectReportItem(id)
+}
+function rememberGradeDraft(sessionId) {
+  if (sessionId == null || previewLoading.value) return
+  if (gradeDraftPending.value) gradeDrafts.value[sessionId] = { score: gradeScore.value, comment: gradeComment.value }
+  else delete gradeDrafts.value[sessionId]
+}
+const overviewSearch = ref(''), reportSearch = ref('')
+const requestScope = computed(() => ({ experimentCode: selectedExpCode.value }))
+function matchesStudent(student, query) {
+  return !query || [student.studentClass || '未分班', student.studentName, student.displayName, student.username]
+    .some(value => String(value || '').toLowerCase().includes(query.toLowerCase()))
+}
+function selectClassStudent(row){selectedUserId.value=row.userId;selectedStudentClass.value=row.studentClass}
+const filteredReportsByClass = computed(() => reportsByClass.value
+  .filter(group => !reportClassFilter.value || group.className === reportClassFilter.value)
+  .map(group => ({ ...group, students: group.students.filter(student =>
+    matchesStudent(student, reportSearch.value) && (reportStateFilter.value === 'all' ||
+    (reportStateFilter.value === 'pending' && !student.submitted) ||
+    (reportStateFilter.value === 'submitted' && student.submitted && !student.report?.gradingCompleted) ||
+    (reportStateFilter.value === 'graded' && student.submitted && student.report?.gradingCompleted))
+  ).sort((a, b) => {
+    const value = student => reportSortField.value === 'name' ? student.studentName || ''
+      : reportSortField.value === 'score' ? student.report?.teacherScore ?? -1
+      : timeValue(student.report?.endTime || student.report?.startTime)
+    const av = value(a), bv = value(b)
+    const comparison = typeof av === 'string' ? av.localeCompare(bv, 'zh-CN') : av - bv
+    return reportSortDirection.value === 'asc' ? comparison : -comparison
+  }) })).filter(group => group.students.length))
+
 
 const selectedUserId = ref(null)
 const feedbackFilter = ref('PENDING')
@@ -495,6 +540,10 @@ const reviewDimensions = ref([])
 const gradingCompleted = ref(false)
 const savingGrade = ref(false)
 
+watch([gradeScore, gradeComment], () => {
+  if (!previewLoading.value) rememberGradeDraft(selectedReportId.value)
+})
+
 const benchEnvLogs = ref({})
 const benchChecking = ref({})
 const difyStatus = ref(null)
@@ -511,16 +560,7 @@ const envCheckAvailable = computed(() => difyStatus.value?.available !== false)
 
 const benchStations = computed(() => cameraStudents.value)
 
-const experimentOptions = computed(() => {
-  if (experiments.value.length) return experiments.value
-  const codes = new Map()
-  students.value.forEach((s) => {
-    ;(s.assignedExperimentCodes || []).forEach((code, i) => {
-      codes.set(code, s.assignedExperimentNames?.[i] || code)
-    })
-  })
-  return [...codes.entries()].map(([code, name]) => ({ code, name }))
-})
+const experimentOptions = computed(() => experiments.value)
 
 const currentExperimentName = computed(() =>
   experimentOptions.value.find((e) => e.code === selectedExpCode.value)?.name
@@ -529,25 +569,22 @@ const currentExperimentName = computed(() =>
     || '实验'
 )
 
-const experimentStudents = computed(() => {
-  if (!selectedExpCode.value) return students.value
-  return students.value.filter((s) =>
-    (s.assignedExperimentCodes || []).includes(selectedExpCode.value)
-  )
-})
-
 const classroomStudents = computed(() => classroom.value?.students || [])
+const overviewStudents = computed(() => studentsByClass.value.flatMap(group => group.students))
 
-const finishedCount = computed(() => classroomStudents.value.filter((s) => s.status === 'FINISHED').length)
+const finishedCount = computed(() => overviewStudents.value.filter((s) => s.status === 'FINISHED').length)
 
 const studentsByClass = computed(() => {
-  const groups = {}
+  const groups = new Map()
+  for (const student of students.value) groups.set(student.studentClass || '未分班', [])
   for (const s of classroomStudents.value) {
     const cls = s.studentClass || '未分班'
-    if (!groups[cls]) groups[cls] = []
-    groups[cls].push(s)
+    if (!groups.has(cls)) groups.set(cls, [])
+    groups.get(cls).push(s)
   }
-  return Object.entries(groups).map(([name, list]) => ({
+  return [...groups].map(([name, rows]) => {
+    const list = rows.filter(student => matchesStudent(student, overviewSearch.value))
+    return {
     name,
     students: list,
     activeCount: list.filter((s) => s.status === 'ACTIVE').length,
@@ -555,7 +592,8 @@ const studentsByClass = computed(() => {
     reportCount: 0,
     helpCount: list.reduce((sum, s) => sum + (s.helpCount || 0), 0),
     errorCount: list.reduce((sum, s) => sum + (s.errorPointCount || 0), 0)
-  }))
+    }
+  }).filter(group => !overviewSearch.value || group.name.toLowerCase().includes(overviewSearch.value.toLowerCase()) || group.students.length)
 })
 const currentReports = computed(() =>
   reports.value.filter((r) => r.experimentCode === selectedExpCode.value)
@@ -570,6 +608,7 @@ const cameraStudents = computed(() => {
     .filter((s) => !selectedExpCode.value || (s.assignedExperimentCodes || []).includes(selectedExpCode.value))
     .map((s) => ({
       userId: s.userId,
+      username: s.username,
       studentName: s.displayName || s.username,
       studentClass: s.studentClass,
       status: 'NOT_STARTED',
@@ -579,7 +618,7 @@ const cameraStudents = computed(() => {
 })
 
 const selectedStudent = computed(() =>
-  classroomStudents.value.find((s) => s.userId === selectedUserId.value) || null
+  overviewStudents.value.find((s) => s.userId === selectedUserId.value && (!selectedStudentClass.value || s.studentClass === selectedStudentClass.value)) || null
 )
 
 const unprocessedCount = computed(() =>
@@ -619,7 +658,7 @@ const sortedReports = computed(() =>
 const reportsByClass = computed(() => {
   const reportMap = new Map()
   currentReports.value.forEach((r) => {
-    const key = r.userId || r.studentName
+    const key = (r.userId || r.studentName)+'|'+(r.studentClass||'未分班')
     reportMap.set(key, r)
   })
   const allStudents = cameraStudents.value
@@ -630,7 +669,7 @@ const reportsByClass = computed(() => {
       classMap.set(cls, { className: cls, students: [], submitted: 0, total: 0 })
     }
     const group = classMap.get(cls)
-    const report = reportMap.get(s.userId)
+    const report = reportMap.get(s.userId+'|'+cls)
     const submitted = !!(s.reportCompleted || report?.reportCompleted)
     group.students.push({
       ...s,
@@ -640,7 +679,7 @@ const reportsByClass = computed(() => {
     group.total++
     if (submitted) group.submitted++
   })
-  return [...classMap.values()].sort((a, b) => a.className.localeCompare(b.className))
+  return [...classMap.values()]
 })
 
 const submittedReportCount = computed(() =>
@@ -648,12 +687,12 @@ const submittedReportCount = computed(() =>
 )
 
 function toggleClassExpand(className) {
-  expandedClasses.value = { ...expandedClasses.value, [className]: !expandedClasses.value[className] }
+  expandedClasses.value = { ...expandedClasses.value, [className]: expandedClasses.value[className] === false }
 }
 
 const selectedReportItem = computed(() => {
   const fromList = sortedReports.value.find((r) => r.sessionId === selectedReportId.value)
-  if (fromList) return fromList
+  if (fromList) return { ...fromList, username: fromList.username || cameraStudents.value.find(s => s.userId === fromList.userId && s.studentClass === fromList.studentClass)?.username }
   for (const grp of reportsByClass.value) {
     for (const stu of grp.students) {
       const sid = stu.report?.sessionId || stu.sessionId
@@ -661,6 +700,7 @@ const selectedReportItem = computed(() => {
         return {
           ...stu.report,
           sessionId: sid,
+          username: stu.username,
           studentName: stu.studentName,
           studentClass: stu.studentClass,
           experimentName: stu.experimentName || stu.report?.experimentName
@@ -669,6 +709,21 @@ const selectedReportItem = computed(() => {
     }
   }
   return null
+})
+
+watch(overviewStudents, (rows) => {
+  if (!rows.some(student => student.userId === selectedUserId.value && student.studentClass === selectedStudentClass.value)) {
+    selectedUserId.value = rows[0]?.userId || null
+    selectedStudentClass.value = rows[0]?.studentClass || ''
+  }
+})
+
+watch(filteredReportsByClass, (groups) => {
+  const visibleReports = groups.flatMap(group => group.students).filter(student => student.submitted && student.report)
+  if (!visibleReports.some(student => student.report.sessionId === selectedReportId.value)) {
+    rememberGradeDraft(selectedReportId.value)
+    selectedReportId.value = visibleReports[0]?.report.sessionId || null
+  }
 })
 
 const navTabs = computed(() => [
@@ -705,9 +760,7 @@ const navTabs = computed(() => [
 ])
 
 watch(activeTab, (tab) => {
-  if (tab === 'report' && !selectedReportId.value && sortedReports.value.length) {
-    selectedReportId.value = sortedReports.value[0].sessionId
-  }
+  if (tab !== 'report') reportImmersive.value = false
   if (tab === 'camera') {
     loadDifyStatus()
     loadAllBenchEnvLogs()
@@ -735,7 +788,7 @@ onUnmounted(() => {
 async function refreshClassroomForCamera() {
   if (!selectedExpCode.value) return
   try {
-    const { data } = await teacherApi.classroom({ experimentCode: selectedExpCode.value })
+    const { data } = await teacherApi.classroom(requestScope.value)
     classroom.value = data
     if (activeTab.value === 'camera') {
       await loadAllBenchEnvLogs()
@@ -759,7 +812,7 @@ function stopCameraPoll() {
 }
 
 async function loadInitial() {
-  loading.value = true
+  loading.value = true;loadError.value=''
   try {
     const [expRes, studentRes] = await Promise.all([
       experimentApi.list(),
@@ -772,7 +825,7 @@ async function loadInitial() {
       ? saved
       : experimentOptions.value[0]?.code || ''
     await loadExperimentData()
-  } finally {
+  } catch(e) {loadError.value=e.response?.data?.message||'教学数据加载失败，请重试'} finally {
     loading.value = false
     loadedOnce.value = true
   }
@@ -780,23 +833,27 @@ async function loadInitial() {
 
 async function loadExperimentData() {
   if (!selectedExpCode.value) return
+  const sequence=++teachingLoadSequence
   const [overviewRes, classroomRes, reportRes, feedbackRes] = await Promise.all([
     teacherApi.overview(),
-    teacherApi.classroom({ experimentCode: selectedExpCode.value }),
-    teacherApi.reports({ experimentCode: selectedExpCode.value }),
+    teacherApi.classroom(requestScope.value),
+    teacherApi.reports(requestScope.value),
     teacherApi.feedback({ experimentCode: selectedExpCode.value })
   ])
+  if(sequence!==teachingLoadSequence)return
   overview.value = overviewRes.data
   classroom.value = classroomRes.data
   reports.value = reportRes.data || []
   feedbackList.value = feedbackRes.data || []
-  selectedUserId.value = classroomStudents.value[0]?.userId || null
-  selectedReportId.value = sortedReports.value[0]?.sessionId || null
+  selectedUserId.value = overviewStudents.value[0]?.userId || null
+  selectedStudentClass.value = overviewStudents.value[0]?.studentClass || ''
+  const visibleIds = reportNavigation.value
+  if (!visibleIds.includes(selectedReportId.value)) selectedReportId.value = visibleIds[0] || null
   await loadPreviewReport(selectedReportId.value)
 }
 
 async function refresh() {
-  loading.value = true
+  loading.value = true;loadError.value=''
   try {
     const { data } = await teacherApi.students()
     students.value = data || []
@@ -809,6 +866,8 @@ async function refresh() {
 async function onExperimentChange(code) {
   if (code) selectedExpCode.value = code
   localStorage.setItem(CURRENT_EXP_KEY, selectedExpCode.value)
+  rememberGradeDraft(selectedReportId.value)
+  reportClassFilter.value = ''
   selectedUserId.value = null
   selectedReportId.value = null
   selectedReportPreview.value = null
@@ -821,6 +880,8 @@ async function onExperimentChange(code) {
 }
 
 function selectReportItem(sessionId) {
+  if (reportBusy.value || sessionId === selectedReportId.value || !sessionId) return
+  rememberGradeDraft(selectedReportId.value)
   selectedReportId.value = sessionId
 }
 
@@ -880,21 +941,30 @@ async function runStationEnvCheck(station) {
 }
 
 async function loadPreviewReport(sessionId) {
+  const sequence=++previewSequence
+  reportActiveSection.value = 'purpose'
+  selectedReportPreview.value = null
   if (!sessionId) {
     selectedReportPreview.value = null
     resetGradePanel()
+    previewLoading.value = false
     return
   }
   previewLoading.value = true
+  resetGradePanel()
   try {
     const { data } = await teacherApi.report(sessionId)
+    if(sequence!==previewSequence)return
     selectedReportPreview.value = data
     applyGradeFromReport(data)
+    const draft = gradeDrafts.value[sessionId]
+    if (draft) { gradeScore.value = draft.score; gradeComment.value = draft.comment }
   } catch {
+    if(sequence!==previewSequence)return
     selectedReportPreview.value = null
     resetGradePanel()
   } finally {
-    previewLoading.value = false
+    if(sequence===previewSequence)previewLoading.value = false
   }
 }
 
@@ -902,6 +972,8 @@ function resetGradePanel() {
   gradeScore.value = null
   gradeComment.value = ''
   aiReviewComment.value = ''
+  aiReviewScore.value = null
+  gradeBaseline.value = { score: null, comment: '' }
   gradeBand.value = ''
   reviewDimensions.value = []
   gradingCompleted.value = false
@@ -918,8 +990,10 @@ function applyGradeFromReport(data) {
   const json = data.aiReviewJson && typeof data.aiReviewJson === 'object' ? data.aiReviewJson : {}
   const savedScore = data.teacherScore ?? data.aiReviewScore ?? json.score
   gradeScore.value = savedScore == null || savedScore === '' ? null : Number(savedScore)
+  aiReviewScore.value = data.aiReviewScore ?? json.score ?? null
   aiReviewComment.value = data.aiReviewComment || json.comment || ''
-  gradeComment.value = data.teacherComment || aiReviewComment.value
+  gradeComment.value = data.teacherComment ?? aiReviewComment.value
+  gradeBaseline.value = { score: gradeScore.value, comment: gradeComment.value }
   gradeBand.value = json.gradeBand || ''
   reviewDimensions.value = Array.isArray(json.dimensions) ? json.dimensions : []
   gradingCompleted.value = !!data.gradingCompleted
@@ -945,7 +1019,7 @@ function applyReviewResponse(data) {
   reviewFromDify.value = data?.fromDify !== false
   const payload = data?.data && typeof data.data === 'object' ? data.data : {}
   const score = data?.score ?? payload.score
-  gradeScore.value = score == null || score === '' ? gradeScore.value : Number(score)
+  aiReviewScore.value = score == null || score === '' ? null : Number(score)
   aiReviewComment.value = data?.comment || payload.comment || ''
   if (!aiReviewComment.value) {
     const raw = String(data?.text || '').trim()
@@ -953,12 +1027,8 @@ function applyReviewResponse(data) {
       aiReviewComment.value = raw
     }
   }
-  if (aiReviewComment.value) {
-    gradeComment.value = aiReviewComment.value
-  }
   gradeBand.value = data?.gradeBand || payload.gradeBand || ''
   reviewDimensions.value = Array.isArray(payload.dimensions) ? payload.dimensions : []
-  gradingCompleted.value = false
 }
 
 async function runAiReviewInPlace() {
@@ -969,15 +1039,20 @@ async function runAiReviewInPlace() {
 }
 
 async function runAiReview() {
-  const sessionId = selectedReportSessionId.value || selectedReportId.value
-  if (!sessionId || reviewingReport.value) return
+  const sessionId = reportVisible.value ? selectedReportSessionId.value : selectedReportId.value
+  if (!sessionId || reviewingReport.value || savingGrade.value || previewLoading.value) return
   selectedReportSessionId.value = sessionId
   reviewingReport.value = true
   reviewError.value = ''
   try {
     const { data } = await teacherApi.reviewReport(sessionId)
+    if (sessionId !== (reportVisible.value ? selectedReportSessionId.value : selectedReportId.value)) return
     applyReviewResponse(data)
+    reports.value = reports.value.map(report => report.sessionId === sessionId
+      ? { ...report, aiReviewScore: aiReviewScore.value, aiReviewComment: aiReviewComment.value }
+      : report)
   } catch (e) {
+    if (sessionId !== (reportVisible.value ? selectedReportSessionId.value : selectedReportId.value)) return
     reviewError.value = e.response?.data?.message || e.message || 'AI 预评失败'
   } finally {
     reviewingReport.value = false
@@ -986,7 +1061,7 @@ async function runAiReview() {
 
 async function finishGrade() {
   const sessionId = selectedReportId.value || selectedReportSessionId.value
-  if (!sessionId || savingGrade.value || gradeScore.value == null) return
+  if (!sessionId || savingGrade.value || reviewingReport.value || previewLoading.value || gradeScore.value == null || !Number.isFinite(Number(gradeScore.value)) || Number(gradeScore.value) < 0 || Number(gradeScore.value) > 100) return
   savingGrade.value = true
   reviewError.value = ''
   try {
@@ -994,8 +1069,11 @@ async function finishGrade() {
       score: Number(gradeScore.value),
       comment: gradeComment.value || ''
     })
-    applyGradeFromReport(data)
-    gradingCompleted.value = true
+    if (sessionId === selectedReportId.value) {
+      applyGradeFromReport(data)
+      gradingCompleted.value = true
+    }
+    delete gradeDrafts.value[sessionId]
     await loadExperimentData()
   } catch (e) {
     reviewError.value = e.response?.data?.message || e.message || '保存成绩失败'
@@ -1214,7 +1292,6 @@ function logout() {
   padding: 10px 16px; border-bottom: 1px solid #e4e9f3; flex-shrink: 0;
   background: #fff;
 }
-.overview-toolbar h2 { font-size: 14px; font-weight: 700; color: #0f172a; }
 .overview-summary { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; }
 .overview-summary .sep { color: #cbd5e1; }
 
@@ -1639,4 +1716,75 @@ function logout() {
   .kpi-row { grid-template-columns: 1fr; }
   .rd-summary { flex-wrap: wrap; }
 }
+/* Each list owns its filters; keep the original header and Tab icons. */
+.experiment-context { display:flex; align-items:center; gap:10px; padding:8px 16px; flex-shrink:0; background:#fff; border-bottom:1px solid #e4e9f3; font-size:12px; color:#64748b; }
+.experiment-context :deep(.exp-select-name) { max-width:min(600px, calc(100vw - 130px)); }
+.learn-identity { font-size:11px; color:#94a3b8; margin:5px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.class-search { min-width:0; width:240px; height:32px; border:1px solid #e4e9f3; background:#fff; border-radius:6px; padding:6px 10px; font-size:12px; color:#334155; }
+.class-search:focus { outline:2px solid #c7d2fe; border-color:#818cf8; }
+.overview-toolbar { gap:12px; flex-wrap:wrap; }
+.report-search { width:100%; margin-bottom:8px; flex-shrink:0; }
+.report-state-filter { border:1px solid #e4e9f3; background:#fff; border-radius:6px; padding:6px 10px; font-size:12px; color:#334155; }
+.report-state-filter { margin-bottom:10px; flex-shrink:0; }
+.class-empty { padding:14px 16px; color:#94a3b8; font-size:12px; }
+.teacher-load-error { padding:10px 16px; background:#fef2f2; color:#dc2626; font-size:12px; }
+.teacher-load-error button { margin-left:12px; text-decoration:underline; }
+
+/* Report review: roster, document and grading remain independently scrollable. */
+.report-workspace { background: #f8fafc; min-height: 0; }
+.report-workspace.immersive { position: fixed; inset: 0; z-index: 60; height: 100dvh; }
+.report-workspace-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 18px; color: #475569; font-size: 12px; flex-shrink: 0; background: #fff; border-bottom: 1px solid #e4e9f3; }
+.toolbar-muted { color: #94a3b8; }
+.workspace-actions { display: flex; gap: 8px; }
+.workspace-actions button { height: 30px; border: 1px solid #e4e9f3; border-radius: 6px; background: #fff; padding: 0 12px; color: #64748b; font-size: 12px; }
+.workspace-actions button[aria-pressed="true"] { color: #4f46e5; border-color: #c7d2fe; background: #eef2ff; }
+.report-workspace .report-layout { grid-template-columns: minmax(260px, .8fr) minmax(0, 1.8fr) minmax(310px, 1fr); gap: 14px; padding: 16px; overflow: hidden; }
+.report-workspace .report-list-section, .report-workspace .report-detail-section, .report-grade-empty { min-width: 0; border: 1px solid #e4e9f3; border-radius: 12px; background: #fff; }
+.report-workspace .report-list-section { padding: 0 14px 14px; }
+.report-status-tabs { display: flex; gap: 4px; border-bottom: 1px solid #e4e9f3; flex-shrink: 0; margin-bottom: 14px; }
+.report-status-tabs button { flex: 1; display: flex; justify-content: center; align-items: center; gap: 4px; height: 46px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: transparent; color: #64748b; font-size: 12px; white-space: nowrap; padding: 0 2px; }
+.report-status-tabs button.active { color: #4f46e5; border-bottom-color: #818cf8; font-weight: 600; }
+.report-status-tabs button span { padding: 1px 4px; border-radius: 4px; font-size: 10px; background: #f1f5f9; color: #64748b; font-variant-numeric: tabular-nums; }
+.report-status-tabs button.active span { color: #4f46e5; background: #ede9fe; }
+.report-list-filters { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 8px; margin-bottom: 14px; flex-shrink: 0; }
+.report-list-filters input, .report-list-filters select { min-width: 0; width: 100%; height: 34px; border: 1px solid #e4e9f3; border-radius: 6px; padding: 0 8px; font-size: 12px; color: #475569; background: #fff; }
+.report-workspace :is(button, input, select):focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+.report-workspace .report-class-list { gap: 14px; }
+.report-workspace .class-group { border: 0; border-radius: 0; overflow: visible; flex-shrink: 0; }
+.report-workspace .class-group-header { padding: 0 2px 8px; background: #fff; color: #475569; font-size: 12px; }
+.report-workspace .class-stats { font-size: 11px; color: #94a3b8; font-weight: 400; }
+.report-workspace .class-group-body { gap: 10px; }
+.report-workspace .student-report-row { display: flex; flex-direction: column; align-items: stretch; gap: 0; border: 1px solid #e4e9f3; border-radius: 8px; padding: 13px; background: #fff; }
+.report-workspace .student-report-row:hover:not(:disabled) { border-color: #c7d2fe; background: #fafaff; }
+.report-workspace .student-report-row.active { border-color: #c4b5fd; background: #f5f3ff; box-shadow: inset 3px 0 #818cf8; }
+.report-workspace .student-report-row:disabled { cursor: default; }
+.report-student-heading { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+.report-student-heading strong { font-size: 13px; color: #1e293b; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-status-badge { padding: 3px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
+.report-status-badge.waiting { color: #b45309; background: #fff7ed; }
+.report-status-badge.graded { color: #047857; background: #ecfdf5; }
+.report-status-badge.unsubmitted { color: #64748b; background: #f1f5f9; }
+.report-student-id { color: #64748b; font-size: 11px; margin-top: 5px; }
+.report-submission-time { font-size: 11px; color: #94a3b8; margin: 10px 0; line-height: 1.5; }
+.report-student-scores { display: flex; justify-content: space-between; gap: 8px; color: #64748b; font-size: 11px; }
+.report-student-scores b { margin-left: 4px; color: #334155; font-weight: 600; }
+.report-student-scores small { color: #94a3b8; font-size: 10px; }
+.compact-list .student-report-row { padding: 10px 12px; }
+.compact-list .report-submission-time, .compact-list .report-student-scores { display: none; }
+.report-workspace .report-detail-section { padding: 0; }
+.report-workspace .rd-head { padding: 14px 18px; margin-bottom: 0; }
+.report-workspace .rd-head h2 { font-size: 15px; }
+.report-workspace .rd-head p { font-size: 11px; color: #64748b; font-weight: 400; }
+.report-workspace .rd-actions button { font-weight: 400; }
+.report-section-nav { display: flex; gap: 18px; padding: 14px 18px; overflow-x: auto; border-bottom: 1px solid #e4e9f3; background: #fbfcfe; flex-shrink: 0; }
+.report-section-nav button { display: flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 12px; color: #64748b; background: transparent; border: 0; padding: 0; }
+.report-section-nav button span { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid #dbe2ec; border-radius: 50%; background: #fff; color: #64748b; font-size: 12px; }
+.report-section-nav button.active { color: #6366f1; font-weight: 600; }
+.report-section-nav button.active span { border-color: #818cf8; color: #6366f1; }
+.report-workspace .rd-body { padding: 18px; border-radius: 0; background: #fff; min-height: 0; }
+.report-workspace .rd-body :deep(.report-doc.compact) { max-width: none; border: 0; padding: 12px 10px; border-radius: 0; }
+.report-workspace .rd-body :deep(.doc-header) { margin-bottom: 22px; }
+@media (min-width: 1101px) and (max-width: 1350px) { .report-workspace .report-layout { gap: 10px; padding: 12px; } .report-workspace .report-list-section { padding: 0 10px 10px; } .report-workspace .student-report-row { padding: 11px; } .report-workspace .rd-body { padding: 12px; } }
+@media (max-width: 1100px) { .report-workspace { overflow-y: auto; } .report-workspace .report-layout { grid-template-columns: 260px minmax(0, 1fr); overflow: visible; flex: none; align-items: start; } .report-workspace .report-list-section { grid-row: span 2; max-height: calc(100dvh - 200px); position: sticky; top: 0; } .report-workspace .report-detail-section { height: 640px; } .report-workspace :deep(.grade-panel) { grid-column: 2; } .report-grade-empty { min-height: 180px; grid-column: 2; } }
+@media (max-width: 768px) { .report-workspace .report-layout { display: flex; flex-direction: column; padding: 10px; gap: 10px; } .report-workspace .report-list-section { position: static; width: 100%; max-height: 320px; min-height: 180px; } .report-workspace .report-detail-section { width: 100%; flex-shrink: 0; } .report-workspace :deep(.grade-panel) { width: 100%; } .report-grade-empty { width: 100%; padding: 32px; } .report-workspace-toolbar { padding: 10px; } .toolbar-muted { display: none; } }
 </style>

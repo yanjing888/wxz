@@ -20,7 +20,9 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
+import { watch } from 'vue'
+import { useTaskStore } from '../stores/tasks'
 import AppTopBar from '../components/layout/AppTopBar.vue'
 import StudentExperimentSwitcher from '../components/layout/StudentExperimentSwitcher.vue'
 import StudentTabBar from '../components/layout/StudentTabBar.vue'
@@ -28,6 +30,8 @@ import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
+const route=useRoute(),tasks=useTaskStore()
+watch(()=>route.fullPath,()=>tasks.load().catch(()=>{}))
 
 function logout() {
   auth.logout()

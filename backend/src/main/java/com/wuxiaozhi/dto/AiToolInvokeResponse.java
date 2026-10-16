@@ -10,7 +10,7 @@ public class AiToolInvokeResponse {
     private String text;
     private boolean fromDify;
     private Map<String, Object> data = new LinkedHashMap<>();
-    /** 建议分（10 分制，一位小数）；无结构化输出时为空 */
+    /** 建议分；教师报告预评为百分制，具体满分由maxScore提供。 */
     private Double score;
     private Double maxScore;
     private String comment;

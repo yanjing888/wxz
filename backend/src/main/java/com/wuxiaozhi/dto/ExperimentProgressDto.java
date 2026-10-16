@@ -11,6 +11,17 @@ import java.util.Map;
 public class ExperimentProgressDto {
     private String experimentCode;
     private String experimentName;
+    private String className;
+    private String instructions;
+    private java.time.LocalDateTime reportDueAt;
+    private java.time.LocalDateTime assignedAt;
+    private boolean currentTask;
+    /** CURRENT | QUEUED | REPORT_PENDING | SUBMITTED | GRADED */
+    private String taskState;
+    private Double teacherScore;
+    private String teacherComment;
+    private boolean gradingCompleted;
+    private java.time.LocalDateTime reportUpdatedAt;
     private String currentStep;
     private Long activeSessionId;
     private Long finishedSessionId;

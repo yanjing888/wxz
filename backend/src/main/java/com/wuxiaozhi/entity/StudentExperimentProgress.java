@@ -42,8 +42,12 @@ public class StudentExperimentProgress {
 
     private Long reportSessionId;
 
-    /** AI 预评建议分（10 分制） */
+    /** AI 预评原始分；对应分值上限记录于 aiReviewScoreMax。 */
     private Double aiReviewScore;
+
+    /** 旧记录默认10分，新Workflow预评使用100分。 */
+    @Column(nullable = false, columnDefinition = "double default 10")
+    private Double aiReviewScoreMax = 10.0;
 
     @Column(columnDefinition = "TEXT")
     private String aiReviewComment;
@@ -51,8 +55,11 @@ public class StudentExperimentProgress {
     @Column(columnDefinition = "TEXT")
     private String aiReviewJson;
 
-    /** 教师确认分（10 分制） */
+    /** 教师确认原始分；对应分值上限记录于 teacherScoreMax。 */
     private Double teacherScore;
+
+    @Column(nullable = false, columnDefinition = "double default 10")
+    private Double teacherScoreMax = 10.0;
 
     @Column(columnDefinition = "TEXT")
     private String teacherComment;
@@ -63,4 +70,13 @@ public class StudentExperimentProgress {
 
     @Column(nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    public Double aiReviewScoreAsPercent() { return percent(aiReviewScore, aiReviewScoreMax); }
+    public Double teacherScoreAsPercent() { return percent(teacherScore, teacherScoreMax); }
+    private static Double percent(Double score, Double maximum) {
+        if (score == null) return null;
+        double scale = maximum == null ? 10.0 : maximum;
+        if (!Double.isFinite(score) || !Double.isFinite(scale) || scale <= 0) return null;
+        return Math.round(score / scale * 1000.0) / 10.0;
+    }
 }

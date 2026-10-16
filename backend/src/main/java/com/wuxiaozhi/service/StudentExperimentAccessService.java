@@ -5,6 +5,7 @@ import com.wuxiaozhi.entity.User;
 import com.wuxiaozhi.entity.UserRole;
 import com.wuxiaozhi.repository.StudentExperimentAssignmentRepository;
 import com.wuxiaozhi.repository.UserRepository;
+import com.wuxiaozhi.repository.LabSessionRepository;
 import jakarta.annotation.PostConstruct;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -28,11 +29,13 @@ public class StudentExperimentAccessService {
 
     private final StudentExperimentAssignmentRepository assignmentRepository;
     private final UserRepository userRepository;
+    private final LabSessionRepository sessions;
 
     public StudentExperimentAccessService(StudentExperimentAssignmentRepository assignmentRepository,
-                                          UserRepository userRepository) {
+                                          UserRepository userRepository, LabSessionRepository sessions) {
         this.assignmentRepository = assignmentRepository;
         this.userRepository = userRepository;
+        this.sessions=sessions;
     }
 
     @PostConstruct
@@ -51,9 +54,37 @@ public class StudentExperimentAccessService {
     }
 
     public Set<String> assignedCodes(Long userId) {
-        return assignmentRepository.findByUserIdOrderByExperimentCodeAsc(userId).stream()
+        return assignmentRepository.findByUserIdOrderByAssignedAtAscIdAsc(userId).stream()
                 .map(StudentExperimentAssignment::getExperimentCode)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** 多个实验按分配顺序排队；已开始的未完成实验优先，报告不占实操队列。 */
+    public java.util.Optional<StudentExperimentAssignment> currentAssignment(Long userId) {
+        var assigned=assignmentRepository.findByUserIdOrderByAssignedAtAscIdAsc(userId);
+        var history=sessions.findByUserIdOrderByStartTimeDesc(userId);
+        var finished=history.stream().filter(s->"FINISHED".equals(s.getStatus())).map(com.wuxiaozhi.entity.LabSession::getExperimentCode).collect(Collectors.toSet());
+        var pending=assigned.stream().filter(a->!finished.contains(a.getExperimentCode())).toList();
+        for(var session:history)if("ACTIVE".equals(session.getStatus())){
+            var active=pending.stream().filter(a->a.getExperimentCode().equals(session.getExperimentCode())).findFirst();
+            if(active.isPresent())return active;
+        }
+        return pending.stream().findFirst();
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void requireCurrentIfStudent(Long userId,String code) {
+        User user=userRepository.lockById(userId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"用户不存在"));
+        if(!UserRole.STUDENT.equalsIgnoreCase(user.getRole()))return;
+        requireAssignedIfStudent(userId,code);
+        var current=currentAssignment(userId);
+        if(current.isEmpty()||!current.get().getExperimentCode().equals(code))throw new ResponseStatusException(HttpStatus.CONFLICT,"请先完成当前实验，其他已分配实验按顺序等待；待交报告可在报告中心继续提交");
+    }
+
+    public String assignmentClass(Long userId,String code) {
+        var assignment=assignmentRepository.findByUserIdAndExperimentCode(userId,code).orElse(null);
+        if(assignment!=null&&assignment.getClassName()!=null&&!assignment.getClassName().isBlank())return assignment.getClassName();
+        return userRepository.findById(userId).map(u->ClassRosterService.classKey(u.getStudentClass())).orElse("未分班");
     }
 
     public boolean isAssigned(Long userId, String experimentCode) {

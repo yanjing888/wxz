@@ -1,61 +1,25 @@
 <template>
-  <aside class="grade-panel">
-    <div class="score-block">
-      <div class="score-label">得分</div>
-      <div v-if="reviewing" class="score-row" aria-busy="true">
-        <span class="score-skeleton" />
-        <span class="score-max">/ {{ maxScore }}</span>
-      </div>
-      <div v-else class="score-row">
-        <input
-          v-model.number="scoreModel"
-          class="score-input"
-          type="number"
-          min="0"
-          max="10"
-          step="0.1"
-          :disabled="saving"
-        />
-        <span class="score-max">/ {{ maxScore }}</span>
-      </div>
-      <p class="score-status" :class="statusClass">{{ statusText }}</p>
-    </div>
-
-    <div class="grade-actions">
-      <button type="button" class="btn-ai" :disabled="reviewing || saving || !sessionId" @click="$emit('ai-review')">
-        {{ reviewing ? '预评中…' : 'AI 预评' }}
-      </button>
-      <button type="button" class="btn-done" :disabled="saving || reviewing || !canFinish" @click="$emit('finish')">
-        {{ saving ? '保存中…' : '完成批改' }}
-      </button>
-    </div>
-
-    <label class="field-label" for="teacher-comment">评语</label>
-    <div class="comment-wrap">
-      <textarea
-        id="teacher-comment"
-        v-model="commentModel"
-        class="comment-input"
-        placeholder="可直接采用 AI 评语，或在此修改后完成批改。"
-        :disabled="saving || reviewing"
-      />
-      <div v-if="reviewing" class="comment-loading" role="status" aria-live="polite">
-        <div class="sk-lines" aria-hidden="true">
-          <span class="sk-bar w92" />
-          <span class="sk-bar w100" />
-          <span class="sk-bar w86" />
-          <span class="sk-bar w96" />
-          <span class="sk-bar w78" />
-          <span class="sk-bar w88" />
-          <span class="sk-bar w64" />
-        </div>
-        <p class="sk-hint">
-          <span class="sk-spinner" />
-          AI 正在阅读报告并生成评语，请稍候…
-        </p>
-      </div>
-    </div>
-    <p v-if="reviewError" class="review-error">{{ reviewError }}</p>
+  <aside class="grade-panel" aria-label="报告批改">
+    <section class="ai-review-card">
+      <header class="card-heading"><h2>AI 预评结果</h2><button type="button" class="btn-review" :disabled="busy || !sessionId" @click="$emit('ai-review')">{{ reviewing ? '预评中…' : aiScore == null ? '开始预评' : '重新预评' }}</button></header>
+      <p class="ai-note">AI 结果仅供参考，最终成绩以教师批改为准。</p>
+      <div class="ai-score" :class="{ 'is-empty': aiScore == null }"><strong>{{ reviewing ? '…' : aiScore ?? '—' }}</strong><span>/ {{ maxScore }} 分</span></div>
+      <div class="ai-comment-label">AI 评语</div>
+      <div class="ai-comment custom-scroll" :aria-busy="reviewing" role="status">{{ reviewing ? '正在阅读报告并生成评分与评语…' : aiComment || '暂无预评结果，可先阅读报告并手动批改。' }}</div>
+      <p v-if="reviewError" class="review-error" role="alert">{{ reviewError }}</p>
+    </section>
+    <section class="teacher-grade-card">
+      <header class="card-heading"><h2>教师批改</h2><button type="button" class="btn-adopt" :disabled="busy || aiScore == null" @click="adoptReview">采用 AI 结果</button></header>
+      <div class="teacher-score-row"><label for="teacher-score">实验得分</label><input id="teacher-score" v-model.number="scoreModel" type="number" min="0" :max="maxScore" step="0.1" placeholder="待评分" :disabled="busy" :aria-invalid="score != null && !canFinish" /><span>/ {{ maxScore }}</span></div>
+      <p v-if="score != null && !canFinish" class="review-error">请输入 0–{{ maxScore }} 之间的分数。</p>
+      <label class="field-label" for="teacher-comment">批改意见</label>
+      <textarea id="teacher-comment" v-model="commentModel" class="comment-input" placeholder="填写批改意见" :disabled="busy" />
+      <p class="grade-status" :class="{ completed: gradingCompleted && !draftPending }" aria-live="polite">{{ draftPending ? '有修改待提交 · 切换报告时暂存' : gradingCompleted ? '批改已完成' : '尚未提交批改结果' }}</p>
+      <footer class="grade-footer">
+        <div class="report-pagination"><button type="button" :disabled="busy || !hasPrevious" @click="$emit('previous')">上一份</button><button type="button" :disabled="busy || !hasNext" @click="$emit('next')">下一份</button></div>
+        <button type="button" class="btn-submit" :disabled="busy || !canFinish || !sessionId" @click="$emit('finish')">{{ saving ? '正在提交…' : gradingCompleted ? '保存批改修改' : '提交批改结果' }}</button>
+      </footer>
+    </section>
   </aside>
 </template>
 
@@ -66,162 +30,60 @@ const props = defineProps({
   sessionId: { type: [Number, String], default: null },
   score: { type: Number, default: null },
   comment: { type: String, default: '' },
-  maxScore: { type: Number, default: 10 },
+  maxScore: { type: Number, default: 100 },
+  aiScore: { type: Number, default: null },
+  aiComment: { type: String, default: '' },
   reviewError: { type: String, default: '' },
   reviewing: { type: Boolean, default: false },
   saving: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false },
   gradingCompleted: { type: Boolean, default: false },
-  gradeBand: { type: String, default: '' }
+  draftPending: { type: Boolean, default: false },
+  hasPrevious: { type: Boolean, default: false },
+  hasNext: { type: Boolean, default: false }
 })
-
-const emit = defineEmits(['update:score', 'update:comment', 'ai-review', 'finish'])
-
-const scoreModel = computed({
-  get: () => props.score,
-  set: (value) => emit('update:score', value)
-})
-
-const commentModel = computed({
-  get: () => props.comment,
-  set: (value) => emit('update:comment', value)
-})
-
-const canFinish = computed(() => props.score != null && Number.isFinite(Number(props.score)))
-
-const statusText = computed(() => {
-  if (props.reviewing) return 'AI 正在评分…'
-  if (props.gradingCompleted) return '批改已完成'
-  if (props.score != null && Number.isFinite(Number(props.score))) {
-    const band = props.gradeBand ? ` · ${props.gradeBand}` : ''
-    return `建议分待教师确认${band}`
-  }
-  return '批改未完成或未开始'
-})
-
-const statusClass = computed(() => {
-  if (props.reviewing) return 'loading'
-  if (props.gradingCompleted) return 'ok'
-  if (props.score != null) return 'pending'
-  return 'empty'
-})
+const emit = defineEmits(['update:score', 'update:comment', 'ai-review', 'finish', 'previous', 'next'])
+const busy = computed(() => props.reviewing || props.saving || props.loading)
+const scoreModel = computed({ get: () => props.score, set: value => emit('update:score', value === '' ? null : value) })
+const commentModel = computed({ get: () => props.comment, set: value => emit('update:comment', value) })
+const canFinish = computed(() => props.score != null && Number.isFinite(Number(props.score)) && Number(props.score) >= 0 && Number(props.score) <= props.maxScore)
+function adoptReview() {
+  if (busy.value || props.aiScore == null) return
+  emit('update:score', props.aiScore)
+  emit('update:comment', props.aiComment)
+}
 </script>
 
 <style scoped>
-.grade-panel {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-  padding: 16px;
-  background: #f8fafc;
-  border-left: 1px solid #e4e9f3;
-  overflow: hidden;
-}
-.score-block { margin-bottom: 14px; flex-shrink: 0; }
-.score-label { font-size: 12px; font-weight: 700; color: #64748b; letter-spacing: 0.04em; }
-.score-row { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; }
-.score-input {
-  width: 92px; height: 44px; border: 1px solid #c7d2fe; border-radius: 10px;
-  background: #fff; color: #1e1b4b; font-size: 28px; font-weight: 800;
-  text-align: center; padding: 0 8px;
-}
-.score-input:focus { outline: 2px solid #818cf8; border-color: #6366f1; }
-.score-skeleton {
-  display: inline-block;
-  width: 92px;
-  height: 44px;
-  border-radius: 10px;
-  border: 1px solid #c7d2fe;
-  background: linear-gradient(90deg, #eef2ff 0%, #e0e7ff 40%, #eef2ff 80%);
-  background-size: 200% 100%;
-  animation: sk-shimmer 1.4s ease-in-out infinite;
-}
-.score-max { font-size: 14px; font-weight: 700; color: #94a3b8; }
-.score-status { margin-top: 6px; font-size: 12px; font-weight: 600; }
-.score-status.empty { color: #94a3b8; }
-.score-status.pending { color: #d97706; }
-.score-status.ok { color: #16a34a; }
-.score-status.loading { color: #6366f1; }
-.grade-actions { display: flex; gap: 8px; margin-bottom: 14px; flex-shrink: 0; }
-.grade-actions button {
-  flex: 1; height: 36px; border-radius: 8px; font-size: 13px; font-weight: 700; border: none;
-}
-.btn-ai { background: #4f46e5; color: #fff; }
-.btn-ai:hover:not(:disabled) { background: #4338ca; }
-.btn-done { background: #2563eb; color: #fff; }
-.btn-done:hover:not(:disabled) { background: #1d4ed8; }
-.grade-actions button:disabled { opacity: 0.45; cursor: default; }
-.field-label { font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 6px; flex-shrink: 0; }
-.comment-wrap {
-  position: relative;
-  flex: 1;
-  min-height: 280px;
-  display: flex;
-}
-.comment-input {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  resize: none;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 12px 14px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #1e293b;
-  background: #fff;
-}
-.comment-input:focus { outline: 2px solid #c7d2fe; border-color: #818cf8; }
-.comment-input:disabled { color: #64748b; }
-.comment-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid #c7d2fe;
-  border-radius: 10px;
-  background: #fff;
-  padding: 14px 16px 12px;
-  overflow: hidden;
-}
-.sk-lines { display: flex; flex-direction: column; gap: 10px; flex: 1; }
-.sk-bar {
-  display: block;
-  height: 12px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #eef2ff 0%, #e0e7ff 40%, #eef2ff 80%);
-  background-size: 200% 100%;
-  animation: sk-shimmer 1.4s ease-in-out infinite;
-}
-.sk-bar.w92 { width: 92%; }
-.sk-bar.w100 { width: 100%; }
-.sk-bar.w86 { width: 86%; }
-.sk-bar.w96 { width: 96%; }
-.sk-bar.w78 { width: 78%; }
-.sk-bar.w88 { width: 88%; }
-.sk-bar.w64 { width: 64%; }
-.sk-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #6366f1;
-}
-.sk-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid #c7d2fe;
-  border-top-color: #4f46e5;
-  border-radius: 50%;
-  animation: sk-spin 0.8s linear infinite;
-  flex-shrink: 0;
-}
-.review-error { margin-top: 8px; font-size: 12.5px; color: #dc2626; line-height: 1.6; flex-shrink: 0; }
-@keyframes sk-shimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
-}
-@keyframes sk-spin { to { transform: rotate(360deg); } }
+.grade-panel { display: grid; grid-template-rows: minmax(220px, 0.92fr) minmax(310px, 1fr); gap: 12px; min-width: 0; min-height: 0; }
+.ai-review-card, .teacher-grade-card { display: flex; flex-direction: column; min-height: 0; min-width: 0; border: 1px solid #e4e9f3; border-radius: 12px; background: #fff; padding: 18px; }
+.card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
+.card-heading h2 { font-size: 15px; font-weight: 700; color: #1e293b; margin: 0; }
+.card-heading button { border: 1px solid #e4e9f3; border-radius: 6px; background: #fff; padding: 6px 10px; font-size: 12px; color: #4f46e5; white-space: nowrap; }
+.card-heading button:hover:not(:disabled) { background: #f5f3ff; border-color: #c4b5fd; }
+.ai-note { font-size: 12px; color: #64748b; line-height: 1.6; margin: 12px 0 0; }
+.ai-score { display: flex; align-items: baseline; gap: 8px; margin: 12px 0; color: #4f46e5; }
+.ai-score strong { font-size: 30px; line-height: 1.15; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ai-score span { color: #64748b; font-size: 12px; }
+.ai-score.is-empty { color: #94a3b8; }
+.ai-comment-label, .field-label { font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 8px; }
+.ai-comment { flex: 1; min-height: 56px; overflow-y: auto; padding: 12px; background: #f8fafc; border-radius: 6px; color: #475569; font-size: 13px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.teacher-score-row { display: flex; align-items: center; gap: 10px; margin: 18px 0; font-size: 13px; color: #64748b; }
+.teacher-score-row label { color: #475569; font-weight: 600; }
+.teacher-score-row input { width: 96px; min-width: 0; height: 38px; padding: 6px 10px; border: 1px solid #dbe2ec; border-radius: 6px; font-size: 18px; font-weight: 600; color: #1e293b; }
+.comment-input { flex: 1; width: 100%; min-height: 72px; resize: none; padding: 12px; border: 1px solid #dbe2ec; border-radius: 6px; color: #334155; background: #fff; font-size: 13px; line-height: 1.7; }
+.grade-status { margin: 8px 0 12px; color: #64748b; font-size: 11px; line-height: 1.5; }
+.grade-status.completed { color: #059669; }
+.grade-footer { flex-shrink: 0; }
+.report-pagination { display: flex; gap: 10px; margin-bottom: 10px; }
+.report-pagination button { flex: 1; height: 32px; border-radius: 6px; border: 1px solid #e4e9f3; background: #fff; color: #64748b; font-size: 12px; }
+.btn-submit { width: 100%; height: 40px; border: 0; border-radius: 7px; background: #6366f1; color: #fff; font-weight: 600; font-size: 13px; }
+.btn-submit:hover:not(:disabled) { background: #4f46e5; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+.review-error { color: #dc2626; font-size: 12px; line-height: 1.6; margin: 8px 0; overflow-wrap: anywhere; }
+.custom-scroll::-webkit-scrollbar { width: 5px; }
+.custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+@media (max-height: 760px) and (min-width: 1101px) { .grade-panel { overflow-y: auto; } .ai-review-card, .teacher-grade-card { padding: 12px; } }
+@media (max-width: 1100px) { .grade-panel { grid-template-rows: auto auto; overflow: visible; } .ai-review-card { min-height: 260px; } .ai-comment { max-height: 220px; } .teacher-grade-card { min-height: 360px; } }
 </style>

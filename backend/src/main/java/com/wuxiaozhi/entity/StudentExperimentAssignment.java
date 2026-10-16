@@ -26,6 +26,15 @@ public class StudentExperimentAssignment {
     @Column(nullable = false)
     private Long assignedByUserId;
 
+    /** 分配时的教学班快照，避免学生加入其他班级后报告串班。 */
+    @Column(length=64)
+    private String className;
+
+    @Column(length=4000)
+    private String instructions;
+
+    private LocalDateTime reportDueAt;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime assignedAt = LocalDateTime.now();
 }

@@ -17,7 +17,7 @@ public class DifyProperties {
     private String appMode = "chat";
     private Map<String, String> workflows = new HashMap<>();
     /** 单个 Dify 应用可覆盖全局 appMode，例如 env-check=workflow。 */
-    private Map<String, String> workflowModes = new HashMap<>();
+    private Map<String, String> workflowModes = new HashMap<>(Map.of("report-review", "workflow"));
     private Knowledge knowledge = new Knowledge();
 
     @Data

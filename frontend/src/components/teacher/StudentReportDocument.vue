@@ -1,9 +1,10 @@
 <template>
-  <article class="report-doc" :class="{ compact }">
+  <article ref="documentRoot" class="report-doc" :class="{ compact }">
     <header class="doc-header">
       <h1 class="doc-title">{{ report?.experimentName || '实验报告' }}</h1>
       <div class="doc-subtitle">大学物理实验报告</div>
       <table class="doc-info-table">
+        <tbody>
         <tr>
           <td class="doc-info-label">姓名</td>
           <td class="doc-info-value">{{ report?.studentName || '—' }}</td>
@@ -16,11 +17,12 @@
           <td class="doc-info-label">日期</td>
           <td class="doc-info-value">{{ reportDate }}</td>
         </tr>
+        </tbody>
       </table>
     </header>
     <div v-if="!hasAnySection" class="doc-empty-all">学生尚未提交报告正文。</div>
     <div v-else class="doc-body">
-      <section v-for="sec in sections" :key="sec.key" class="doc-section">
+      <section v-for="sec in sections" :key="sec.key" :data-report-section="sec.key" class="doc-section">
         <h2 class="doc-heading">{{ sec.label }}</h2>
         <div v-if="sec.hasContent" class="doc-content" v-html="formatPreviewSection(sec.html)" />
         <p v-else class="doc-empty">（未填写）</p>
@@ -30,7 +32,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { REPORT_SECTION_DEFS } from '../../utils/sessionReport'
 import { renderMathInMarkdown } from '../../utils/markdown'
 
@@ -38,6 +40,14 @@ const props = defineProps({
   report: { type: Object, default: null },
   compact: { type: Boolean, default: false }
 })
+const documentRoot = ref(null)
+function scrollToSection(key) {
+  const section = documentRoot.value?.querySelector(`[data-report-section="${key}"]`)
+  const scroller = documentRoot.value?.parentElement
+  if (!section || !scroller) return
+  scroller.scrollTo({ top: scroller.scrollTop + section.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 16, behavior: 'smooth' })
+}
+defineExpose({ scrollToSection })
 
 const sections = computed(() => {
   const raw = props.report?.studentReportSections
@@ -66,21 +76,31 @@ const reportDate = computed(() => {
 })
 
 function hasText(html) {
-  return String(html || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').trim().length > 0
+  return /<img\b/i.test(html) || String(html || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').trim().length > 0
 }
 
 function formatPreviewSection(html) {
   if (!html?.trim()) return ''
-  if (html.includes('<table')) return html
   const withMath = html.replace(
     /<span class="inline-formula"[^>]*>\$([^<]+)\$<\/span>/gi,
     (_, tex) => `$${tex}$`
   )
-  const text = withMath
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-  return renderMathInMarkdown(text).replace(/\n/g, '<br>')
+  // Keep student photos and tables, including sections that contain only a photo.
+  const content = /<(p|div|table|ul|ol|h[1-6])\b/i.test(withMath) ? withMath : withMath.replace(/\n/g, '<br>')
+  const rendered = renderMathInMarkdown(content)
+  const doc = new DOMParser().parseFromString(rendered, 'text/html')
+  doc.querySelectorAll('script,style,iframe,object,embed,link,meta,base,form,input,button,textarea,select,foreignObject,use,animate,animateMotion,animateTransform,set').forEach(el => el.remove())
+  for (const el of doc.body.querySelectorAll('*')) {
+    for (const attr of [...el.attributes]) {
+      if (/^on/i.test(attr.name) || ['srcdoc', 'id', 'name'].includes(attr.name.toLowerCase()) || (attr.name === 'style' && /url\s*\(|expression\s*\(|@import/i.test(attr.value))) el.removeAttribute(attr.name)
+      if (['src', 'href', 'xlink:href', 'action', 'srcset'].includes(attr.name.toLowerCase())) {
+        const url = attr.value.trim()
+        const safe = /^(https?:\/\/|\/(?!\/)|\.\.?\/|#)/i.test(url) || (el.tagName === 'IMG' && /^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(url))
+        if (!safe || attr.name.toLowerCase() === 'srcset') el.removeAttribute(attr.name)
+      }
+    }
+  }
+  return doc.body.innerHTML
 }
 </script>
 
@@ -163,9 +183,14 @@ function formatPreviewSection(html) {
 .doc-content {
   font-size: 14px;
   line-height: 2;
-  text-indent: 2em;
   word-break: break-word;
 }
+.doc-content :deep(p) { margin: 0 0 8px; }
+.doc-content :deep(ul), .doc-content :deep(ol) { padding-left: 24px; }
+.doc-content :deep(.katex-display) { overflow-x: auto; overflow-y: hidden; }
+.doc-section { scroll-margin-top: 16px; }
+.compact .doc-info-value { min-width: 0; }
+@media (max-width: 1500px) { .report-doc.compact { padding: 24px 20px; } .compact .doc-title { font-size: 19px; letter-spacing: 0; } .compact .doc-info-table { font-size: 12px; } .compact .doc-info-label { width: auto; } }
 .doc-content :deep(img) {
   max-width: 100%;
   height: auto;

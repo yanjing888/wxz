@@ -62,7 +62,7 @@ export async function syncSubmittedReportDrafts() {
     for (const row of submitted) {
       const serverLen = reportSectionsLength(row.reportSections)
       if (serverLen >= 8) continue
-      const match = drafts.find((d) => d.experimentCode === row.experimentCode) || (submitted.length === 1 ? drafts[0] : null)
+      const match = drafts.find((d) => d.experimentCode === row.experimentCode && d.sessionId === row.finishedSessionId)
       if (!match) continue
       await studentExperimentApi.completeReport(row.experimentCode, {
         sessionId: match.sessionId || row.finishedSessionId || row.activeSessionId || null,

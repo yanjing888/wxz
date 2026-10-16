@@ -97,6 +97,7 @@ public class LabSessionService {
     public LabSession startSession(StartSessionRequest req, Long userId) {
         if (userId != null && userId > GUEST_USER_ID) {
             accessService.requireAssignedIfStudent(userId, req.getExperimentCode());
+            accessService.requireCurrentIfStudent(userId,req.getExperimentCode());
         }
         if (isLabCompleted(userId != null ? userId : GUEST_USER_ID, req.getExperimentCode())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "实验已结束，仅可查看历史对话");
@@ -107,7 +108,7 @@ public class LabSessionService {
         session.setExperimentCode(exp.getCode());
         session.setExperimentName(exp.getName());
         session.setStudentName(req.getStudentName().trim());
-        session.setStudentClass(req.getStudentClass() != null ? req.getStudentClass().trim() : "");
+        session.setStudentClass(userId!=null&&userId>GUEST_USER_ID?accessService.assignmentClass(userId,exp.getCode()):(req.getStudentClass() != null ? req.getStudentClass().trim() : ""));
         session.setActiveStep(1);
         session.setStatus("ACTIVE");
         return sessionRepository.save(session);

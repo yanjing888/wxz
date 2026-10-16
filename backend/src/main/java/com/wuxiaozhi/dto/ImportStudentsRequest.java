@@ -9,6 +9,7 @@ import java.util.List;
 
 @Data
 public class ImportStudentsRequest {
+    private String className;
     /** 未在行内指定密码时使用的默认密码 */
     @Size(min = 6, max = 128)
     private String defaultPassword = "123456";

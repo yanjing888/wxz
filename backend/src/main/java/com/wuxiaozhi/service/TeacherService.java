@@ -34,6 +34,7 @@ public class TeacherService {
     };
 
     private final UserRepository userRepository;
+    private final ClassRosterService roster;
     private final LabSessionRepository sessionRepository;
     private final MessageFeedbackRepository feedbackRepository;
     private final StudentExperimentAssignmentRepository assignmentRepository;
@@ -65,8 +66,9 @@ public class TeacherService {
                           AiToolCatalogService aiToolCatalogService,
                           DifyService difyService,
                           ObjectMapper objectMapper,
-                          PasswordEncoder passwordEncoder) {
+                          PasswordEncoder passwordEncoder, ClassRosterService roster) {
         this.userRepository = userRepository;
+        this.roster=roster;
         this.sessionRepository = sessionRepository;
         this.feedbackRepository = feedbackRepository;
         this.assignmentRepository = assignmentRepository;
@@ -95,9 +97,7 @@ public class TeacherService {
 
     public TeacherOverviewDto overview(User teacher) {
         String managedClass = FeedbackService.managedClass(teacher);
-        long studentCount = managedClass.isBlank()
-                ? userRepository.countByRole(UserRole.STUDENT)
-                : userRepository.countByRoleAndStudentClass(UserRole.STUDENT, managedClass);
+        long studentCount = roster.students(teacher,null).size();
         long finishedCount = managedClass.isBlank()
                 ? sessionRepository.countByStatus("FINISHED")
                 : sessionRepository.countByStatusAndStudentClass("FINISHED", managedClass);
@@ -111,7 +111,7 @@ public class TeacherService {
         return new TeacherOverviewDto(
                 studentCount,
                 finishedCount,
-                finishedCount,
+                listReports(teacher,null).size(),
                 feedbackCount,
                 notHelpfulCount,
                 unprocessedCount,
@@ -119,75 +119,36 @@ public class TeacherService {
         );
     }
 
-    public List<TeacherReportItemDto> listReports(User teacher, String experimentCode) {
-        String managedClass = FeedbackService.managedClass(teacher);
-        String filterCode = experimentCode != null ? experimentCode.trim() : "";
-        List<LabSession> sessions = managedClass.isBlank()
-                ? sessionRepository.findByStatusOrderByStartTimeDesc("FINISHED")
-                : sessionRepository.findByStatusAndStudentClassOrderByStartTimeDesc("FINISHED", managedClass);
-        List<LabSession> finished = sessions.stream()
-                .filter(s -> filterCode.isBlank() || filterCode.equals(s.getExperimentCode()))
-                .toList();
-
-        Map<Long, LabSession> latestByUser = new LinkedHashMap<>();
-        for (LabSession session : finished) {
-            if (session.getUserId() != null) {
-                latestByUser.putIfAbsent(session.getUserId(), session);
-            }
+    public List<TeacherReportItemDto> listReports(User teacher,String experimentCode) {return listReports(teacher,experimentCode,null);}
+    public List<TeacherReportItemDto> listReports(User teacher,String experimentCode,String className) {
+        String scope=roster.scope(teacher,className),code=experimentCode==null?"":experimentCode.trim();
+        Map<String,TeacherReportItemDto> items=new LinkedHashMap<>();
+        for(LabSession session:sessionRepository.findByStatusOrderByStartTimeDesc("FINISHED")){
+            String cls=resolvedSessionClass(session);
+            if((!scope.isBlank()&&!scope.equals(cls))||(!code.isBlank()&&!code.equals(session.getExperimentCode())))continue;
+            var progress=progressRepository.findByUserIdAndExperimentCode(session.getUserId(),session.getExperimentCode()).orElse(null);
+            if(progress==null||!progress.isReportCompleted())continue;
+            if(progress.getReportSessionId()!=null&&!session.getId().equals(progress.getReportSessionId()))continue;
+            String key=session.getUserId()+"|"+session.getExperimentCode()+"|"+cls;
+            TeacherReportItemDto item=toReportItem(session,progress);item.setStudentClass(cls);items.putIfAbsent(key,item);
         }
-
-        Map<Long, StudentExperimentProgress> progressByUser = Map.of();
-        if (!filterCode.isBlank()) {
-            Set<Long> userIds = new LinkedHashSet<>(latestByUser.keySet());
-            List<StudentExperimentAssignment> assigned = assignmentRepository.findByExperimentCode(filterCode);
-            assigned.stream().map(StudentExperimentAssignment::getUserId).forEach(userIds::add);
-            if (!userIds.isEmpty()) {
-                progressByUser = progressRepository.findByExperimentCodeAndUserIdIn(filterCode, userIds).stream()
-                        .collect(Collectors.toMap(StudentExperimentProgress::getUserId, p -> p, (a, b) -> a));
-            }
-            for (StudentExperimentProgress progress : progressByUser.values()) {
-                if (!progress.isReportCompleted()) {
-                    continue;
-                }
-                LabSession preferred = null;
-                if (progress.getReportSessionId() != null) {
-                    preferred = sessionRepository.findById(progress.getReportSessionId()).orElse(null);
-                }
-                if (preferred == null) {
-                    preferred = latestByUser.get(progress.getUserId());
-                }
-                if (preferred == null) {
-                    preferred = sessionRepository
-                            .findFirstByUserIdAndExperimentCodeOrderByStartTimeDesc(progress.getUserId(), filterCode)
-                            .orElse(null);
-                }
-                if (preferred != null) {
-                    latestByUser.put(progress.getUserId(), preferred);
-                }
-            }
-        }
-
-        Map<Long, StudentExperimentProgress> progressLookup = progressByUser;
-        List<TeacherReportItemDto> items = latestByUser.values().stream()
-                .map(session -> toReportItem(session, progressLookup.get(session.getUserId())))
-                .toList();
-        if (filterCode.isBlank()) {
-            return items;
-        }
-        return items.stream().filter(TeacherReportItemDto::isReportCompleted).toList();
+        return new ArrayList<>(items.values());
     }
 
     public Map<String, Object> getReport(User teacher, Long sessionId) {
         LabSession session = getSessionForTeacher(teacher, sessionId);
         Map<String, Object> data = labSessionService.buildReportData(session.getId());
+        data.put("studentClass", resolvedSessionClass(session));
         progressRepository.findByUserIdAndExperimentCode(session.getUserId(), session.getExperimentCode())
+                .filter(progress->progress.getReportSessionId()==null||sessionId.equals(progress.getReportSessionId()))
                 .ifPresent(progress -> {
                     data.put("reportCompleted", progress.isReportCompleted());
                     data.put("studentReportSections", readReportSections(progress.getReportSectionsJson()));
-                    data.put("aiReviewScore", progress.getAiReviewScore());
+                    data.put("aiReviewScore", progress.aiReviewScoreAsPercent());
                     data.put("aiReviewComment", progress.getAiReviewComment());
                     data.put("aiReviewJson", parseJsonObject(progress.getAiReviewJson()));
-                    data.put("teacherScore", progress.getTeacherScore());
+                    data.put("teacherScore", progress.teacherScoreAsPercent());
+                    data.put("maxScore", 100);
                     data.put("teacherComment", progress.getTeacherComment());
                     data.put("gradingCompleted", Boolean.TRUE.equals(progress.getGradingCompleted()));
                     data.put("gradingAt", progress.getGradingAt());
@@ -207,95 +168,53 @@ public class TeacherService {
     /**
      * 课堂态势：每个学生一行。已结束实验显示为已完成，不再把多次「新建对话」拆成重复卡片。
      */
-    public TeacherClassroomDto classroom(User teacher, String experimentCode) {
-        String managedClass = FeedbackService.managedClass(teacher);
-        String filterCode = experimentCode != null ? experimentCode.trim() : "";
-        if (filterCode.isBlank()) {
-            return classroomFromActiveSessions(teacher, managedClass, "");
+    public TeacherClassroomDto classroom(User teacher,String experimentCode){return classroom(teacher,experimentCode,null);}
+    public TeacherClassroomDto classroom(User teacher,String experimentCode,String className) {
+        String scope=roster.scope(teacher,className),code=experimentCode==null?"":experimentCode.trim();
+        if(code.isBlank())return classroomFromActiveSessions(teacher,scope,"");
+        ExperimentConfig config=experimentConfigService.getByCode(code);
+        List<User> students=roster.students(teacher,scope);
+        Map<Long,User> byId=students.stream().collect(Collectors.toMap(User::getId,u->u));
+        List<LabSession> history=byId.isEmpty()?List.of():sessionRepository.findByExperimentCodeAndUserIdInOrderByStartTimeDesc(code,byId.keySet());
+        Map<Long,String> historyClasses = new HashMap<>();
+        history.forEach(session -> historyClasses.put(session.getId(), resolvedSessionClass(session)));
+        Map<String,User> contexts=new LinkedHashMap<>();
+        for(var a:assignmentRepository.findByExperimentCode(code)){
+            User u=byId.get(a.getUserId());if(u==null)continue;
+            String cls=assignmentClass(a,u);if(scope.isBlank()||scope.equals(cls))contexts.put(u.getId()+"|"+cls,u);
         }
-
-        ExperimentConfig focusExp = null;
-        try {
-            focusExp = experimentConfigService.getByCode(filterCode);
-        } catch (RuntimeException ignored) {
-            focusExp = null;
-        }
-
-        Set<Long> assignedIds = assignmentRepository.findByExperimentCode(filterCode).stream()
-                .map(StudentExperimentAssignment::getUserId)
-                .collect(Collectors.toSet());
-        List<User> classStudents = managedClass.isBlank()
-                ? userRepository.findByRoleOrderByDisplayNameAsc(UserRole.STUDENT)
-                : userRepository.findByRoleAndStudentClassOrderByDisplayNameAsc(UserRole.STUDENT, managedClass);
-        Set<Long> classIds = classStudents.stream().map(User::getId).collect(Collectors.toCollection(LinkedHashSet::new));
-        Set<Long> visibleIds = new LinkedHashSet<>(assignedIds);
-        visibleIds.retainAll(classIds);
-        if (!classIds.isEmpty()) {
-            sessionRepository.findByExperimentCodeAndUserIdInOrderByStartTimeDesc(filterCode, classIds).stream()
-                    .map(LabSession::getUserId)
-                    .filter(Objects::nonNull)
-                    .forEach(visibleIds::add);
-        }
-        List<User> students = classStudents.stream()
-                .filter(u -> visibleIds.contains(u.getId()))
-                .toList();
-
-        List<Long> userIds = students.stream().map(User::getId).toList();
-        List<LabSession> sessions = userIds.isEmpty()
-                ? List.of()
-                : sessionRepository.findByExperimentCodeAndUserIdInOrderByStartTimeDesc(filterCode, userIds);
-        Map<Long, List<LabSession>> sessionsByUser = sessions.stream()
-                .collect(Collectors.groupingBy(LabSession::getUserId));
-        Map<Long, Boolean> readyByUser = userIds.isEmpty()
-                ? Map.of()
-                : progressRepository.findByExperimentCodeAndUserIdIn(filterCode, userIds).stream()
-                .collect(Collectors.toMap(StudentExperimentProgress::getUserId,
-                        StudentExperimentProgress::isPreLabCompleted, (a, b) -> a || b));
-        Map<Long, StudentExperimentProgress> progressByUser = userIds.isEmpty()
-                ? Map.of()
-                : progressRepository.findByExperimentCodeAndUserIdIn(filterCode, userIds).stream()
-                .collect(Collectors.toMap(StudentExperimentProgress::getUserId, p -> p, (a, b) -> a));
-
-        List<TeacherClassroomStudentDto> rows = new ArrayList<>();
-        for (User student : students) {
-            LabSession canonical = pickCanonicalSession(sessionsByUser.getOrDefault(student.getId(), List.of()));
-            boolean ready = readyByUser.getOrDefault(student.getId(), false);
-            TeacherClassroomStudentDto row;
-            if (canonical != null) {
-                row = toClassroomRow(canonical, ready);
-                row.setStudentName(displayName(student, canonical.getStudentName()));
-                row.setStudentClass(safeClass(student.getStudentClass()));
-            } else {
-                row = idleStudentRow(student, filterCode, focusExp, ready);
-            }
-            StudentExperimentProgress progress = progressByUser.get(student.getId());
-            if (progress != null) {
-                row.setReportCompleted(progress.isReportCompleted());
-            }
-            if ("FINISHED".equals(row.getStatus()) && !row.isDataIssue()) {
-                row.setPriority("normal");
-                row.setPriorityReason(row.isReportCompleted() ? "实验与报告已完成" : "实验已结束");
-            }
+        for(var session:history){User u=byId.get(session.getUserId());String cls=historyClasses.get(session.getId());if(u!=null&&(scope.isBlank()||scope.equals(cls)))contexts.putIfAbsent(u.getId()+"|"+cls,u);}
+        List<TeacherClassroomStudentDto> rows=new ArrayList<>();
+        for(var context:contexts.entrySet()){
+            User u=context.getValue();String cls=context.getKey().substring(context.getKey().indexOf('|')+1);
+            var matching=history.stream().filter(h->u.getId().equals(h.getUserId())&&cls.equals(historyClasses.get(h.getId()))).toList();
+            var canonical=pickCanonicalSession(matching);
+            var progress=progressRepository.findByUserIdAndExperimentCode(u.getId(),code).orElse(null);
+            boolean ready=progress!=null&&(progress.isPreLabCompleted()||progress.isSimulationCompleted());
+            var row=canonical==null?idleStudentRow(u,code,config,ready):toClassroomRow(canonical,ready);
+            row.setUsername(u.getUsername());row.setStudentName(displayName(u,canonical==null?u.getDisplayName():canonical.getStudentName()));row.setStudentClass(cls);
+            row.setReportCompleted(progress!=null&&progress.isReportCompleted()&&(progress.getReportSessionId()==null||canonical!=null&&canonical.getId().equals(progress.getReportSessionId())));
+            if("FINISHED".equals(row.getStatus())&&!row.isDataIssue()){row.setPriority("normal");row.setPriorityReason(row.isReportCompleted()?"实验与报告已完成":"实操已结束，待提交报告");}
             rows.add(row);
         }
+        disambiguateStudentNames(rows,students);enrichEnvLogStats(rows);
+        rows.sort(Comparator.comparing(TeacherClassroomStudentDto::getStudentClass).thenComparing(TeacherClassroomStudentDto::getStudentName));
+        var dto=new TeacherClassroomDto();dto.setExperimentCode(code);dto.setExperimentName(config.getName());dto.setManagedClass(scope);dto.setStudents(rows);
+        dto.setActiveCount((int)rows.stream().filter(r->"ACTIVE".equals(r.getStatus())).count());dto.setNotReadyCount((int)rows.stream().filter(r->!r.isPreLabCompleted()).count());dto.setHighPriorityCount((int)rows.stream().filter(r->"high".equals(r.getPriority())).count());dto.setDataIssueCount((int)rows.stream().filter(TeacherClassroomStudentDto::isDataIssue).count());return dto;
+    }
+    private String assignmentClass(StudentExperimentAssignment a,User u){return a.getClassName()==null||a.getClassName().isBlank()?ClassRosterService.classKey(u.getStudentClass()):a.getClassName();}
 
-        disambiguateStudentNames(rows, students);
-        enrichEnvLogStats(rows);
-
-        rows.sort(Comparator
-                .comparingInt((TeacherClassroomStudentDto r) -> priorityRank(r.getPriority()))
-                .thenComparing(TeacherClassroomStudentDto::getStudentName, Comparator.nullsLast(String::compareTo)));
-
-        TeacherClassroomDto dto = new TeacherClassroomDto();
-        dto.setExperimentCode(filterCode);
-        dto.setExperimentName(focusExp != null ? focusExp.getName() : filterCode);
-        dto.setManagedClass(managedClass);
-        dto.setActiveCount((int) rows.stream().filter(r -> "ACTIVE".equals(r.getStatus())).count());
-        dto.setHighPriorityCount((int) rows.stream().filter(r -> "high".equals(r.getPriority())).count());
-        dto.setNotReadyCount((int) rows.stream().filter(r -> !r.isPreLabCompleted()).count());
-        dto.setDataIssueCount((int) rows.stream().filter(TeacherClassroomStudentDto::isDataIssue).count());
-        dto.setStudents(rows);
-        return dto;
+    /** Read-only compatibility for legacy sessions that did not save a class. */
+    private String resolvedSessionClass(LabSession session) {
+        String saved = ClassRosterService.classKey(session.getStudentClass());
+        if (!"未分班".equals(saved)) return saved;
+        var student = userRepository.findById(session.getUserId()).orElse(null);
+        if (student == null) return saved;
+        var assignment = assignmentRepository.findByUserIdAndExperimentCode(session.getUserId(), session.getExperimentCode()).orElse(null);
+        if (assignment != null && assignment.getClassName() != null && !assignment.getClassName().isBlank()
+                && !"未分班".equals(assignment.getClassName().trim())) return assignment.getClassName().trim();
+        var classes = roster.classes(student);
+        return classes.size() == 1 ? classes.iterator().next() : saved;
     }
 
     private TeacherClassroomDto classroomFromActiveSessions(User teacher, String managedClass, String filterCode) {
@@ -466,6 +385,9 @@ public class TeacherService {
      */
     public AiToolInvokeResponse reviewReport(User teacher, Long sessionId) {
         Map<String, Object> report = getReport(teacher, sessionId);
+        if (!Boolean.TRUE.equals(report.get("reportCompleted"))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "请先提交实验报告，再进行预评");
+        }
         String experimentCode = stringOrEmpty(report.get("experimentCode"));
         String experimentName = stringOrEmpty(report.get("experimentName"));
         String userId = "teacher-review-" + teacher.getId();
@@ -493,14 +415,12 @@ public class TeacherService {
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "学生报告文件上传失败，无法预评");
         }
-        inputs.put("query",
-                "请对照本实验的目的与步骤，阅读学生提交的实验报告文件，做预评（非终裁）。"
-                        + "按完整性、数据可信度、误差分析、结论质量、思考题与讨论五维评分，"
-                        + "输出建议分数（10 分制，一位小数）和可编辑评语。强调需教师确认后才作为正式成绩。");
-
         AiToolDefinition tool = aiToolCatalogService.requireTool("report-review");
         String workflowKey = aiToolCatalogService.resolveWorkflowKey(tool);
         AiToolInvokeResponse resp = difyService.invokeTool(workflowKey, inputs, userId, null);
+        if (resp == null || !resp.isFromDify() || resp.getScore() == null || resp.getComment() == null || resp.getComment().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "报告预评未完成，请检查Workflow配置或稍后重试");
+        }
         persistAiReview(sessionId, resp);
         return resp;
     }
@@ -511,7 +431,9 @@ public class TeacherService {
         StudentExperimentProgress progress = progressRepository
                 .findByUserIdAndExperimentCode(session.getUserId(), session.getExperimentCode())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "未找到该学生的实验进度"));
+        if(!progress.isReportCompleted()||progress.getReportSessionId()!=null&&!sessionId.equals(progress.getReportSessionId()))throw new ResponseStatusException(HttpStatus.CONFLICT,"只能批改当前已正式提交的报告");
         progress.setTeacherScore(request.getScore());
+        progress.setTeacherScoreMax(100.0);
         progress.setTeacherComment(request.getComment() == null ? "" : request.getComment().trim());
         progress.setGradingCompleted(true);
         progress.setGradingAt(LocalDateTime.now());
@@ -555,6 +477,7 @@ public class TeacherService {
                         .ifPresent(progress -> {
                             if (resp.getScore() != null) {
                                 progress.setAiReviewScore(resp.getScore());
+                                progress.setAiReviewScoreMax(100.0);
                             }
                             if (resp.getComment() != null && !resp.getComment().isBlank()) {
                                 progress.setAiReviewComment(resp.getComment());
@@ -606,26 +529,21 @@ public class TeacherService {
         return feedbackService.markProcessed(feedbackId, teacher, rating);
     }
 
-    public List<TeacherStudentItemDto> listStudents(User teacher, String experimentCode) {
-        String managedClass = FeedbackService.managedClass(teacher);
-        List<User> students = managedClass.isBlank()
-                ? userRepository.findByRoleOrderByDisplayNameAsc(UserRole.STUDENT)
-                : userRepository.findByRoleAndStudentClassOrderByDisplayNameAsc(UserRole.STUDENT, managedClass);
-        Map<Long, List<String>> codesByUser = assignmentRepository.findByUserIdIn(
-                        students.stream().map(User::getId).toList()).stream()
-                .collect(Collectors.groupingBy(
-                        StudentExperimentAssignment::getUserId,
-                        Collectors.mapping(StudentExperimentAssignment::getExperimentCode, Collectors.toList())
-                ));
-        return students.stream()
-                .filter(u -> {
-                    if (experimentCode == null || experimentCode.isBlank()) {
-                        return true;
-                    }
-                    return codesByUser.getOrDefault(u.getId(), List.of()).contains(experimentCode.trim());
-                })
-                .map(u -> toStudentItem(u, codesByUser.getOrDefault(u.getId(), List.of())))
-                .toList();
+    public List<String> listClasses(User teacher){return roster.visibleClasses(teacher);}
+    public List<TeacherStudentItemDto> listStudents(User teacher,String experimentCode){return listStudents(teacher,experimentCode,null);}
+    public List<TeacherStudentItemDto> listStudents(User teacher,String experimentCode,String className){
+        String scope=roster.scope(teacher,className);List<TeacherStudentItemDto> rows=new ArrayList<>();
+        var students=roster.students(teacher,scope);var classesByUser=roster.classMap(students);
+        for(User u:students){
+            var assigned=assignmentRepository.findByUserIdOrderByAssignedAtAscIdAsc(u.getId());
+            for(String cls:classesByUser.get(u.getId())){
+                if(!scope.isBlank()&&!scope.equals(cls))continue;
+                var codes=assigned.stream().filter(a->cls.equals(assignmentClass(a,u))).map(StudentExperimentAssignment::getExperimentCode).toList();
+                if(experimentCode!=null&&!experimentCode.isBlank()&&!codes.contains(experimentCode.trim()))continue;
+                var item=toStudentItem(u,codes);item.setStudentClass(cls);rows.add(item);
+            }
+        }
+        rows.sort(Comparator.comparing(TeacherStudentItemDto::getStudentClass).thenComparing(TeacherStudentItemDto::getUsername));return rows;
     }
 
     @Transactional
@@ -655,149 +573,77 @@ public class TeacherService {
     }
 
     @Transactional
-    public ImportStudentsResult importStudents(User teacher, ImportStudentsRequest req) {
-        List<ImportStudentRow> rows = new ArrayList<>();
-        if (req.getCsv() != null && !req.getCsv().isBlank()) {
-            rows.addAll(parseCsv(req.getCsv()));
-        }
-        if (req.getStudents() != null) {
-            rows.addAll(req.getStudents());
-        }
-        if (rows.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请提供学生名单");
-        }
-
-        String defaultPassword = req.getDefaultPassword() != null && !req.getDefaultPassword().isBlank()
-                ? req.getDefaultPassword()
-                : "123456";
-        String managedClass = FeedbackService.managedClass(teacher);
-        ImportStudentsResult result = new ImportStudentsResult();
-        List<Long> affectedUserIds = new ArrayList<>();
-
-        for (ImportStudentRow row : rows) {
-            String username = row.getUsername() != null ? row.getUsername().trim() : "";
-            String displayName = row.getDisplayName() != null ? row.getDisplayName().trim() : "";
-            if (username.isBlank() || displayName.isBlank()) {
-                result.setSkipped(result.getSkipped() + 1);
-                result.getErrors().add("跳过无效行：账号或姓名为空");
-                continue;
+    public ImportStudentsResult importStudents(User teacher,ImportStudentsRequest req){
+        List<ImportStudentRow> rows=new ArrayList<>();if(req.getCsv()!=null&&!req.getCsv().isBlank())rows.addAll(parseCsv(req.getCsv()));if(req.getStudents()!=null)rows.addAll(req.getStudents());
+        if(rows.isEmpty())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请提供学生名单");
+        List<String> codes=normalizeExperimentCodes(req.getExperimentCodes());
+        var result=new ImportStudentsResult();List<Long> affected=new ArrayList<>();
+        for(var row:rows){
+            String username=stringOrEmpty(row.getUsername()).trim(),name=stringOrEmpty(row.getDisplayName()).trim();
+            String cls=stringOrEmpty(row.getStudentClass()).trim();if(cls.isBlank())cls=stringOrEmpty(req.getClassName()).trim();if(cls.isBlank())cls=FeedbackService.managedClass(teacher);
+            if(username.isBlank()||name.isBlank()||cls.isBlank()||username.length()>64||name.length()>64||cls.length()>64){result.setSkipped(result.getSkipped()+1);result.getErrors().add(username+"：请填写有效的学号、姓名和教学班（不超过64字）");continue;}
+            try{roster.scope(teacher,cls);}catch(ResponseStatusException e){result.setSkipped(result.getSkipped()+1);result.getErrors().add(username+"：无权导入该教学班");continue;}
+            var existing=userRepository.findByUsername(username);User user;
+            if(existing.isPresent()){
+                user=existing.get();if(!UserRole.STUDENT.equalsIgnoreCase(user.getRole())||!name.equals(user.getDisplayName())){result.setSkipped(result.getSkipped()+1);result.getErrors().add(username+"：账号已存在，请核对姓名和身份；未覆盖原账号");continue;}
+                if(user.getStudentClass()==null||user.getStudentClass().isBlank()){user.setStudentClass(cls);userRepository.save(user);}
+                result.setUpdated(result.getUpdated()+1);
+            }else{
+                String password=stringOrEmpty(row.getPassword()).trim();if(password.isBlank())password=stringOrEmpty(req.getDefaultPassword());if(password.isBlank())password="123456";
+                if(password.length()<6){result.setSkipped(result.getSkipped()+1);result.getErrors().add(username+"：密码至少6位");continue;}
+                user=new User();user.setUsername(username);user.setDisplayName(name);user.setStudentClass(cls);user.setPasswordHash(passwordEncoder.encode(password));user.setRole(UserRole.STUDENT);userRepository.save(user);result.setCreated(result.getCreated()+1);
             }
-
-            String studentClass = row.getStudentClass() != null && !row.getStudentClass().isBlank()
-                    ? row.getStudentClass().trim()
-                    : managedClass;
-            String password = row.getPassword() != null && !row.getPassword().isBlank()
-                    ? row.getPassword().trim()
-                    : defaultPassword;
-            if (password.length() < 6) {
-                result.setSkipped(result.getSkipped() + 1);
-                result.getErrors().add(username + "：密码至少 6 位");
-                continue;
+            roster.join(teacher,user,cls);affected.add(user.getId());
+            if(!codes.isEmpty()){
+                applyAssignments(teacher,user,codes,"replace".equalsIgnoreCase(req.getAssignMode()),cls,null,null);result.setAssigned(result.getAssigned()+1);
             }
-
-            Optional<User> existing = userRepository.findByUsername(username);
-            if (existing.isPresent()) {
-                User user = existing.get();
-                if (!UserRole.STUDENT.equalsIgnoreCase(user.getRole())) {
-                    result.setSkipped(result.getSkipped() + 1);
-                    result.getErrors().add(username + "：账号已存在且非学生");
-                    continue;
-                }
-                if (!managedClass.isBlank() && !managedClass.equals(safeClass(user.getStudentClass()))) {
-                    result.setSkipped(result.getSkipped() + 1);
-                    result.getErrors().add(username + "：不属于当前管理班级");
-                    continue;
-                }
-                user.setDisplayName(displayName);
-                if (!studentClass.isBlank()) {
-                    user.setStudentClass(studentClass);
-                }
-                userRepository.save(user);
-                result.setUpdated(result.getUpdated() + 1);
-                affectedUserIds.add(user.getId());
-                continue;
-            }
-
-            User user = new User();
-            user.setUsername(username);
-            user.setPasswordHash(passwordEncoder.encode(password));
-            user.setDisplayName(displayName);
-            user.setStudentClass(studentClass);
-            user.setRole(UserRole.STUDENT);
-            userRepository.save(user);
-            result.setCreated(result.getCreated() + 1);
-            affectedUserIds.add(user.getId());
         }
-
-        List<String> experimentCodes = normalizeExperimentCodes(req.getExperimentCodes());
-        if (!experimentCodes.isEmpty() && !affectedUserIds.isEmpty()) {
-            boolean append = !"replace".equalsIgnoreCase(req.getAssignMode());
-            BulkAssignExperimentsRequest assignReq = new BulkAssignExperimentsRequest();
-            assignReq.setUserIds(affectedUserIds.stream().distinct().toList());
-            assignReq.setExperimentCodes(experimentCodes);
-            assignReq.setMode(append ? "append" : "replace");
-            result.setAssigned(bulkAssignExperiments(teacher, assignReq));
-            result.setUserIds(affectedUserIds.stream().distinct().toList());
-        }
-        return result;
+        result.setUserIds(affected.stream().distinct().toList());return result;
     }
 
     @Transactional
-    public TeacherStudentItemDto assignExperiments(User teacher, Long userId, AssignExperimentsRequest req) {
-        User student = requireStudentForTeacher(teacher, userId);
-        List<String> codes = normalizeExperimentCodes(req.getExperimentCodes());
-        replaceExperiments(student.getId(), codes, teacher.getId());
-        return toStudentItem(student, codes);
+    public TeacherStudentItemDto assignExperiments(User teacher,Long userId,AssignExperimentsRequest req){
+        User student=requireStudentForTeacher(teacher,userId);
+        String cls=applyAssignments(teacher,student,normalizeExperimentCodes(req.getExperimentCodes()),true,req.getClassName(),req.getInstructions(),req.getReportDueAt());
+        return listStudents(teacher,null,cls).stream().filter(r->r.getUserId().equals(userId)).findFirst().orElseThrow();
     }
 
     @Transactional
-    public int bulkAssignExperiments(User teacher, BulkAssignExperimentsRequest req) {
-        List<String> codes = normalizeExperimentCodes(req.getExperimentCodes());
-        boolean append = "append".equalsIgnoreCase(req.getMode());
-        int count = 0;
-        for (Long userId : req.getUserIds()) {
-            User student = requireStudentForTeacher(teacher, userId);
-            if (append) {
-                appendExperiments(student.getId(), codes, teacher.getId());
-            } else {
-                replaceExperiments(student.getId(), codes, teacher.getId());
-            }
-            count++;
-        }
-        return count;
+    public int bulkAssignExperiments(User teacher,BulkAssignExperimentsRequest req){
+        List<String> codes=normalizeExperimentCodes(req.getExperimentCodes());
+        for(Long userId:new LinkedHashSet<>(req.getUserIds()))applyAssignments(teacher,requireStudentForTeacher(teacher,userId),codes,!"append".equalsIgnoreCase(req.getMode()),req.getClassName(),req.getInstructions(),req.getReportDueAt());
+        return new LinkedHashSet<>(req.getUserIds()).size();
     }
 
+    private String applyAssignments(User teacher,User student,List<String> codes,boolean replace,String requested,String instructions,LocalDateTime due){
+        String cls=roster.scope(teacher,requested);
+        if(cls.isBlank()){
+            var classes=roster.classes(student);if(classes.size()!=1)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"该学生有多个教学班，请先选择本次分配的班级");cls=classes.iterator().next();
+        }
+        if(!roster.member(student,cls))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"学生尚未加入该教学班");
+        if(instructions!=null&&instructions.length()>4000)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"本班要求最多4000字");
+        var existing=assignmentRepository.findByUserIdOrderByAssignedAtAscIdAsc(student.getId());
+        // Validate the entire change before deleting anything.
+        for(var assignment:existing){
+            String owner=assignmentClass(assignment,student);
+            if(codes.contains(assignment.getExperimentCode())&&!cls.equals(owner))throw new ResponseStatusException(HttpStatus.CONFLICT,student.getDisplayName()+"已在“"+owner+"”分配此实验，不能跨班重复分配同一实验");
+            if(replace&&cls.equals(owner)&&!codes.contains(assignment.getExperimentCode()))requireUnstarted(assignment);
+        }
+        if(replace)for(var assignment:existing)if(cls.equals(assignmentClass(assignment,student))&&!codes.contains(assignment.getExperimentCode()))assignmentRepository.delete(assignment);
+        for(String code:codes){
+            var assignment=existing.stream().filter(x->code.equals(x.getExperimentCode())).findFirst().orElse(null);
+            if(assignment==null){assignment=new StudentExperimentAssignment();assignment.setUserId(student.getId());assignment.setExperimentCode(code);assignment.setAssignedByUserId(teacher.getId());}
+            assignment.setClassName(cls);if(instructions!=null)assignment.setInstructions(instructions.trim());if(due!=null)assignment.setReportDueAt(due);assignmentRepository.save(assignment);
+        }
+        return cls;
+    }
+    private void requireUnstarted(StudentExperimentAssignment assignment){
+        if(!sessionRepository.findByUserIdAndExperimentCodeOrderByStartTimeDesc(assignment.getUserId(),assignment.getExperimentCode()).isEmpty())throw new ResponseStatusException(HttpStatus.CONFLICT,"该实验已有实操记录，不能移除；其报告和历史记录需要保留");
+    }
     @Transactional
-    public void unassignExperiment(User teacher, Long userId, String experimentCode) {
-        requireStudentForTeacher(teacher, userId);
-        if (experimentCode == null || experimentCode.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "实验 code 不能为空");
-        }
-        assignmentRepository.deleteByUserIdAndExperimentCode(userId, experimentCode.trim());
-    }
-
-    private void replaceExperiments(Long userId, List<String> codes, Long assignedByUserId) {
-        assignmentRepository.deleteByUserId(userId);
-        for (String code : codes) {
-            StudentExperimentAssignment assignment = new StudentExperimentAssignment();
-            assignment.setUserId(userId);
-            assignment.setExperimentCode(code);
-            assignment.setAssignedByUserId(assignedByUserId);
-            assignmentRepository.save(assignment);
-        }
-    }
-
-    private void appendExperiments(Long userId, List<String> codes, Long assignedByUserId) {
-        for (String code : codes) {
-            if (assignmentRepository.existsByUserIdAndExperimentCode(userId, code)) {
-                continue;
-            }
-            StudentExperimentAssignment assignment = new StudentExperimentAssignment();
-            assignment.setUserId(userId);
-            assignment.setExperimentCode(code);
-            assignment.setAssignedByUserId(assignedByUserId);
-            assignmentRepository.save(assignment);
-        }
+    public void unassignExperiment(User teacher,Long userId,String experimentCode){
+        User student=requireStudentForTeacher(teacher,userId);var assignment=assignmentRepository.findByUserIdAndExperimentCode(userId,experimentCode).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"分配不存在"));
+        roster.scope(teacher,assignmentClass(assignment,student));requireUnstarted(assignment);assignmentRepository.delete(assignment);
     }
 
     public List<EnvCheckLog> getEnvLogsForTeacher(User teacher, Long sessionId) {
@@ -849,7 +695,7 @@ public class TeacherService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));
         String managedClass = FeedbackService.managedClass(teacher);
         if (!managedClass.isBlank()) {
-            String sessionClass = session.getStudentClass() != null ? session.getStudentClass().trim() : "";
+            String sessionClass = resolvedSessionClass(session);
             if (!managedClass.equals(sessionClass)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权查看该班级会话");
             }
@@ -864,7 +710,7 @@ public class TeacherService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标用户不是学生");
         }
         String managedClass = FeedbackService.managedClass(teacher);
-        if (!managedClass.isBlank() && !managedClass.equals(safeClass(student.getStudentClass()))) {
+        if (!managedClass.isBlank() && !roster.member(student,managedClass)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权管理该学生");
         }
         return student;
@@ -965,8 +811,8 @@ public class TeacherService {
         dto.setHelpCount(session.getHelpCount());
         dto.setErrorPointCount(session.getErrorPointCount());
         dto.setReportCompleted(progress != null && progress.isReportCompleted());
-        dto.setAiReviewScore(progress != null ? progress.getAiReviewScore() : null);
-        dto.setTeacherScore(progress != null ? progress.getTeacherScore() : null);
+        dto.setAiReviewScore(progress != null ? progress.aiReviewScoreAsPercent() : null);
+        dto.setTeacherScore(progress != null ? progress.teacherScoreAsPercent() : null);
         dto.setGradingCompleted(progress != null && Boolean.TRUE.equals(progress.getGradingCompleted()));
         return dto;
     }

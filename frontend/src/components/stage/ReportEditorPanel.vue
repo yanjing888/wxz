@@ -22,7 +22,7 @@
             <h2>{{ experimentName || '实验报告' }}</h2>
           </div>
           <div class="header-actions">
-            <button type="button" class="btn-plain" :disabled="!sessionId || generating" @click="generateFromSession">
+            <button type="button" class="btn-plain" :disabled="!sessionId || generating || reportDone" @click="generateFromSession">
               {{ generating ? '恢复中…' : '从实验记录填充' }}
             </button>
             <button type="button" class="btn-plain" :disabled="!hasContent" @click="copyFullReport">复制全文</button>
@@ -36,7 +36,8 @@
         </header>
 
         <!-- 工具栏 -->
-        <div class="rep-toolbar">
+        <p class="draft-save-status" role="status">{{ reportDone ? '报告已正式提交，正文只读；教师批改后可在报告列表查看成绩。' : completionMessage || '草稿会自动保存到服务器，可在宿舍登录后继续写作。' }}</p>
+        <div v-if="!reportDone" class="rep-toolbar">
           <button type="button" class="tool-btn" title="加粗" @mousedown.prevent="execFmt('bold')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"/></svg>
           </button>
@@ -80,7 +81,7 @@
             </label>
             <div
               class="rep-editor"
-              contenteditable="true"
+              :contenteditable="!reportDone"
               :data-key="def.key"
               :data-placeholder="placeholders[def.key]"
               @input="onEditorInput(def.key, $event)"
@@ -201,9 +202,10 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import AskPanel from './AskPanel.vue'
 import { useAuthStore } from '../../stores/auth'
+import { useTaskStore } from '../../stores/tasks'
 import { sessionApi, studentExperimentApi } from '../../api'
 import {
   REPORT_SECTION_DEFS,
@@ -248,6 +250,7 @@ const formulaText = ref('')
 const formulaInputRef = ref(null)
 const imageInputRef = ref(null)
 const previewOpen = ref(false)
+let draftTimer,pendingDraft=null,saveSequence=0,loadSequence=0
 
 const REPORT_MAIN_WIDTH_KEY = 'wxz_report_main_width'
 const DEFAULT_REPORT_MAIN_WIDTH = 720
@@ -359,6 +362,7 @@ function escapeHtml(text) {
 
 function onEditorInput(key, event) {
   form[key] = event.target.innerHTML
+  saveDraft()
 }
 
 function setEditorContent(key, content) {
@@ -452,14 +456,24 @@ function draftKey() {
   return props.sessionId ? `wxz_report_draft_${props.sessionId}` : ''
 }
 
+async function flushServerDraft(){
+  clearTimeout(draftTimer)
+  const draft=pendingDraft;pendingDraft=null;if(!draft)return
+  const sequence=++saveSequence
+  try{await studentExperimentApi.saveReportDraft(draft.code,draft.payload);if(sequence===saveSequence)completionMessage.value="草稿已保存到服务器，可换设备继续写作。"}
+  catch(e){if(sequence===saveSequence)completionMessage.value="草稿已保存在本机，服务器保存失败："+(e.response?.data?.message||"请检查网络后重试")}
+}
+onBeforeUnmount(()=>{loadSequence++;flushServerDraft()})
 function saveDraft() {
   const key = draftKey()
   if (!key) return
   localStorage.setItem(key, JSON.stringify({
     experimentCode: props.experimentCode,
     sessionId: props.sessionId,
+    draftUpdatedAt: new Date().toISOString(),
     ...form
   }))
+  if(!reportDone.value){pendingDraft={code:props.experimentCode,payload:{sessionId:Number(props.sessionId),sections:currentSectionsPayload()}};clearTimeout(draftTimer);draftTimer=setTimeout(flushServerDraft,900)}
 }
 
 function applySections(sections) {
@@ -482,39 +496,38 @@ function loadDraft() {
       // fall through
     }
   }
-  const others = readLocalReportDrafts().filter((d) =>
-    !d.experimentCode || !props.experimentCode || d.experimentCode === props.experimentCode
-  )
-  return others.length ? applySections(others[0].sections) : false
+  return false
 }
 
 async function onSessionChange() {
+  const sequence=++loadSequence
+  flushServerDraft()
   completionMessage.value = ''
   reportDone.value = false
   sourceReport.value = null
   Object.keys(form).forEach((k) => { form[k] = '' })
   if (!props.sessionId) return
-  let serverSections = null
+  let serverSections = null, serverUpdatedAt=null
   if (props.experimentCode) {
     try {
       const { data } = await studentExperimentApi.getProgress(props.experimentCode)
       reportDone.value = !!data?.reportCompleted
       serverSections = data?.reportSections || null
+      serverUpdatedAt=data?.reportUpdatedAt
     } catch {
       reportDone.value = false
     }
   }
-  const loadedLocal = loadDraft()
-  if (!loadedLocal) applySections(serverSections)
-  else if (reportSectionsLength(extractReportSections(serverSections)) > reportSectionsLength(extractReportSections(form))) {
-    applySections(serverSections)
-  }
+  if(sequence!==loadSequence)return
+  let localUpdatedAt=null;try{localUpdatedAt=JSON.parse(localStorage.getItem(draftKey())||'null')?.draftUpdatedAt}catch{}
+  let loadedLocal=false
+  if(reportDone.value)applySections(serverSections)
+  else if(serverSections&&reportSectionsLength(extractReportSections(serverSections))>0&&(!localUpdatedAt||Date.parse(serverUpdatedAt)>=Date.parse(localUpdatedAt)))applySections(serverSections)
+  else loadedLocal=loadDraft()||applySections(serverSections)
   await nextTick()
   syncEditorsFromForm()
   await loadSourceReport()
-  if (reportDone.value && hasContent.value) {
-    persistReportToServer().catch(() => {})
-  }
+  if(sequence!==loadSequence)return
   if (loadedLocal || hasContent.value) return
   await generateFromSession()
 }
@@ -532,10 +545,12 @@ async function loadSourceReport() {
 }
 
 async function generateFromSession() {
-  if (!props.sessionId) return
+  if (!props.sessionId || reportDone.value) return
+  const sequence=loadSequence
   generating.value = true
   try {
     await loadSourceReport()
+    if(sequence!==loadSequence)return
     const built = buildReportSections(sourceReport.value, props.experimentCode)
     Object.keys(form).forEach((k) => {
       const raw = built[k] || ''
@@ -573,8 +588,10 @@ async function markReportComplete({ silent = false } = {}) {
   reportCompleting.value = true
   if (!silent) completionMessage.value = ''
   try {
+    await flushServerDraft()
     await persistReportToServer()
     reportDone.value = true
+    useTaskStore().load().catch(()=>{})
     if (!silent) completionMessage.value = '报告状态已同步，教师端可在报告评阅中查看。'
   } finally {
     reportCompleting.value = false
@@ -632,6 +649,7 @@ async function confirmSubmit() {
 </script>
 
 <style scoped>
+.draft-save-status{flex-shrink:0;padding:8px 16px;background:#f7fafb;color:#6d8490;border-bottom:1px solid #e3e9ed;font-size:11px}
 .report-editor { @apply overflow-hidden bg-white; }
 
 .report-frame-resizable {

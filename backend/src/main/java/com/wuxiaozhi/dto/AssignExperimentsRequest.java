@@ -7,5 +7,8 @@ import java.util.List;
 
 @Data
 public class AssignExperimentsRequest {
+    private String className;
+    private String instructions;
+    private java.time.LocalDateTime reportDueAt;
     private List<String> experimentCodes = new ArrayList<>();
 }

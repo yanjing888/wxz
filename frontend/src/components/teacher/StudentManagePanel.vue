@@ -1,10 +1,12 @@
 <template>
   <div class="student-manage">
-    <header class="sm-head">
-      <div>
-        <h2>学生管理</h2>
-        <p>{{ experimentName || experimentCode }} · 已导入 {{ filteredStudents.length }} 人</p>
-      </div>
+    <div class="sm-toolbar">
+      <input v-model.trim="searchQuery" class="sm-search" type="search" aria-label="搜索学生" placeholder="搜索班级、学号或姓名" />
+      <select v-model="assignmentFilter" class="sm-select" aria-label="实验分配状态">
+        <option value="all">全部学生</option>
+        <option value="assigned">已分配本实验</option>
+        <option value="unassigned">未分配本实验</option>
+      </select>
       <div class="sm-actions">
         <button type="button" class="sm-btn sm-btn--neutral" @click="downloadTemplate">下载模板</button>
         <label class="sm-btn sm-btn--import">
@@ -13,24 +15,30 @@
         </label>
         <button type="button" class="sm-btn sm-btn--primary" @click="openAddModal">添加学生</button>
       </div>
-    </header>
-
-    <div class="sm-toolbar">
-      <label class="sm-filter">
-        <input v-model="showAllStudents" type="checkbox" />
-        显示全部学生（含未加入本实验）
-      </label>
-      <input v-model.trim="searchQuery" class="sm-search" type="search" placeholder="搜索学号或姓名…" />
     </div>
 
+    <section class="task-publishing">
+      <div class="publish-actions">
+        <h3>{{ experimentName || experimentCode }}</h3>
+        <span>已选 {{ selectedRows.length }} 条</span>
+        <button type="button" class="sm-btn sm-btn--primary" :disabled="busy || !experimentCode || !selectedRows.length" @click="assignSelected">分配实验</button>
+      </div>
+      <details>
+        <summary>实验步骤与分配设置</summary>
+        <ol v-if="experimentSteps.length"><li v-for="step in experimentSteps" :key="step.id">{{ step.title }}</li></ol>
+        <label>补充要求<textarea v-model="taskInstructions" maxlength="4000" placeholder="选填" rows="2"></textarea></label>
+        <label>报告截止时间<input v-model="reportDueAt" type="datetime-local" /></label>
+      </details>
+    </section>
     <div v-if="busy" class="sm-state">处理中…</div>
     <div v-else-if="!displayStudents.length" class="sm-state">
-      {{ showAllStudents ? '暂无学生，请导入名单或添加学生。' : '本实验暂无学生，请导入并加入当前实验。' }}
+      {{ searchQuery || assignmentFilter !== 'all' ? '无匹配学生。' : '暂无学生。' }}
     </div>
     <div v-else class="sm-table-wrap custom-scroll">
       <table class="sm-table">
         <thead>
           <tr>
+            <th><input type="checkbox" :checked="displayStudents.length > 0 && selectedRows.length === displayStudents.length" :indeterminate="selectedRows.length > 0 && selectedRows.length < displayStudents.length" aria-label="选择当前列表全部学生" @change="checkedStudents = $event.target.checked ? displayStudents.map(studentKey) : []" /></th>
             <th>学号</th>
             <th>姓名</th>
             <th>班级</th>
@@ -39,7 +47,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="stu in displayStudents" :key="stu.userId">
+          <template v-for="group in studentGroups" :key="group.name"><tr class="student-class-row"><td colspan="6">{{ group.name }} · {{ group.students.length }} 人</td></tr><tr v-for="stu in group.students" :key="studentKey(stu)"><td><input v-model="checkedStudents" type="checkbox" :value="studentKey(stu)" :aria-label="'选择' + group.name + '的' + stu.displayName" /></td>
             <td>{{ stu.username }}</td>
             <td>{{ stu.displayName }}</td>
             <td>{{ stu.studentClass || '未分班' }}</td>
@@ -73,6 +81,7 @@
               </button>
             </td>
           </tr>
+</template>
         </tbody>
       </table>
     </div>
@@ -83,7 +92,6 @@
     <div v-if="addModalOpen" class="sm-modal-overlay" @click.self="closeAddModal">
       <form class="sm-modal" @submit.prevent="submitAddStudent">
         <h3>添加学生</h3>
-        <p class="sm-modal-hint">添加后学生可使用学号登录，默认密码 123456（可修改）。</p>
         <label class="sm-field">
           <span>学号</span>
           <input v-model.trim="addForm.username" required placeholder="如：20240101" />
@@ -94,7 +102,7 @@
         </label>
         <label class="sm-field">
           <span>班级</span>
-          <input v-model.trim="addForm.studentClass" placeholder="如：物理 2401 班" />
+          <input v-model.trim="addForm.studentClass" required placeholder="如：物理 2401 班" />
         </label>
         <label class="sm-field">
           <span>初始密码</span>
@@ -126,7 +134,7 @@
           <p v-for="(err, i) in importResult.errors" :key="i">{{ err }}</p>
         </div>
         <div class="sm-modal-actions">
-          <button type="button" class="sm-btn sm-btn--primary" @click="importResultOpen = false">知道了</button>
+          <button type="button" class="sm-btn sm-btn--primary" @click="importResultOpen = false">关闭</button>
         </div>
       </div>
     </div>
@@ -138,15 +146,16 @@ import { computed, reactive, ref, watch } from 'vue'
 import { teacherApi } from '../../api'
 
 const props = defineProps({
+  experimentSteps:{type:Array,default:()=>[]},
   experimentCode: { type: String, default: '' },
   experimentName: { type: String, default: '' },
-  students: { type: Array, default: () => [] },
   allStudents: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['refresh'])
 
-const showAllStudents = ref(false)
+const assignmentFilter = ref('all')
+const checkedStudents=ref([]),taskInstructions=ref(''),reportDueAt=ref('')
 const searchQuery = ref('')
 const busy = ref(false)
 const message = ref('')
@@ -160,7 +169,7 @@ const addForm = reactive({
   displayName: '',
   studentClass: '',
   password: '',
-  joinCurrent: true
+  joinCurrent: false
 })
 
 const importResultOpen = ref(false)
@@ -172,33 +181,77 @@ const importResult = reactive({
   errors: []
 })
 
-const filteredStudents = computed(() => {
-  const list = props.students || []
-  const q = searchQuery.value.toLowerCase()
-  if (!q) return list
-  return list.filter((s) =>
-    (s.username || '').toLowerCase().includes(q) ||
-    (s.displayName || '').toLowerCase().includes(q) ||
-    (s.studentClass || '').toLowerCase().includes(q)
-  )
-})
-
 const displayStudents = computed(() => {
-  const source = showAllStudents.value ? (props.allStudents || []) : filteredStudents.value
+  const source = props.allStudents || []
   const q = searchQuery.value.toLowerCase()
-  if (!q || !showAllStudents.value) return source
   return source.filter((s) =>
-    (s.username || '').toLowerCase().includes(q) ||
+    (!q || (s.username || '').toLowerCase().includes(q) ||
     (s.displayName || '').toLowerCase().includes(q) ||
-    (s.studentClass || '').toLowerCase().includes(q)
+    (s.studentClass || '未分班').toLowerCase().includes(q)) &&
+    (assignmentFilter.value === 'all' || (assignmentFilter.value === 'assigned' ? isAssignedToCurrent(s) : !isAssignedToCurrent(s)))
   )
 })
 
 watch(() => props.experimentCode, () => {
-  showAllStudents.value = false
+  assignmentFilter.value = 'all'
+  checkedStudents.value=[]
   message.value = ''
 })
 
+const studentGroups = computed(() => {
+  const groups = new Map()
+  for (const student of displayStudents.value) {
+    const name = student.studentClass || '未分班'
+    if (!groups.has(name)) groups.set(name, [])
+    groups.get(name).push(student)
+  }
+  return [...groups].map(([name, students]) => ({ name, students }))
+})
+const studentKey = student => JSON.stringify([student.studentClass || '未分班', student.userId])
+const selectedRows = computed(() => displayStudents.value.filter(student => checkedStudents.value.includes(studentKey(student))))
+watch([searchQuery, assignmentFilter], () => { checkedStudents.value = []; message.value = '' })
+
+async function assignSelected() {
+  if (busy.value || !props.experimentCode || !selectedRows.value.length) return
+  const rows = [...selectedRows.value]
+  const seen = new Set()
+  for (const student of rows) {
+    if (seen.has(student.userId)) {
+      message.value = `${student.displayName} 在多个班级被选中，请保留一个班级。`
+      messageType.value = 'error'
+      return
+    }
+    seen.add(student.userId)
+  }
+  const groups = new Map()
+  for (const student of rows) {
+    const name = student.studentClass || '未分班'
+    if (!groups.has(name)) groups.set(name, [])
+    groups.get(name).push(student)
+  }
+  busy.value = true
+  message.value = ''
+  let assigned = 0
+  try {
+    for (const [className, students] of groups) {
+      await teacherApi.bulkAssignExperiments({
+        userIds: students.map(student => student.userId),
+        experimentCodes: [props.experimentCode], className, mode: 'append',
+        instructions: taskInstructions.value, reportDueAt: reportDueAt.value || null
+      })
+      assigned += students.length
+      checkedStudents.value = checkedStudents.value.filter(key => !students.some(student => studentKey(student) === key))
+    }
+    message.value = `已分配 ${assigned} 人。`
+    messageType.value = 'success'
+  } catch (e) {
+    message.value = (assigned ? `已分配 ${assigned} 人；其余未分配：` : '') + (e.response?.data?.message || '分配失败')
+    messageType.value = 'error'
+  } finally {
+    busy.value = false
+    if (assigned) emit('refresh')
+  }
+}
 function isAssignedToCurrent(stu) {
   return (stu.assignedExperimentCodes || []).includes(props.experimentCode)
 }
@@ -225,7 +278,7 @@ async function onImportFile(event) {
     const { data } = await teacherApi.importStudents({
       csv,
       defaultPassword: '123456',
-      experimentCodes: props.experimentCode ? [props.experimentCode] : [],
+      experimentCodes: [],
       assignMode: 'append'
     })
     importResult.created = data.created || 0
@@ -248,7 +301,7 @@ function openAddModal() {
   addForm.displayName = ''
   addForm.studentClass = ''
   addForm.password = ''
-  addForm.joinCurrent = true
+  addForm.joinCurrent = false
   addError.value = ''
   addModalOpen.value = true
 }
@@ -273,7 +326,7 @@ async function submitAddStudent() {
     }
     await teacherApi.createStudent(payload)
     closeAddModal()
-    message.value = '学生已添加，可使用学号登录实验台。'
+    message.value = '已添加。'
     messageType.value = 'success'
     emit('refresh')
   } catch (e) {
@@ -291,6 +344,7 @@ async function addToCurrent(stu) {
     await teacherApi.bulkAssignExperiments({
       userIds: [stu.userId],
       experimentCodes: [props.experimentCode],
+      className:stu.studentClass,
       mode: 'append'
     })
     message.value = `已将 ${stu.displayName} 加入本实验。`
@@ -324,6 +378,18 @@ async function removeFromCurrent(stu) {
 </script>
 
 <style scoped>
+.task-publishing { border:1px solid #e4e9f3; background:#fafbff; border-radius:8px; padding:10px 14px; margin:0 0 12px; flex-shrink:0; }
+.task-publishing h3 { font-size:13px; font-weight:600; color:#334155; margin-right:auto; }
+.task-publishing details { font-size:12px; margin-top:8px; color:#64748b; }
+.task-publishing summary { cursor:pointer; }
+.task-publishing textarea { display:block; width:100%; border:1px solid #e4e9f3; border-radius:6px; padding:8px; margin:6px 0 10px; background:white; font-size:13px; }
+.task-publishing input[type=datetime-local] { display:block; border:1px solid #e4e9f3; background:#fff; padding:6px; margin-top:6px; border-radius:6px; }
+.task-publishing ol { list-style:decimal; padding:10px 0 10px 20px; line-height:1.8; max-height:160px; overflow:auto; }
+.publish-actions { display:flex; gap:12px; align-items:center; flex-wrap:wrap; font-size:12px; color:#64748b; }
+.student-class-row td { background:#f8f9fc; font-weight:600; color:#475569; }
+.sm-table input[type=checkbox] { accent-color:#4f46e5; }
+.sm-select { border:1px solid #e2e8f0; background:#fff; border-radius:8px; height:34px; padding:0 10px; font-size:12px; color:#475569; }
+
 .student-manage {
   display: flex;
   flex-direction: column;
@@ -332,17 +398,7 @@ async function removeFromCurrent(stu) {
   padding: 16px;
   background: #fff;
 }
-.sm-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
-  flex-shrink: 0;
-}
-.sm-head h2 { font-size: 17px; font-weight: 700; color: #0f172a; }
-.sm-head p { margin-top: 4px; font-size: 12px; color: #94a3b8; font-weight: 600; }
-.sm-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sm-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; flex-shrink: 0; }
 .sm-btn {
   display: inline-flex;
   align-items: center;
@@ -392,6 +448,7 @@ async function removeFromCurrent(stu) {
   gap: 12px;
   margin-bottom: 12px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 .sm-filter {
   display: flex;
@@ -404,6 +461,7 @@ async function removeFromCurrent(stu) {
 }
 .sm-search {
   flex: 1;
+  min-width: 180px;
   max-width: 280px;
   height: 34px;
   border: 1px solid #e2e8f0;

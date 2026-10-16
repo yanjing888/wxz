@@ -60,4 +60,9 @@ public class StudentExperimentController {
     public ExperimentProgressDto completeRecap(@PathVariable String experimentCode, Authentication authentication) {
         return studentExperimentService.completeRecap(AuthSupport.currentUserId(authentication), experimentCode);
     }
+
+    @PutMapping("/{experimentCode}/progress/report/draft")
+    public ExperimentProgressDto saveDraft(@PathVariable String experimentCode,@RequestBody CompleteReportRequest request,Authentication authentication){
+        return studentExperimentService.saveDraft(AuthSupport.currentUserId(authentication),experimentCode,request);
+    }
 }

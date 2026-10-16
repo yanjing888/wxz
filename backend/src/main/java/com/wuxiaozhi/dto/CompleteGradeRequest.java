@@ -7,9 +7,9 @@ import lombok.Data;
 
 @Data
 public class CompleteGradeRequest {
-    @NotNull
-    @DecimalMin("0.0")
-    @DecimalMax("10.0")
+    @NotNull(message = "请填写评分")
+    @DecimalMin(value = "0.0", message = "评分不能小于0分")
+    @DecimalMax(value = "100.0", message = "评分不能超过100分")
     private Double score;
 
     private String comment;

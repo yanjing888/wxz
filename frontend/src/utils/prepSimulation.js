@@ -12,16 +12,13 @@ export function simulationPrepRoute(code) {
 export function labEntryBlockedRoute(progress, code) {
   if (!code || !progress) return null
   if (progress.experimentCode && progress.experimentCode !== code) return null
-  return requiresSimulation(progress) ? simulationPrepRoute(code) : null
+  return !progress.labCompleted && requiresSimulation(progress) ? simulationPrepRoute(code) : null
 }
 
 /** 仿真未完成时需拦截的学生端路由 */
 export const SIMULATION_GATED_ROUTE_NAMES = [
   'lab',
-  'lab-monitor',
-  'after-center',
-  'after-report',
-  'after-review'
+  'lab-monitor'
 ]
 
 export function experimentCodeFromRoute(to, fallback = '') {

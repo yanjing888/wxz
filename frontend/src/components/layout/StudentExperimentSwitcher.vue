@@ -1,6 +1,6 @@
 <template>
   <ExperimentSelect
-    :experiments="lab.experiments"
+    :experiments="availableExperiments"
     :experiment-code="currentCode"
     :switching="switching"
     @experiment-change="onSwitch"
@@ -14,17 +14,23 @@ import { useLabStore } from '../../stores/lab'
 import { studentExperimentApi } from '../../api'
 import { labEntryBlockedRoute } from '../../utils/prepSimulation'
 import ExperimentSelect from './ExperimentSelect.vue'
+import { useTaskStore } from '../../stores/tasks'
 
 const router = useRouter()
 const route = useRoute()
 const lab = useLabStore()
+const tasks = useTaskStore()
+const availableExperiments = computed(() => tasks.loaded
+  ? lab.experiments.filter(experiment => tasks.items.some(item => item.experimentCode === experiment.code && (item.currentTask || item.labCompleted)))
+  : lab.experiments)
 const switching = ref(false)
 
 const currentCode = computed(() =>
-  String(route.params.code || route.query.exp || lab.experiment?.code || '').trim()
+  String(route.params.code || route.query.exp || tasks.current?.experimentCode || lab.experiment?.code || '').trim()
 )
 
 onMounted(async () => {
+  await tasks.load().catch(() => {})
   if (!lab.experiments.length) {
     try {
       await lab.loadExperiments()

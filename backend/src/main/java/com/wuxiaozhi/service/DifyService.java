@@ -155,6 +155,9 @@ public class DifyService {
                 return toInvokeResponse(assist.getFeedback(), assist.isFromDify());
             }
             JsonNode outputs = runWorkflow(workflowKey, buildToolWorkflowInputs(workflowKey, inputs, imageUrl, userId), userId);
+            if ("report-review".equals(workflowKey)) {
+                return reportReviewResponse(outputs);
+            }
             AssistResponse parsed = parseAssistResponse(outputs, true);
             String text = parsed.getFeedback() != null && !parsed.getFeedback().isBlank()
                     ? parsed.getFeedback()
@@ -181,6 +184,31 @@ public class DifyService {
             workflowInputs.putIfAbsent("image_url", imageUrl);
         }
         return workflowInputs;
+    }
+
+    /** Workflow End outputs are two scalar fields, not a Chatflow answer or JSON string. */
+    private AiToolInvokeResponse reportReviewResponse(JsonNode outputs) throws Exception {
+        JsonNode scoreNode = outputs.get("score");
+        JsonNode commentNode = outputs.get("comment");
+        if (scoreNode == null || !scoreNode.isNumber() || !Double.isFinite(scoreNode.asDouble())
+                || scoreNode.asDouble() < 0 || scoreNode.asDouble() > 100
+                || commentNode == null || !commentNode.isTextual() || commentNode.asText().isBlank()) {
+            throw new IllegalArgumentException("Report review must return score (0-100) and nonempty comment");
+        }
+        double score = Math.round(scoreNode.asDouble() * 10.0) / 10.0;
+        String comment = commentNode.asText().trim();
+        Map<String,Object> data = new LinkedHashMap<>();
+        data.put("score", score);
+        data.put("comment", comment);
+        AiToolInvokeResponse response = new AiToolInvokeResponse();
+        response.setFromDify(true);
+        response.setScore(score);
+        response.setMaxScore(100.0);
+        response.setComment(comment);
+        response.setNeedsTeacherConfirm(true);
+        response.setData(data);
+        response.setText(objectMapper.writeValueAsString(data));
+        return response;
     }
 
     private AiToolInvokeResponse toInvokeResponse(String text, boolean fromDify) {
@@ -834,7 +862,11 @@ public class DifyService {
         body.put("user", userId);
 
         JsonNode root = postJson(url, difyProperties.resolveApiKey(workflowKey), body);
-        return root.path("data").path("outputs");
+        JsonNode data = root.path("data");
+        if (data.has("status") && !"succeeded".equals(data.path("status").asText())) {
+            throw new IllegalStateException("Dify workflow did not succeed");
+        }
+        return data.path("outputs");
     }
 
     private JsonNode runChat(String workflowKey, Map<String, Object> inputs, String userId, String query,

@@ -8,6 +8,8 @@ import java.util.List;
 
 public interface StudentExperimentAssignmentRepository extends JpaRepository<StudentExperimentAssignment, Long> {
     List<StudentExperimentAssignment> findByUserIdOrderByExperimentCodeAsc(Long userId);
+    List<StudentExperimentAssignment> findByUserIdOrderByAssignedAtAscIdAsc(Long userId);
+    java.util.Optional<StudentExperimentAssignment> findByUserIdAndExperimentCode(Long userId,String experimentCode);
 
     List<StudentExperimentAssignment> findByUserIdIn(Collection<Long> userIds);
 

@@ -12,11 +12,80 @@ import org.junit.jupiter.api.Test;
 import java.net.InetSocketAddress;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 class DifyServiceTest {
+
+    @Test
+    void reportReviewUsesWorkflowAndReadsTwoScalarOutputsAsPercent() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        AtomicReference<com.fasterxml.jackson.databind.JsonNode> request = new AtomicReference<>();
+        AtomicInteger chatCalls = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/workflows/run", exchange -> {
+            request.set(mapper.readTree(exchange.getRequestBody()));
+            byte[] body = mapper.writeValueAsBytes(Map.of("data", Map.of("status", "succeeded", "outputs",
+                    Map.of("score", 86.5, "comment", "数据记录完整，建议补充不确定度分析。"))));
+            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+            exchange.sendResponseHeaders(200, body.length);exchange.getResponseBody().write(body);exchange.close();
+        });
+        server.createContext("/v1/chat-messages", exchange -> {chatCalls.incrementAndGet();exchange.sendResponseHeaders(500, -1);exchange.close();});
+        server.start();
+        try {
+            DifyProperties properties = new DifyProperties();
+            properties.setAppMode("chat"); // Other tools remain Chatflows.
+            properties.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
+            properties.setWorkflows(Map.of("report-review", "app-report-key"));
+            DifyService service = new DifyService(properties, mapper, mock(FileStorageService.class));
+            Map<String,Object> file = Map.of("type", "document", "transfer_method", "local_file", "upload_file_id", "file-123");
+            var response = service.invokeTool("report-review", Map.of("student_report_file", file, "experiment_spec", "实验要求"), "teacher-1");
+            assertThat(response.isFromDify()).isTrue();
+            assertThat(response.getScore()).isEqualTo(86.5);
+            assertThat(response.getMaxScore()).isEqualTo(100.0);
+            assertThat(response.getComment()).contains("不确定度");
+            assertThat(response.getData()).containsOnlyKeys("score", "comment");
+            assertThat(request.get().path("response_mode").asText()).isEqualTo("blocking");
+            assertThat(request.get().path("inputs").path("student_report_file").path("upload_file_id").asText()).isEqualTo("file-123");
+            assertThat(request.get().has("query")).isFalse();
+            assertThat(request.get().has("conversation_id")).isFalse();
+            assertThat(chatCalls.get()).isZero();
+        } finally {server.stop(0);}
+    }
+
+    @Test
+    void reportReviewRejectsInvalidMarksOrFailedWorkflows() throws Exception {
+        AtomicReference<String> responseBody = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/workflows/run", exchange -> {
+            byte[] body = responseBody.get().getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+            exchange.sendResponseHeaders(200, body.length);exchange.getResponseBody().write(body);exchange.close();
+        });
+        server.start();
+        try {
+            DifyProperties properties = new DifyProperties();
+            properties.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
+            properties.setWorkflows(Map.of("report-review", "app-report-key"));
+            DifyService service = new DifyService(properties, new ObjectMapper(), mock(FileStorageService.class));
+            for (String outputs : List.of("{\"score\":101,\"comment\":\"comment\"}", "{\"score\":-1,\"comment\":\"comment\"}",
+                    "{\"score\":80,\"comment\":\"\"}", "{\"score\":\"80\",\"comment\":\"comment\"}", "{\"comment\":\"comment\"}")) {
+                responseBody.set("{\"data\":{\"status\":\"succeeded\",\"outputs\":" + outputs + "}}");
+                assertThat(service.invokeTool("report-review", Map.of(), "teacher-1").isFromDify()).isFalse();
+            }
+            responseBody.set("{\"data\":{\"status\":\"failed\",\"outputs\":{\"score\":80,\"comment\":\"comment\"}}}");
+            assertThat(service.invokeTool("report-review", Map.of(), "teacher-1").isFromDify()).isFalse();
+            for (int score : List.of(0, 5, 100)) {
+                responseBody.set("{\"data\":{\"status\":\"succeeded\",\"outputs\":{\"score\":" + score + ",\"comment\":\"comment\"}}}");
+                assertThat(service.invokeTool("report-review", Map.of(), "teacher-1").getScore()).isEqualTo((double) score);
+            }
+        } finally {server.stop(0);}
+    }
 
     @Test
     void assistDoesNotFallbackToStepMockWhenDifyUnavailable() {

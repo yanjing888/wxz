@@ -9,6 +9,7 @@ import java.util.List;
 @Data
 public class TeacherClassroomStudentDto {
     private Long userId;
+    private String username;
     private String studentName;
     private String studentClass;
     private String experimentCode;

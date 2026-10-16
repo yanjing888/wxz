@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { studentExperimentApi } from '../api'
+import { useTaskStore } from '../stores/tasks'
 import { lastExperiment } from '../utils/experimentFlow'
 import {
   experimentCodeFromRoute,
@@ -18,6 +19,8 @@ const routes = [
     meta: studentMeta,
     children: [
       { path: '', redirect: { name: 'lab' } },
+      { path: 'tasks', name: 'student-tasks', redirect: { name: 'lab' } },
+      { path: 'reports', name: 'student-reports', component: () => import('../views/TaskCenterView.vue'), meta: studentMeta },
       {
         path: 'experiments',
         name: 'experiments',
@@ -143,13 +146,29 @@ router.beforeEach(async (to) => {
   if (role === 'STUDENT' && auth.isTeacher) {
     return '/teacher'
   }
-  if (SIMULATION_GATED_ROUTE_NAMES.includes(String(to.name)) && auth.token && !auth.isTeacher) {
+  // Resolve the current assignment inside the original experiment page.
+  if (['lab', 'lab-monitor'].includes(String(to.name)) && !to.query.exp && auth.token && !auth.isTeacher) {
+    try {
+      const tasks = useTaskStore()
+      await tasks.load()
+      const code = tasks.current?.experimentCode || tasks.reports.at(-1)?.experimentCode
+      if (code) return { name: to.name, query: { ...to.query, exp: code } }
+    } catch { /* The experiment page shows connection errors. */ }
+  }
+  if ([...SIMULATION_GATED_ROUTE_NAMES, 'prep-simulation'].includes(String(to.name)) && auth.token && !auth.isTeacher) {
     const code = experimentCodeFromRoute(to, lastExperiment())
     if (code) {
       try {
         const { data: progress } = await studentExperimentApi.getProgress(code)
+        if (progress?.currentTask === false && !progress.labCompleted) {
+          const tasks = useTaskStore()
+          await tasks.load()
+          return tasks.current
+            ? { name: 'lab', query: { exp: tasks.current.experimentCode } }
+            : { name: 'student-reports' }
+        }
         const simBlock = labEntryBlockedRoute(progress, code)
-        if (simBlock) return simBlock
+        if (simBlock && to.name !== 'prep-simulation') return simBlock
       } catch {
         // 进度拉取失败时不阻断，由目标页自行提示
       }
