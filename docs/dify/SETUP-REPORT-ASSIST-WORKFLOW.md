@@ -51,13 +51,7 @@ DIFY_WF_REPORT_ASSIST=app-xxxxxxxxxxxxxxxx
 
 **学生端侧边栏**建议用 **多分支版**：问「缺什么」只走完整性支路，问「整理表格」只走表格支路。
 
-生成/更新 DSL：
-
-```bash
-python scripts/build_report_analysis_dify.py
-```
-
-会同时输出 `wuxiaozhi-report-assist-branched.yml`。
+这两个报告助手 DSL 直接在 Dify 导入。修改节点后，从 Dify 导出并更新仓库中对应的 YAML 文件。
 
 ---
 

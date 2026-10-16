@@ -11,7 +11,7 @@ version: v1.0
 
 # 低碳钢拉伸实验教学知识库
 
-本文档用于 Dify 教学知识库：原理、步骤、数据处理与报告指导。纠错规则见 `docs/visual-rules/tensile_steel.md`。
+本文档用于 Dify 教学知识库：原理、步骤、数据处理与报告指导。纠错规则见同目录的 `visual-rules.md`。
 
 ## 一、实验目的
 

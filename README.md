@@ -9,7 +9,8 @@ Vue 3 + Spring Boot 大学物理实验多模态智能指导平台。AI 能力通
 ├── config/
 │   ├── ports.env       # 前后端端口（唯一入口）
 │   └── dify.env        # Dify 全部配置（唯一入口）
-├── index.html          # 原始 HTML 原型（参考）
+├── scripts/            # 启动、部署和知识库维护脚本
+├── docs/               # 开发、部署及 Dify 接入说明
 ├── backend/            # Spring Boot 后端
 └── frontend/           # Vue 3 前端
 ```
@@ -62,6 +63,19 @@ chmod +x scripts/start.sh
 ```
 
 脚本会读取 `config/ports.env` 并检查端口是否空闲。
+
+| 操作 | 入口 |
+|---|---|
+| 开发环境启动前后端 | `scripts/start.bat` |
+| 使用已构建的后端 JAR 启动 | `scripts/start-deploy.bat` |
+| 单独启动前端 / 后端 JAR | `启动前端.cmd` / `启动后端.cmd` |
+| 停止服务 | `scripts/stop.bat` |
+| 安装前端依赖 | `scripts/npm-install.bat` |
+| 生成 Windows 部署包 | `scripts/pack-deploy.bat` |
+| 部署检查 / 数据库连接检查 | `scripts/check-deploy.bat` / `scripts/test-mysql-connect.bat` |
+| 收集启动诊断 | `scripts/diagnose.bat` |
+
+`scripts/_read-*.bat` 和 `_free-port.bat` 是启动脚本的内部依赖，需要保留。
 
 ### 分别启动
 
@@ -131,6 +145,8 @@ DIFY_KB_TOP_K=5
 ```text
 backend/src/main/resources/knowledge-map.yml
 ```
+
+教学知识与纠错规则统一维护在 `backend/src/main/resources/experiments/<实验编号>/` 下的 `teaching-knowledge.md` 和 `visual-rules.md`。运行 `python scripts/sync_kb.py` 可生成 Dify 导入包；导出目录 `docs/kb/export/` 不提交到 Git。维护方式见 [知识库说明](docs/kb/README.md)。
 
 推荐使用两个通用知识库：
 
@@ -246,3 +262,12 @@ experiments/
 | POST | `/api/sessions/{id}/env-check` | 环境巡检 |
 | GET | `/api/sessions/{id}/report` | 报告 JSON |
 | GET | `/api/sessions/{id}/report/docx` | 报告 DOCX 下载 |
+
+## 维护文档
+
+- [教学班、实验任务与报告流程](docs/teaching-workflow.md)
+- [真实实验教学流程评估](docs/lab-teaching-review.md)
+- [Dify 实验指导工作流](docs/dify/SETUP-GUIDANCE-WORKFLOW.md)
+- [Dify 教师报告预评](docs/dify/SETUP-REPORT-REVIEW-WORKFLOW.md)
+- [Dify 学生报告助手](docs/dify/SETUP-REPORT-ASSIST-WORKFLOW.md)
+- [Android 平板打包](docs/android-apk.md)

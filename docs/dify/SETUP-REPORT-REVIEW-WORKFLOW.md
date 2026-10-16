@@ -12,11 +12,9 @@
 python scripts/build_report_review_dify.py
 ```
 
-会同时写出：
+生成文件：
 
 - `docs/dify/物小智-教师报告预评.yml`
-- `docs/dify/wuxiaozhi-report-review.yml`（内容相同）
-- `docs/dify/物小智-教师报告预评-Workflow-100分.yml`（便于辨认的导入文件，内容相同）
 
 ## 2. 导入 Dify 并发布
 

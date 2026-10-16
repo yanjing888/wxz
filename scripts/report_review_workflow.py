@@ -10,8 +10,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUTS = [ROOT / "docs/dify/物小智-教师报告预评.yml", ROOT / "docs/dify/wuxiaozhi-report-review.yml",
-           ROOT / "docs/dify/物小智-教师报告预评-Workflow-100分.yml"]
+OUTPUTS = [ROOT / "docs/dify/物小智-教师报告预评.yml"]
 
 PARSE_CODE = r'''import html
 import re

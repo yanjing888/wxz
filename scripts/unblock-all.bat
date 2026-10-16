@@ -9,6 +9,6 @@ echo.
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%ROOT%' -Recurse -Include *.bat,*.cmd,*.vbs -File | Unblock-File -ErrorAction SilentlyContinue"
 
 echo.
-echo Done. Run scripts\test-window.bat to verify.
+echo Done. Run scripts\check-deploy.bat to verify.
 echo.
 pause

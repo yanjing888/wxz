@@ -11,7 +11,7 @@ from openpyxl.utils import get_column_letter
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCX = Path(r"d:/yanjing/00 资料/智能体/26立项--物小智/牛顿环与空气劈尖三个实验整理.docx")
-OUT = ROOT / "docs" / "kb" / "import" / "三实验教学知识库-Dify导入.xlsx"
+OUT = ROOT / "docs" / "kb" / "import" / "实验教学知识库.xlsx"
 
 EXPERIMENTS = [
     {

@@ -14,11 +14,11 @@ http://192.168.1.100:8082
 
 ## 2. 配置 APK 使用的后端地址
 
-复制示例文件：
+创建本机的构建配置文件：
 
 ```powershell
 cd frontend
-Copy-Item .env.production.example .env.production
+Set-Content .env.production 'VITE_API_BASE_URL=http://你的后端IP:8082'
 ```
 
 编辑 `frontend/.env.production`：
@@ -29,20 +29,20 @@ VITE_API_BASE_URL=http://你的后端IP:8082
 
 ## 3. 生成 Android 工程
 
-第一次打包时执行：
+仓库已经包含 Android 工程，构建前端并同步资源：
 
 ```powershell
 cd frontend
 npm run build
-npx cap add android
-npm run android:sync
+npx cap sync android
 ```
 
 以后前端改完，只需要：
 
 ```powershell
 cd frontend
-npm run android:sync
+npm run build
+npx cap sync android
 ```
 
 ## 4. 在 Android Studio 里出 APK
@@ -56,15 +56,15 @@ C:\Users\你的用户名\AppData\Local\Android\Sdk
 Android Studio 配好 SDK 后，可以回到命令行直接构建 debug APK：
 
 ```powershell
-cd frontend
-npm run android:debug
+cd frontend/android
+.\gradlew.bat assembleDebug
 ```
 
 也可以打开 Android Studio：
 
 ```powershell
 cd frontend
-npm run android:open
+npx cap open android
 ```
 
 Android Studio 打开后：

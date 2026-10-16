@@ -58,7 +58,7 @@ echo.
 echo Two cmd windows will open: WXZ-Backend-JAR and WXZ-Frontend
 echo Open browser: http://localhost:%FRONTEND_PORT%/
 echo.
-echo If nothing appears, run scripts\unblock-all.bat then scripts\test-window.bat
+echo If nothing appears, run scripts\unblock-all.bat then scripts\check-deploy.bat
 echo.
 pause
 

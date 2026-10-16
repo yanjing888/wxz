@@ -1,101 +1,35 @@
-# 物小智知识库建设指南
+# 物小智知识库维护
 
-物小智使用 **双库** 架构，与 `backend/src/main/resources/knowledge-map.yml` 和工作流中的 4 个知识检索节点对应。
+实验教学知识和纠错规则只在后端资源目录维护，不再保留多份源文件。
 
-| 库 | 目录 | Dify 环境变量 |
+| 内容 | 源文件 | Dify 环境变量 |
 |---|---|---|
-| 教学库 | `docs/teaching-knowledge/` | `DIFY_KB_TEACHING_DATASET_ID` |
-| 纠错规则库 | `docs/visual-rules/` | `DIFY_KB_CORRECTION_RULES_DATASET_ID` |
+| 教学知识 | `backend/src/main/resources/experiments/<实验编号>/teaching-knowledge.md` | `DIFY_KB_TEACHING_DATASET_ID` |
+| 纠错规则 | 同目录的 `visual-rules.md` | `DIFY_KB_CORRECTION_RULES_DATASET_ID` |
 
-## 第一步：编写 Markdown
+实验与步骤的检索映射见 `backend/src/main/resources/knowledge-map.yml`。`steps/*.md` 和 `report-guide.md` 也由后端直接读取，用于页面操作引导和报告指导。
 
-- **纠错库**：只写「什么算错、可见证据、怎么改」，每条规则带稳定 `rule_id`
-- **教学库**：原理、步骤、公式、报告写法（不写判错规则）
+## 修改和导出
 
-源文件命名与 `knowledge-map.yml` 中 `doc` 字段一致，例如 `newton_rings/visual-rules.md`。
+1. 编辑对应实验目录的知识 Markdown。教学知识写原理、操作、公式和报告指导；纠错规则写可见证据、错误判断及修正方法。
+2. 保留 frontmatter 中的 `experiment_code`、`kb_type`、`doc`、`sectionKey`，以及各步骤的 `section_key`。
+3. 在项目根目录运行：
 
-每份文档 frontmatter 至少包含：
+   ```bash
+   python scripts/sync_kb.py
+   ```
 
-```yaml
----
-experiment_code: newton_rings
-kb_type: correction_rule   # 或 teaching
-doc: newton_rings/visual-rules.md
-sectionKey: newton_rings
----
-```
+脚本自动读取所有带 `manifest.json` 的实验目录，生成 `docs/kb/export/teaching/` 和 `docs/kb/export/correction_rules/`。每篇 Markdown 配有同名 `.metadata.json`，包含导入 Dify 所需的元数据。导出过程不会改写源文件；源文件缺失会直接报错。
 
-每个实验步骤章节建议标注 `section_key`（与 knowledge-map 中 `rulesSection` 对齐）：
-
-```markdown
-## Step 1：仪器检查与光路调节
-
-> **section_key:** `newton_rings.step.1.rules`
-```
-
-## 第二步：同步到后端
+导出目录是生成文件，已加入 Git 忽略。需要时重新运行脚本，不手工编辑导出副本。也可以指定临时导出位置：
 
 ```bash
-python scripts/sync_kb.py
+python scripts/sync_kb.py --output .codex-tmp/kb-export
 ```
 
-会完成：
+## 更新 Dify
 
-1. `docs/` → `backend/src/main/resources/experiments/*/`
-2. 生成 `docs/kb/export/{teaching|correction_rules}/` 供 Dify 导入
-
-## 第三步：在 Dify 创建知识库
-
-1. 新建数据集 **物理实验教学知识点通用库**（teaching）
-2. 新建数据集 **物理实验纠错规则通用库**（correction_rules）
-3. 从 `docs/kb/export/` 分别导入各实验的 `.md` 文件
-4. 为每个文档设置元数据（与同名 `.metadata.json` 一致）：
-   - `experiment_code`
-   - `kb_type`
-   - `doc`
-   - `sectionKey`
-
-## 第四步：导入并绑定工作流
-
-```bash
-python scripts/build_step_aware_dify_workflow.py
-```
-
-导入 `docs/dify/wuxiaozhi-correction-guidance-rich.yml`，然后在 Dify 界面：
-
-1. 配置环境变量 `WXZ_BACKEND_BASE_URL`（物小智后端地址）
-2. 为 4 个「知识检索」节点绑定对应 dataset_id：
-   - 教学库（文本）
-   - 纠错规则库（文本）
-   - 教学库（视觉辅助）
-   - 纠错规则库（视觉）
-3. 将 dataset UUID 写入 `config/dify.env`：
-   - `DIFY_KB_TEACHING_DATASET_ID=...`
-   - `DIFY_KB_CORRECTION_RULES_DATASET_ID=...`
-
-## 第五步：配置后端
-
-`config/dify.env` 中确保：
-
-- `DIFY_WF_TEXT_ASSIST` — 绑定 rich 工作流 App Key
-- `DIFY_WF_VISION_CORRECTION` — 可与 text 共用同一工作流（后端按有无图片分流）
-
-## 当前进度
-
-| 实验 | 纠错库 | 教学库 |
-|------|--------|--------|
-| general | `docs/visual-rules/general.md` | 待完善 |
-| newton_rings | ✅ 完整 | ✅ 完整 |
-| air_wedge_thickness | ✅ step 章节 | ✅ step 章节 |
-| microscope_length_measurement | ✅ step 章节 | ✅ step 章节 |
-| tensile_steel | 建设中 | 建设中 |
-
-## Dify 工作流导入
-
-详见 [SETUP-GUIDANCE-WORKFLOW.md](../dify/SETUP-GUIDANCE-WORKFLOW.md)
-
-## 规则 ID 命名
-
-`{实验缩写}_STEP{步号}_{问题}` 或 `{实验缩写}_GENERAL_{问题}`
-
-示例：`NR_STEP1_RING_BLUR`、`TS_STEP2_CLAMP_MISALIGN`
+- 将两类导出 Markdown 分别导入教学库和纠错规则库，并按 `.metadata.json` 设置文档元数据。
+- 在 Dify 工作流中绑定相应知识库，用 `experiment_code` 过滤当前实验。
+- 将知识库 ID 写入 `config/dify.env`，更新配置后重启后端。
+- 完整节点绑定方法见 [实验指导工作流](../dify/SETUP-GUIDANCE-WORKFLOW.md)；教师报告预评见 [报告预评工作流](../dify/SETUP-REPORT-REVIEW-WORKFLOW.md)。

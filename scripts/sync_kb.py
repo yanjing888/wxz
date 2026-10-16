@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
-"""Sync KB markdown from docs/ to backend resources and Dify export pack."""
+"""Export the backend's canonical experiment knowledge to a Dify import pack."""
 
 from __future__ import annotations
 
 import json
 import re
-import shutil
+import argparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# (source under docs/, backend relative path, dataset, default experiment_code)
-KB_FILES: list[tuple[str, str, str, str]] = [
-    ("visual-rules/general.md", "experiments/general/visual-rules.md", "correction_rules", "general"),
-    ("visual-rules/newton_rings.md", "experiments/newton_rings/visual-rules.md", "correction_rules", "newton_rings"),
-    ("visual-rules/tensile_steel.md", "experiments/tensile_steel/visual-rules.md", "correction_rules", "tensile_steel"),
-    ("teaching-knowledge/newton_rings.md", "experiments/newton_rings/teaching-knowledge.md", "teaching", "newton_rings"),
-    ("teaching-knowledge/tensile_steel.md", "experiments/tensile_steel/teaching-knowledge.md", "teaching", "tensile_steel"),
-    ("teaching-knowledge/general.md", "experiments/general/teaching-knowledge.md", "teaching", "general"),
-]
+EXPERIMENTS = ROOT / "backend" / "src" / "main" / "resources" / "experiments"
+KB_DOCUMENTS = {
+    "teaching-knowledge.md": ("teaching", "teaching"),
+    "visual-rules.md": ("correction_rules", "correction_rule"),
+}
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
@@ -36,34 +32,24 @@ def parse_frontmatter(text: str) -> dict[str, str]:
     return meta
 
 
-def sync_to_backend() -> list[Path]:
-    backend_root = ROOT / "backend" / "src" / "main" / "resources"
-    written: list[Path] = []
-    for rel_src, rel_dst, _dataset, _exp in KB_FILES:
-        src = ROOT / "docs" / rel_src
-        dst = backend_root / rel_dst
-        if not src.exists():
-            print(f"skip missing source: {src}")
-            continue
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
-        written.append(dst)
-        print(f"synced {src.relative_to(ROOT)} -> {dst.relative_to(ROOT)}")
-    return written
+def export_dify_pack(export_root: Path, experiments: Path = EXPERIMENTS) -> list[Path]:
+    # Validate all sources before writing, so an incomplete experiment fails visibly.
+    documents = []
+    for manifest in sorted(experiments.glob("*/manifest.json")):
+        exp_code = manifest.parent.name
+        for filename, (dataset, kb_type) in KB_DOCUMENTS.items():
+            src = manifest.parent / filename
+            text = src.read_text(encoding="utf-8")
+            meta = parse_frontmatter(text)
+            if meta.get("experiment_code", exp_code) != exp_code:
+                raise ValueError(f"experiment_code does not match its folder: {src}")
+            documents.append((src, text, meta, exp_code, dataset, kb_type))
+    if not documents:
+        raise ValueError(f"No experiment manifests found in {experiments}")
 
-
-def export_dify_pack() -> list[Path]:
-    export_root = ROOT / "docs" / "kb" / "export"
     written: list[Path] = []
-    for rel_src, _rel_dst, dataset, default_exp in KB_FILES:
-        src = ROOT / "docs" / rel_src
-        if not src.exists():
-            continue
-        text = src.read_text(encoding="utf-8")
-        meta = parse_frontmatter(text)
-        exp_code = meta.get("experiment_code", default_exp)
-        kb_type = meta.get("kb_type", "correction_rule" if dataset == "correction_rules" else "teaching")
-        doc_name = meta.get("doc") or rel_src.replace("\\", "/")
+    for src, text, meta, exp_code, dataset, kb_type in documents:
+        doc_name = meta.get("doc") or f"{exp_code}/{src.name}"
         section_key = meta.get("sectionKey") or exp_code
 
         out_dir = export_root / dataset
@@ -77,7 +63,7 @@ def export_dify_pack() -> list[Path]:
             json.dumps(
                 {
                     "experiment_code": exp_code,
-                    "kb_type": kb_type,
+                    "kb_type": meta.get("kb_type", kb_type),
                     "doc": doc_name,
                     "sectionKey": section_key,
                     "dataset": dataset,
@@ -89,14 +75,16 @@ def export_dify_pack() -> list[Path]:
             encoding="utf-8",
         )
         written.append(meta_path)
-        print(f"exported {out_md.relative_to(ROOT)}")
+        print(f"exported {out_md}")
     return written
 
 
 def main() -> None:
-    sync_to_backend()
-    export_dify_pack()
-    print("done")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=ROOT / "docs" / "kb" / "export")
+    args = parser.parse_args()
+    files = export_dify_pack(args.output)
+    print(f"done: {len(files) // 2} documents with metadata; source files unchanged")
 
 
 if __name__ == "__main__":

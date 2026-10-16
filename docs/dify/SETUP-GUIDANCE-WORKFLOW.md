@@ -92,13 +92,13 @@ HTTP 节点会请求：`GET {WXZ_BACKEND_BASE_URL}/api/public/experiments/{exper
 
 | 格式 | 建议 | 原因 |
 |------|------|------|
-| **Markdown** | ✅ 主库用这个 | 与 `docs/teaching-knowledge/`、`docs/visual-rules/` 源文件一致；`sync_kb.py` 一键导出；步骤 `section_key` 可被工作流 metadata 过滤 |
+| **Markdown** | ✅ 主库用这个 | 与 `backend/src/main/resources/experiments/*/` 中的教学知识和纠错规则一致；`sync_kb.py` 一键导出；步骤 `section_key` 可被工作流 metadata 过滤 |
 | **PDF** | ⚠️ 仅补充 | Dify 能导，但难保留章节锚点；扫描版/公式解析差；无法走现有同步脚本 |
 | **Excel** | ❌ 不适合主库 | 适合「一行一条 rule_id」的表，不适合长文教学；分段按单元格切，检索易断章 |
 
 **结论：** 继续导入 `docs/kb/export/` 下的 md。原始 PDF 实验指导书可作**额外附录库**，不要替代带 metadata 的结构化 md，否则按实验/步骤过滤会失效。
 
-修改内容流程：编辑 `docs/` 下 md → `python scripts/sync_kb.py` → 在 Dify 更新或重新导入对应文档。
+修改内容流程：编辑 `backend/src/main/resources/experiments/<实验编号>/` 下的 `teaching-knowledge.md` 或 `visual-rules.md` → `python scripts/sync_kb.py` → 在 Dify 更新或重新导入对应文档。导出目录不纳入 Git，可随时重新生成。
 
 ## 第五步：绑定工作流内 4 个知识检索节点
 
