@@ -3,7 +3,7 @@ setlocal
 
 cd /d "%~dp0..\frontend"
 if not exist "package.json" (
-  echo package.json not found. Extract deploy zip at project root.
+  echo package.json not found. Run this script from the source project.
   pause
   exit /b 1
 )
@@ -25,5 +25,5 @@ if errorlevel 1 (
 )
 
 echo.
-echo Done. Run scripts\start-deploy.bat to start.
+echo Done. Run scripts\start.bat from the project root to start.
 pause

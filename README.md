@@ -71,15 +71,15 @@ chmod +x scripts/start.sh
 | 操作 | 入口 |
 |---|---|
 | 开发环境启动前后端 | `scripts/start.bat` |
-| 使用已构建的后端 JAR 启动 | `scripts/start-deploy.bat` |
-| 单独启动前端 / 后端 JAR | `scripts/run-frontend.bat` / `scripts/run-backend-jar.bat` |
+| 单独启动前端 / 后端 | `scripts/run-frontend.bat` / `scripts/run-backend.bat` |
 | 停止服务 | `scripts/stop.bat` |
 | 安装前端依赖 | `scripts/npm-install.bat` |
-| 生成 Windows 部署包 | `scripts/pack-deploy.bat` |
-| 部署检查 / 数据库连接检查 | `scripts/check-deploy.bat` / `scripts/test-mysql-connect.bat` |
+| 生成正式部署包 | `powershell -ExecutionPolicy Bypass -File scripts/build-lab-release.ps1` |
+| 启动正式服务 | 解压发布包后运行包内 `start.bat`，详见[部署说明](docs/lab-deployment.md) |
+| 数据库连接检查 | `scripts/test-mysql-connect.bat` |
 | 收集启动诊断 | `scripts/diagnose.bat` |
 
-`scripts/_read-*.bat` 和 `_free-port.bat` 是启动脚本的内部依赖，需要保留。
+`scripts/_read-*.bat` 是源码启动脚本读取配置的内部依赖。`start-lab-release.bat` 和 `start-lab-release.sh` 是正式发布包的启动模板，由构建脚本复制到包内使用。
 
 ### 分别启动
 
@@ -292,7 +292,8 @@ Windows 启动脚本在 Node 22 及以上使用 `--no-maglev`，规避本机 Win
 ## 维护文档
 
 - [教学班、实验任务与报告流程](docs/teaching-workflow.md)
-- [真实实验教学流程评估](docs/lab-teaching-review.md)
+- [实验室部署与工位巡视](docs/lab-deployment.md)
+- [学生学习与教师统计](docs/learning.md)
 - [Dify 实验指导工作流](docs/dify/SETUP-GUIDANCE-WORKFLOW.md)
 - [Dify 教师报告预评](docs/dify/SETUP-REPORT-REVIEW-WORKFLOW.md)
 - [Dify 学生报告助手](docs/dify/SETUP-REPORT-ASSIST-WORKFLOW.md)
