@@ -1,0 +1,133 @@
+openapi: 3.0.3
+info:
+  title: Wuxiaozhi Acquisition API
+  version: 1.0.0
+  description: >-
+    Language-neutral contract. Device selection and drivers are owned by the collector;
+    teaching identities and result storage are owned by the platform. The current
+    implementation supports synchronous JPEG captures. All timestamps have a UTC offset.
+    Device enumeration must not acquire or occupy a device.
+servers:
+  - url: http://127.0.0.1:8765
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/health:
+    get:
+      operationId: health
+      security: []
+      description: Process liveness; returns 200 even when no hardware is attached.
+      responses:
+        '200':
+          description: Service is running.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, service, apiVersion]
+                properties:
+                  ok: {type: boolean, enum: [true]}
+                  service: {type: string, enum: [wuxiaozhi-acquisition]}
+                  apiVersion: {type: string, enum: ['1']}
+  /api/v1/devices:
+    get:
+      operationId: listDevices
+      responses:
+        '200':
+          description: Configured devices and discovery status, including offline devices.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [apiVersion, devices]
+                properties:
+                  apiVersion: {type: string, enum: ['1']}
+                  devices:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, capabilities, available]
+                      properties:
+                        id: {$ref: '#/components/schemas/DeviceId'}
+                        name: {type: string}
+                        capabilities:
+                          type: array
+                          items: {type: string, enum: [image]}
+                        available: {type: boolean}
+                        deviceName: {type: string}
+                        message: {type: string}
+        '401': {$ref: '#/components/responses/Error'}
+  /api/v1/devices/{deviceId}/captures:
+    post:
+      operationId: captureImage
+      description: >-
+        Synchronous capture. Same requestId and deviceId returns a cached successful
+        result for up to 60 seconds, subject to an 8-result memory limit. Cache does
+        not survive a service restart. No claim of persistent exactly-once execution.
+        Concurrent hardware commands return 409. No automatic device or demo fallback.
+        The platform must validate response requestId/deviceId before saving.
+      parameters:
+        - in: path
+          name: deviceId
+          required: true
+          schema: {$ref: '#/components/schemas/DeviceId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId]
+              properties:
+                requestId: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Real JPEG capture, up to 12 MiB before base64 encoding.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [apiVersion, requestId, deviceId, capturedAt, kind, contentType, dataBase64, width, height, deviceName]
+                properties:
+                  apiVersion: {type: string, enum: ['1']}
+                  requestId: {type: string, format: uuid}
+                  deviceId: {$ref: '#/components/schemas/DeviceId'}
+                  capturedAt: {type: string, format: date-time}
+                  kind: {type: string, enum: [image]}
+                  contentType: {type: string, enum: [image/jpeg]}
+                  dataBase64: {type: string, format: byte, maxLength: 16777216}
+                  width: {type: integer, minimum: 1}
+                  height: {type: integer, minimum: 1}
+                  deviceName: {type: string}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token may be omitted only for a loopback-only development collector.
+  schemas:
+    DeviceId:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{1,64}$'
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+  responses:
+    Error:
+      description: >-
+        INVALID_REQUEST (400/415), UNAUTHORIZED (401), DEVICE_NOT_FOUND (404),
+        DEVICE_BUSY/REQUEST_CONFLICT (409), DEVICE_UNAVAILABLE/INVALID_IMAGE (503),
+        INTERNAL_ERROR (500).
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}

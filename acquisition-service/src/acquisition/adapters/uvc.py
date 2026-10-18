@@ -1,0 +1,221 @@
+import time
+from types import SimpleNamespace
+
+try:
+    import cv2
+except Exception as exc:
+    cv2 = None
+    CV2_IMPORT_ERROR = str(exc)
+else:
+    CV2_IMPORT_ERROR = ""
+
+# Import on the service main thread; comtypes initializes its first COM apartment here.
+try:
+    import comtypes
+except Exception:
+    comtypes = None
+
+BACKENDS = {
+    "any": 0 if cv2 is None else cv2.CAP_ANY,
+    "dshow": 0 if cv2 is None else cv2.CAP_DSHOW,
+    "msmf": 0 if cv2 is None else cv2.CAP_MSMF,
+}
+
+# 笔记本内置摄像头名称特征 —— 获取成像绝不使用这些设备
+BUILTIN_NAME_HINTS = (
+    "integrated",
+    "built-in",
+    "built in",
+    "内置",
+    "facial",
+    "ir camera",
+    "windows hello",
+    "lenovo camera",
+    "hp hd",
+    "realtek",
+    "fhd camera",
+    "720p",
+    "笔记本",
+    "integrated camera",
+)
+
+
+class CaptureConfig:
+    def __init__(self, args):
+        self.backend = args.backend
+        self.width = args.width
+        self.height = args.height
+        self.fps = args.fps
+        self.warmup = args.warmup
+        self.name_keyword = (args.name_keyword or "UVC").strip()
+
+
+def int_param(params, name, default):
+    values = params.get(name)
+    if not values:
+        return default
+    try:
+        return int(values[0])
+    except ValueError:
+        return default
+
+
+def str_param(params, name, default):
+    values = params.get(name)
+    return values[0].strip() if values and values[0].strip() else default
+
+
+
+
+
+def dshow_camera_names():
+    """DirectShow 视频输入设备名，顺序与 OpenCV CAP_DSHOW 的 index 一致。"""
+    if comtypes is None:
+        raise RuntimeError("设备枚举需要 Windows comtypes，请安装 requirements.txt 中的依赖")
+    # Every HTTP worker needs its own COM initialization, including subsequent requests.
+    # https://learn.microsoft.com/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex
+    comtypes.CoInitialize()
+    try:
+        from pygrabber.dshow_graph import FilterGraph
+
+        names = [name.strip() for name in FilterGraph().get_input_devices() if str(name).strip()]
+        if not names:
+            raise RuntimeError("未检测到任何 DirectShow 视频输入设备")
+        return names
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(
+            "无法枚举摄像头设备，请安装 pygrabber：pip install -r requirements.txt"
+        ) from exc
+    finally:
+        comtypes.CoUninitialize()
+
+
+
+def is_builtin_camera(name):
+    lower = (name or "").lower()
+    return any(hint in lower for hint in BUILTIN_NAME_HINTS)
+
+
+def find_microscope(config, params):
+    """
+    严格模式：只认电子显微镜（设备名包含关键字，如 UVC Camera）。
+    没有显微镜就报错，绝不回退到内置/FHD 摄像头。
+    """
+    keyword = str_param(params, "name_keyword", config.name_keyword) or "UVC"
+    keyword_lower = keyword.lower()
+    names = dshow_camera_names()
+
+    for index, name in enumerate(names):
+        if is_builtin_camera(name):
+            continue
+        if keyword_lower in name.lower():
+            return index, name
+
+    detected = "、".join(names)
+    raise RuntimeError(
+        f"未检测到电子显微镜（设备名需包含「{keyword}」）。"
+        f"当前仅有：{detected}。"
+        f"请连接显微镜 USB，并关闭占用相机的其他软件。"
+    )
+
+
+def describe_cameras(config, params):
+    keyword = str_param(params, "name_keyword", config.name_keyword) or "UVC"
+    keyword_lower = keyword.lower()
+    names = dshow_camera_names()
+    cameras = []
+    microscope_index = None
+    microscope_name = None
+    for index, name in enumerate(names):
+        builtin = is_builtin_camera(name)
+        is_microscope = (not builtin) and keyword_lower in name.lower()
+        if is_microscope:
+            microscope_index = index
+            microscope_name = name
+        cameras.append(
+            {
+                "index": index,
+                "name": name,
+                "builtin": builtin,
+                "microscope": is_microscope,
+            }
+        )
+    return {
+        "cameras": cameras,
+        "microscopeIndex": microscope_index,
+        "microscopeName": microscope_name,
+        "nameKeyword": keyword,
+        "microscopeAvailable": microscope_index is not None,
+    }
+
+
+def capture_frame(config, params):
+    if cv2 is None:
+        raise RuntimeError(f"OpenCV 不可用：{CV2_IMPORT_ERROR or '未安装 cv2'}")
+
+    index, camera_name = find_microscope(config, params)
+
+    width = int_param(params, "width", config.width)
+    height = int_param(params, "height", config.height)
+    fps = int_param(params, "fps", config.fps)
+    backend_name = str_param(params, "backend", config.backend)
+    backend = BACKENDS.get(backend_name, BACKENDS["dshow"])
+
+    cap = cv2.VideoCapture(index, backend)
+    if not cap.isOpened():
+        raise RuntimeError(
+            f"电子显微镜「{camera_name}」无法打开，可能被其他软件占用（index={index}）"
+        )
+
+    try:
+        if width:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        if height:
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        if fps:
+            cap.set(cv2.CAP_PROP_FPS, fps)
+
+        ok = False
+        frame = None
+        for _ in range(max(1, config.warmup)):
+            ok, frame = cap.read()
+            if ok and frame is not None and frame.size:
+                break
+            time.sleep(0.08)
+
+        if not ok or frame is None or not frame.size:
+            raise RuntimeError(f"电子显微镜「{camera_name}」已连接，但未获取到有效图像")
+
+        ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+        if not ok:
+            raise RuntimeError("图像编码失败")
+        print(
+            f"[uvc] microscope index={index} name={camera_name} size={frame.shape[1]}x{frame.shape[0]}",
+            flush=True,
+        )
+        return encoded.tobytes(), frame.shape[1], frame.shape[0], index, camera_name
+    finally:
+        cap.release()
+
+
+class UvcAdapter:
+    def __init__(self, device):
+        self.config = SimpleNamespace(
+            backend=device.get("backend", "dshow"), width=int(device.get("width", 1920)),
+            height=int(device.get("height", 1080)), fps=int(device.get("fps", 30)),
+            warmup=int(device.get("warmup", 5)), name_keyword=device.get("nameKeyword", "UVC"))
+
+    def status(self):
+        try:
+            if cv2 is None:
+                raise RuntimeError("OpenCV 未安装，请安装 requirements.txt 中的依赖")
+            index, name = find_microscope(self.config, {})
+            return dict(available=True, deviceName=name)
+        except Exception as exc:
+            return dict(available=False, message=str(exc))
+
+    def capture(self):
+        image, width, height, index, name = capture_frame(self.config, {})
+        return dict(image=image, width=width, height=height, name=name)

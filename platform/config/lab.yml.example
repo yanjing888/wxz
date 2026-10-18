@@ -1,0 +1,60 @@
+# 复制为 lab.yml，修改后重启平台后端。源码启动和正式 JAR 均读取此文件。
+# 真实配置包含密钥，不提交 Git。请使用空格缩进，不使用 Tab。
+wuxiaozhi:
+  lab:
+    # 旧 /ws/ 代理目标；填写主机或 主机:端口，不含协议。
+    camera-host: ""
+    camera-direct-host: ""
+    initial-stream-url: ""
+    # 同型号摄像头的播放规则；不同型号可在管理端填写完整视频流地址。
+    ip-stream-template: ""
+    bootstrap-enabled: false
+    # bootstrap-room-name: 物理楼302
+    # bootstrap-station-code: "01"
+    initial-snapshot-url: ""
+    camera-username: ""
+    camera-password: ""
+  bench-camera:
+    enabled: false
+  acquisition:
+    enabled: true
+    default-device: microscope
+    # 实验代码对应下面 devices 中的配置名；未单独指定的实验使用 default-device。
+    experiments:
+      newton_rings: microscope
+    devices:
+      microscope:
+        enabled: true
+        label: 牛顿环成像相机
+        # 协议、IP/域名、端口，可带反向代理前缀。
+        base-url: http://127.0.0.1:8765
+        capture-path: "/api/v1/devices/{deviceId}/captures"
+        device-id: microscope-01
+        api-token: ""
+        connect-timeout-ms: 2000
+        capture-timeout-ms: 25000
+      # 其他设备在此增加同级配置，Python、Java 服务使用相同接口格式。
+      # other-camera:
+      #   enabled: true
+      #   label: 其他成像设备
+      #   base-url: http://192.168.1.101:8765
+      #   capture-path: "/api/v1/devices/{deviceId}/captures"
+      #   device-id: camera-02
+      #   api-token: ""
+  # jwt:
+  #   secret: replace-with-at-least-32-random-characters
+
+# 首次部署设置初始化管理员；也可使用 config/admin.env 或环境变量。
+# WXZ_ADMIN_USERNAME: your-admin
+# WXZ_ADMIN_PASSWORD: replace-with-a-strong-password
+
+# 正式部署可启用 MySQL；已有 config/mysql.env 的源码环境继续沿用。
+# spring:
+#   profiles:
+#     active: mysql
+#   datasource:
+#     url: jdbc:mysql://127.0.0.1:3306/wuxiaozhi?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+#     username: wuxiaozhi
+#     password: replace-with-database-password
+# server:
+#   port: 8082
