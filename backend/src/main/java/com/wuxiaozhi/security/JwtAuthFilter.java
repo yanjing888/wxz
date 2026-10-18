@@ -18,9 +18,11 @@ import java.util.List;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final com.wuxiaozhi.repository.UserRepository users;
 
-    public JwtAuthFilter(JwtUtil jwtUtil) {
+    public JwtAuthFilter(JwtUtil jwtUtil,com.wuxiaozhi.repository.UserRepository users) {
         this.jwtUtil = jwtUtil;
+        this.users=users;
     }
 
     @Override
@@ -30,8 +32,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
             try {
-                Long userId = jwtUtil.getUserId(token);
-                String role = jwtUtil.getRole(token);
+                var claims=jwtUtil.parseClaims(token);
+                Long userId = Long.parseLong(claims.getSubject());
+                var user=users.findById(userId).orElseThrow();
+                Number version=claims.get("authVersion",Number.class);
+                if(!user.isEnabled()||user.getAuthVersion()!=(version==null?0:version.intValue()))throw new IllegalArgumentException("账号登录已失效");
+                String role = user.getRole();
                 var auth = new UsernamePasswordAuthenticationToken(
                         userId, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
                 SecurityContextHolder.getContext().setAuthentication(auth);

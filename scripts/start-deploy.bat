@@ -55,7 +55,7 @@ if /I "%MYSQL_ENABLED%"=="true" (
   echo Database    : H2 local file
 )
 echo.
-echo Two cmd windows will open: WXZ-Backend-JAR and WXZ-Frontend
+echo Service windows: WXZ-Backend-JAR and WXZ-Frontend. Keep both open.
 echo Open browser: http://localhost:%FRONTEND_PORT%/
 echo.
 echo If nothing appears, run scripts\unblock-all.bat then scripts\check-deploy.bat
@@ -64,7 +64,7 @@ pause
 
 start "WXZ-Backend-JAR" cmd.exe /k "cd /d ""%ROOT%"" && call ""%ROOT%\scripts\run-backend-jar.bat"""
 timeout /t 2 /nobreak >nul
-start "WXZ-Frontend" cmd.exe /k "cd /d ""%ROOT%"" && call ""%ROOT%\scripts\run-frontend.bat"""
+start "WXZ-Frontend" /D "%ROOT%" cmd.exe /k "scripts\run-frontend.bat"
 
 echo.
 echo Launch commands sent. Check taskbar for WXZ windows.

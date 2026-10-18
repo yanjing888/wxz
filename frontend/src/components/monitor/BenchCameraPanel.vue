@@ -362,7 +362,7 @@ async function startConfiguredCamera(camera) {
   camUiActive.value = false
   camReady.value = false
   notifyCameraUi(false)
-  camError.value = '无法连接摄像头。WiFi 不可达时可网线直连，并将电脑网卡设为 188.18.31.x 同网段静态 IP'
+  camError.value = '无法连接摄像头，请检查实验室网络、设备地址和部署配置'
 }
 
 async function startLocalCamera() {

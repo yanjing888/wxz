@@ -21,12 +21,17 @@ public class JwtUtil {
     }
 
     public String generateToken(Long userId, String username, String role) {
+        return generateToken(userId,username,role,0);
+    }
+
+    public String generateToken(Long userId,String username,String role,int authVersion) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + expirationMs);
         return Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim("username", username)
                 .claim("role", role != null && !role.isBlank() ? role : "STUDENT")
+                .claim("authVersion",authVersion)
                 .issuedAt(now)
                 .expiration(exp)
                 .signWith(key)

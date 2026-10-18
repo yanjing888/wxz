@@ -31,7 +31,7 @@
       </nav>
     </header>
 
-    <div class="experiment-context">
+    <div v-if="experimentContextVisible" class="experiment-context">
       <span>实验</span>
       <ExperimentSelect
         :experiments="experimentOptions"
@@ -39,16 +39,22 @@
         @experiment-change="onExperimentChange"
       />
     </div>
-    <p v-if="loadError" class="teacher-load-error" role="alert">{{ loadError }} <button @click="refresh">重试</button></p>
+    <p v-if="loadError && experimentContextVisible" class="teacher-load-error" role="alert">{{ loadError }} <button @click="refresh">重试</button></p>
     <!-- ====== 加载/空 ====== -->
-    <div v-if="loading && !loadedOnce" class="terminal-state">加载中…</div>
-    <div v-else-if="!selectedExpCode" class="terminal-state">暂无可查看的实验。</div>
+    <div v-if="loading && !loadedOnce && !['camera', 'overview'].includes(activeTab)" class="terminal-state">加载中…</div>
+    <div v-else-if="!selectedExpCode && !['camera', 'overview'].includes(activeTab)" class="terminal-state">暂无可查看的实验。</div>
 
     <!-- ====== 内容区 ====== -->
     <div v-else class="terminal-content">
 
       <!-- ========== Tab 1: 学情总览 ========== -->
-      <div v-show="activeTab === 'overview'" class="tab-panel overview-panel">
+      <div v-show="activeTab === 'overview'" class="analysis-shell">
+        <nav class="analysis-menu" aria-label="学情分析菜单">
+          <button type="button" :class="{ active: analysisPage === 'overview' }" :aria-pressed="analysisPage === 'overview'" @click="analysisPage = 'overview'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 4h7v7H4zM14 4h6v7h-6zM4 14h7v6H4zM14 14h6v6h-6z" /></svg>学情总览</button>
+          <button type="button" :class="{ active: analysisPage === 'learning' }" :aria-pressed="analysisPage === 'learning'" @click="analysisPage = 'learning'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 20h16M7 16V9m5 7V4m5 12v-5" /></svg>学习统计</button>
+        </nav>
+        <div class="analysis-content">
+      <div v-show="analysisPage === 'overview'" class="tab-panel overview-panel">
         <div class="overview-toolbar">
           <input v-model.trim="overviewSearch" class="class-search" type="search" aria-label="搜索学情" placeholder="搜索班级、学号或姓名" />
           <div class="overview-summary">
@@ -57,6 +63,7 @@
             <span>{{ overviewStudents.filter(s => s.status === 'ACTIVE').length }} 进行中</span>
             <span class="sep">·</span>
             <span>{{ finishedCount }} 已完成</span>
+            <span class="sep">·</span><span>{{ overviewStudents.filter(s => overviewReportStatus(s).key !== 'missing').length }} 已交报告</span>
           </div>
         </div>
 
@@ -80,6 +87,7 @@
                     <span class="stat-chip">{{ grp.students.length }} 人</span>
                     <span v-if="grp.activeCount" class="stat-chip active-chip">{{ grp.activeCount }} 进行中</span>
                     <span v-if="grp.finishedCount" class="stat-chip done-chip">{{ grp.finishedCount }} 已完成</span>
+                    <span v-if="grp.reportCount" class="stat-chip report-chip">{{ grp.reportCount }} 已交报告</span>
                   </span>
                 </button>
                 <div v-if="expandedClasses[grp.name] !== false" class="class-group-body">
@@ -104,6 +112,7 @@
                       </div>
                       <p class="learn-identity">{{ row.username || '学号未填写' }} · {{ row.studentClass || '未分班' }}</p>
                       <div class="learn-card-step">{{ row.stepTitle || '未开始' }}</div>
+                      <div class="learn-report"><span>实验报告</span><span class="report-badge" :class="overviewReportStatus(row).key">{{ overviewReportStatus(row).label }}</span></div>
                       <div class="learn-card-bottom">
                         <span class="learn-stat">
                           <span class="learn-stat-label">用时</span>
@@ -164,9 +173,9 @@
                   </strong>
                 </div>
                 <div>
-                  <span>数据校验</span>
-                  <strong :class="selectedStudent.dataIssue ? 'bad-text' : 'ok-text'">
-                    {{ selectedStudent.lastDataValidation || '—' }}
+                  <span>实验报告</span>
+                  <strong class="detail-report-status" :class="overviewReportStatus(selectedStudent).key">
+                    {{ overviewReportStatus(selectedStudent).label }}
                   </strong>
                 </div>
               </div>
@@ -184,6 +193,9 @@
               </div>
             </aside>
           </transition>
+        </div>
+      </div>
+      <div v-if="activeTab === 'overview' && analysisPage === 'learning'" class="tab-panel learning-tab"><TeacherLearningPanel :experiment-code="selectedExpCode" /></div>
         </div>
       </div>
 
@@ -315,25 +327,7 @@
 
       <!-- ========== Tab 4: 摄像头监控 ========== -->
       <div v-show="activeTab === 'camera'" class="tab-panel camera-tab">
-        <div v-if="!benchStations.length" class="empty-state">暂无工位学生。</div>
-        <div v-else class="bench-grid custom-scroll">
-          <TeacherBenchStationCard
-            v-for="(station, index) in benchStations"
-            :key="station.studentClass + '|' + station.userId"
-            :station="station"
-            :bench-label="`工位 ${index + 1}`"
-            :stream-live="activeTab === 'camera'"
-            :stream-url="benchCameraStreamUrl"
-            :bench-camera="benchCameraConfig"
-            :camera-configured="benchCameraConfigured"
-            :logs="benchEnvLogs[station.sessionId] || []"
-            :env-check-enabled="!!station.envCheckEnabled"
-            :checking="!!benchChecking[station.sessionId]"
-            :env-check-available="envCheckAvailable"
-            @toggle-env="(enabled) => toggleStationEnvCheck(station, enabled)"
-            @manual-check="runStationEnvCheck(station)"
-          />
-        </div>
+        <TeacherWorkstationMonitor :active="activeTab === 'camera'" />
       </div>
 
       <!-- ========== Tab 5: 报告分析 ========== -->
@@ -424,7 +418,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { experimentApi, teacherApi, systemApi } from '../api'
+import { experimentApi, teacherApi } from '../api'
 import { REPORT_SECTION_DEFS } from '../utils/sessionReport'
 import { useAuthStore } from '../stores/auth'
 import ReportModal from '../components/modals/ReportModal.vue'
@@ -432,7 +426,8 @@ import ExperimentSelect from '../components/layout/ExperimentSelect.vue'
 import StudentReportDocument from '../components/teacher/StudentReportDocument.vue'
 import ReportGradingPanel from '../components/teacher/ReportGradingPanel.vue'
 import StudentManagePanel from '../components/teacher/StudentManagePanel.vue'
-import TeacherBenchStationCard from '../components/teacher/TeacherBenchStationCard.vue'
+import TeacherWorkstationMonitor from '../components/teacher/TeacherWorkstationMonitor.vue'
+import TeacherLearningPanel from '../components/teacher/TeacherLearningPanel.vue'
 
 const CURRENT_EXP_KEY = 'wxz_teacher_current_exp'
 const auth = useAuthStore()
@@ -452,9 +447,10 @@ const reports = ref([])
 const feedbackList = ref([])
 const selectedFeedbackId = ref(null)
 const students = ref([])
-const benchCameraConfig = ref(null)
 const selectedExpCode = ref('')
 const activeTab = ref('overview')
+const analysisPage = ref('overview')
+const experimentContextVisible = computed(() => activeTab.value !== 'camera')
 const loadError=ref('')
 let teachingLoadSequence=0,previewSequence=0
 const selectedStudentClass = ref(''), reportStateFilter = ref('all')
@@ -544,21 +540,6 @@ watch([gradeScore, gradeComment], () => {
   if (!previewLoading.value) rememberGradeDraft(selectedReportId.value)
 })
 
-const benchEnvLogs = ref({})
-const benchChecking = ref({})
-const difyStatus = ref(null)
-let cameraPollTimer = null
-
-const benchCameraStreamUrl = computed(() => benchCameraConfig.value?.browserStreamUrl || '')
-const benchCameraConfigured = computed(() => {
-  const cfg = benchCameraConfig.value
-  if (!cfg?.enabled) return false
-  return !!(cfg.browserStreamUrl || cfg.browserStreamUrlDirect)
-})
-
-const envCheckAvailable = computed(() => difyStatus.value?.available !== false)
-
-const benchStations = computed(() => cameraStudents.value)
 
 const experimentOptions = computed(() => experiments.value)
 
@@ -589,7 +570,7 @@ const studentsByClass = computed(() => {
     students: list,
     activeCount: list.filter((s) => s.status === 'ACTIVE').length,
     finishedCount: list.filter((s) => s.status === 'FINISHED').length,
-    reportCount: 0,
+    reportCount: list.filter(student => overviewReportStatus(student).key !== 'missing').length,
     helpCount: list.reduce((sum, s) => sum + (s.helpCount || 0), 0),
     errorCount: list.reduce((sum, s) => sum + (s.errorPointCount || 0), 0)
     }
@@ -598,6 +579,11 @@ const studentsByClass = computed(() => {
 const currentReports = computed(() =>
   reports.value.filter((r) => r.experimentCode === selectedExpCode.value)
 )
+function overviewReportStatus(student) {
+  const report = currentReports.value.find(r => r.userId === student.userId && (r.studentClass || '未分班') === (student.studentClass || '未分班'))
+  if (!(student.reportCompleted || report?.reportCompleted)) return { key: 'missing', label: '未提交' }
+  return report?.gradingCompleted ? { key: 'graded', label: '已批阅' } : { key: 'submitted', label: '待批阅' }
+}
 const currentFeedback = computed(() =>
   feedbackList.value.filter((f) => f.experimentCode === selectedExpCode.value)
 )
@@ -728,7 +714,7 @@ watch(filteredReportsByClass, (groups) => {
 
 const navTabs = computed(() => [
   {
-    key: 'overview', label: '学情总览', color: '#6366f1',
+    key: 'overview', label: '学情分析', color: '#6366f1',
     icon: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
     iconFill: 'M3 13h8V3H3v10zm10 8h8V11h-8v10z',
     badge: ''
@@ -746,7 +732,7 @@ const navTabs = computed(() => [
     badge: unprocessedCount.value ? String(unprocessedCount.value) : ''
   },
   {
-    key: 'camera', label: '摄像头监控', color: '#f59e0b',
+    key: 'camera', label: '课堂巡视', color: '#f59e0b',
     icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
     iconFill: 'M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
     badge: ''
@@ -761,13 +747,6 @@ const navTabs = computed(() => [
 
 watch(activeTab, (tab) => {
   if (tab !== 'report') reportImmersive.value = false
-  if (tab === 'camera') {
-    loadDifyStatus()
-    loadAllBenchEnvLogs()
-    startCameraPoll()
-  } else {
-    stopCameraPoll()
-  }
 })
 
 watch(
@@ -778,38 +757,7 @@ watch(
 
 onMounted(() => {
   loadInitial()
-  loadBenchCameraConfig()
 })
-
-onUnmounted(() => {
-  stopCameraPoll()
-})
-
-async function refreshClassroomForCamera() {
-  if (!selectedExpCode.value) return
-  try {
-    const { data } = await teacherApi.classroom(requestScope.value)
-    classroom.value = data
-    if (activeTab.value === 'camera') {
-      await loadAllBenchEnvLogs()
-    }
-  } catch {
-    // 轮询失败不阻断界面
-  }
-}
-
-function startCameraPoll() {
-  stopCameraPoll()
-  refreshClassroomForCamera()
-  cameraPollTimer = setInterval(refreshClassroomForCamera, 5000)
-}
-
-function stopCameraPoll() {
-  if (cameraPollTimer) {
-    clearInterval(cameraPollTimer)
-    cameraPollTimer = null
-  }
-}
 
 async function loadInitial() {
   loading.value = true;loadError.value=''
@@ -883,61 +831,6 @@ function selectReportItem(sessionId) {
   if (reportBusy.value || sessionId === selectedReportId.value || !sessionId) return
   rememberGradeDraft(selectedReportId.value)
   selectedReportId.value = sessionId
-}
-
-async function loadDifyStatus() {
-  try {
-    const { data } = await systemApi.difyStatus()
-    difyStatus.value = data
-  } catch {
-    difyStatus.value = { available: false }
-  }
-}
-
-async function loadAllBenchEnvLogs() {
-  const sessionIds = benchStations.value.map((s) => s.sessionId).filter(Boolean)
-  if (!sessionIds.length) {
-    benchEnvLogs.value = {}
-    return
-  }
-  const results = await Promise.allSettled(
-    sessionIds.map((sid) => teacherApi.sessionEnvLogs(sid))
-  )
-  const next = {}
-  sessionIds.forEach((sid, i) => {
-    const result = results[i]
-    next[sid] = result.status === 'fulfilled' ? (result.value.data || []) : (benchEnvLogs.value[sid] || [])
-  })
-  benchEnvLogs.value = next
-}
-
-async function toggleStationEnvCheck(station, enabled) {
-  if (!station?.sessionId) return
-  try {
-    await teacherApi.setEnvCheckEnabled(station.sessionId, { enabled })
-    if (classroom.value?.students) {
-      const target = classroom.value.students.find((s) => s.sessionId === station.sessionId)
-      if (target) target.envCheckEnabled = enabled
-    }
-  } catch (e) {
-    window.alert(e.response?.data?.message || e.message || '更新巡检开关失败')
-  }
-}
-
-async function runStationEnvCheck(station) {
-  const sessionId = station?.sessionId
-  if (!sessionId || benchChecking.value[sessionId]) return
-  benchChecking.value = { ...benchChecking.value, [sessionId]: true }
-  try {
-    await teacherApi.triggerEnvCheck(sessionId, {})
-    const { data } = await teacherApi.sessionEnvLogs(sessionId)
-    benchEnvLogs.value = { ...benchEnvLogs.value, [sessionId]: data || [] }
-    await refreshClassroomForCamera()
-  } catch (e) {
-    window.alert(e.response?.data?.message || e.message || '巡检检查失败')
-  } finally {
-    benchChecking.value = { ...benchChecking.value, [sessionId]: false }
-  }
 }
 
 async function loadPreviewReport(sessionId) {
@@ -1118,15 +1011,6 @@ async function reviewFeedback(feedbackId, rating) {
   }
 }
 
-async function loadBenchCameraConfig() {
-  try {
-    const { data } = await systemApi.benchCamera()
-    benchCameraConfig.value = data
-  } catch {
-    benchCameraConfig.value = null
-  }
-}
-
 function priorityLabel(p) {
   return { high: '高', medium: '中', normal: '低' }[p] || '低'
 }
@@ -1269,6 +1153,13 @@ function logout() {
 .terminal-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 .tab-panel { height: 100%; overflow: hidden; display: flex; flex-direction: column; padding: 14px 24px 20px; }
 .tab-panel:has(.report-layout) { padding: 0; }
+.tab-panel.learning-tab{padding:0}
+.analysis-shell{flex:1;min-height:0;display:grid;grid-template-columns:156px minmax(0,1fr);overflow:hidden;background:#f8fafc}
+.analysis-menu{display:flex;flex-direction:column;gap:7px;padding:18px 12px;border-right:1px solid #e4e9f3;background:#fff}
+.analysis-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:12px 13px;background:transparent;border:1px solid transparent;border-radius:7px;font-size:13px;color:#64748b;cursor:pointer;text-align:left;white-space:nowrap}
+.analysis-menu button svg{width:18px;height:18px;flex-shrink:0}.analysis-menu button:hover{background:#f8fafc;color:#4f46e5}.analysis-menu button.active{border-color:#e0e7ff;background:#eef2ff;color:#4f46e5;font-weight:600}.analysis-menu button:focus-visible{outline:2px solid #a5b4fc;outline-offset:2px}
+.analysis-content{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}.analysis-content>.tab-panel{flex:1;min-height:0}
+@media(max-width:600px){.analysis-shell{grid-template-columns:112px minmax(0,1fr)}.analysis-menu{padding:12px 7px;gap:6px}.analysis-menu button{padding:11px 8px;gap:6px;font-size:12px}.analysis-menu button svg{width:15px;height:15px}.overview-toolbar{flex-wrap:wrap;gap:10px}.analysis-content .class-search{max-width:100%}.analysis-content .overview-summary{flex-wrap:wrap}}
 .student-manage-panel { padding: 0; }
 
 /* ====== 统计栏 ====== */
@@ -1349,6 +1240,7 @@ function logout() {
 .learn-card--done.learn-card--active { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.12); }
 .learn-card--done .learn-name { color: #059669; }
 .learn-card--done .learn-card-step { background: #ecfdf5; color: #059669; }
+.learn-report{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#94a3b8}.report-badge{display:inline-block;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:500;white-space:nowrap}.report-badge.missing{color:#64748b;background:#f1f5f9}.report-badge.submitted{color:#b45309;background:#fffbeb}.report-badge.graded{color:#059669;background:#ecfdf5}.stat-chip.report-chip{color:#6366f1;background:#eef2ff}
 
 .learn-card-top {
   display: flex; align-items: center; justify-content: space-between;
@@ -1420,6 +1312,7 @@ function logout() {
 .detail-stats div:nth-last-child(-n+2) { border-bottom: 0; }
 .detail-stats span { display: block; color: #94a3b8; font-size: 11px; font-weight: 600; }
 .detail-stats strong { display: block; margin-top: 3px; color: #0f172a; font-size: 13px; font-weight: 700; }
+.detail-stats .detail-report-status.missing{color:#64748b}.detail-stats .detail-report-status.submitted{color:#b45309}.detail-stats .detail-report-status.graded{color:#059669}
 
 .detail-alert {
   display: flex; align-items: flex-start; gap: 8px;

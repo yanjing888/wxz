@@ -75,10 +75,9 @@ const simulationTab = (code) => ({
 const tabs = computed(() => {
   const code = currentCode.value
   const labTo = code ? { name: 'lab', query: { exp: code } } : { name: 'lab' }
-  const reportTo = { name: 'student-reports' }
-  const monitorTo = code
-    ? { name: 'lab-monitor', query: { exp: code } }
-    : { name: 'lab-monitor' }
+  const reportTo = code
+    ? { name: 'after-center', params: { code }, query: { tab: 'report' } }
+    : labTo
 
   const items = []
   if (code) {
@@ -95,38 +94,34 @@ const tabs = computed(() => {
       to: labTo
     },
     {
-      key: 'monitor',
-      label: '监控',
-      color: '#f59e0b',
-      icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
-      iconFill: 'M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
-      to: monitorTo
-    },
-    {
       key: 'report',
       label: '实验报告',
       color: '#8b5cf6',
       icon: 'M14 3v4a1 1 0 001 1h4M9 13h6m-6 4h6M7 21h10a2 2 0 002-2V8l-5-5H7a2 2 0 00-2 2v14a2 2 0 002 2z',
       iconFill: 'M7 3a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5H7z',
       to: reportTo
+    },
+    {
+      key: 'learning', label: '我的学习', color: '#6366f1',
+      icon: 'M12 3l9 5-9 5-9-5 9-5zm-6 8v6c3 3 9 3 12 0v-6M21 8v7',
+      to: { name: 'my-learning' }
     }
   )
 
   return simulationLocked.value && code
-    ? items.filter(item => ['simulation', 'report'].includes(item.key))
+    ? items.filter(item => ['simulation', 'report', 'learning'].includes(item.key))
     : items
 })
 
 const LAB_ROUTES = ['lab']
 const SIMULATION_ROUTES = ['prep-simulation']
-const MONITOR_ROUTES = ['lab-monitor']
 const REPORT_ROUTES = ['student-reports', 'after-center', 'after-report', 'after-review']
 
 function isActive(tab) {
   if (tab.key === 'simulation') return SIMULATION_ROUTES.includes(route.name)
   if (tab.key === 'lab') return LAB_ROUTES.includes(route.name)
-  if (tab.key === 'monitor') return MONITOR_ROUTES.includes(route.name)
   if (tab.key === 'report') return REPORT_ROUTES.includes(route.name)
+  if (tab.key === 'learning') return route.name === 'my-learning'
   return false
 }
 </script>

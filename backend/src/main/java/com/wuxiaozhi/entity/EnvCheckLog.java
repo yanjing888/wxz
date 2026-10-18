@@ -31,6 +31,13 @@ public class EnvCheckLog {
     @Column(length = 512)
     private String snapshotUrl;
 
+    private Long workstationUseId;
+    private Long workstationId;
+    private Long lessonId;
+    @Column(length = 64)
+    private String cameraCode;
+    private LocalDateTime capturedAt;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

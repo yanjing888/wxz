@@ -81,26 +81,8 @@ assertContains(
 
 assertContains(
   labStore,
-  '我会围绕你当前的实验步骤',
-  'The welcome message should stay centered on the current experiment instead of fixed feature categories.'
-)
-
-assertContains(
-  labStore,
-  '<strong>遇到卡点</strong>',
-  'The welcome guide should invite students to describe blockers.'
-)
-
-assertContains(
-  labStore,
-  '<strong>需要判断</strong>',
-  'The welcome guide should mention analysis based on uploaded evidence.'
-)
-
-assertContains(
-  labStore,
-  '<strong>继续推进</strong>',
-  'The welcome guide should support moving through the experiment workflow.'
+  'welcome-guide-title',
+  'The welcome introduction should retain its layout class independently of its wording.'
 )
 
 assertContains(

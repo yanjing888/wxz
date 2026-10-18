@@ -34,6 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = {
         "spring.datasource.url=jdbc:h2:mem:auth-session-test;DB_CLOSE_DELAY=-1;MODE=MySQL",
         "spring.jpa.hibernate.ddl-auto=create-drop",
+        "wuxiaozhi.auth.self-registration-enabled=true",
         "wuxiaozhi.jwt.secret=auth-session-test-secret-must-be-at-least-32-bytes",
         "wuxiaozhi.jwt.expiration-ms=86400000"
 })
@@ -138,7 +139,7 @@ class AuthSessionIntegrationTest {
     }
 
     @Test
-    void resetPasswordAllowsLoginWithNewPassword() throws Exception {
+    void unauthenticatedPasswordResetIsRejected() throws Exception {
         saveUser("student001", "oldpass1", "王同学", "物理一班");
 
         mockMvc.perform(patch("/api/auth/password")
@@ -149,14 +150,14 @@ class AuthSessionIntegrationTest {
                                   "newPassword": "newpass1"
                                 }
                                 """))
-                .andExpect(status().isOk());
+                .andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "username": "student001",
-                                  "password": "newpass1"
+                                  "password": "oldpass1"
                                 }
                                 """))
                 .andExpect(status().isOk());

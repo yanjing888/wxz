@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 
 @SpringBootApplication
+@org.springframework.scheduling.annotation.EnableScheduling
 @EnableConfigurationProperties({ AppProperties.class, DifyProperties.class })
 public class WuxiaozhiApplication {
 
@@ -25,7 +26,7 @@ public class WuxiaozhiApplication {
     }
 
     private static void loadExternalEnvFiles() {
-        for (String name : new String[] { "ports.env", "dify.env", "mysql.env" }) {
+        for (String name : new String[] { "ports.env", "dify.env", "mysql.env", "admin.env" }) {
             for (Path path : configCandidates(name)) {
                 if (Files.isRegularFile(path)) {
                     loadEnvFile(path);

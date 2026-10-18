@@ -8,6 +8,9 @@ import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select u from User u where u.role = 'ADMIN' order by u.id")
+    List<User> lockAdmins();
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("select u from User u where u.id = :id")
     java.util.Optional<User> lockById(@org.springframework.data.repository.query.Param("id") Long id);
     Optional<User> findByUsername(String username);

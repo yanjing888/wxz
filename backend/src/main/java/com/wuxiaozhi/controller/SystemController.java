@@ -30,6 +30,10 @@ public class SystemController {
 
     @GetMapping("/bench-camera")
     public AppProperties.BenchCamera benchCamera() {
-        return appProperties.getBenchCamera();
+        var source=appProperties.getBenchCamera();
+        var result=new AppProperties.BenchCamera();
+        result.setEnabled(source.isEnabled());result.setLabel(source.getLabel());result.setConnectionMode(source.getConnectionMode());
+        result.setBrowserStreamUrl(source.getBrowserStreamUrl());result.setBrowserStreamUrlDirect(source.getBrowserStreamUrlDirect());
+        return result;
     }
 }

@@ -2,7 +2,7 @@
   <div class="student-app h-full flex flex-col">
     <AppTopBar title="" subtitle="" @logout="logout">
       <template #left-extra>
-        <StudentExperimentSwitcher />
+        <StudentExperimentSwitcher v-if="route.name !== 'my-learning'" />
       </template>
       <template #center>
         <StudentTabBar />
@@ -11,9 +11,7 @@
 
     <main class="content-area flex-1 min-h-0">
       <router-view v-slot="{ Component }">
-        <keep-alive :include="['LabMonitorView']">
-          <component :is="Component" v-if="Component" class="page-root" />
-        </keep-alive>
+        <component :is="Component" v-if="Component" class="page-root" />
       </router-view>
     </main>
   </div>

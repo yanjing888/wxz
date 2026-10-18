@@ -1,5 +1,9 @@
 # 物小智智能体平台
 
+实验室正式部署、摄像头接入及“管理员配置工位 → 教师直接巡视”最小流程见 [实验室部署说明](docs/lab-deployment.md)。正式发行包使用 `scripts/build-lab-release.ps1` 构建，前端、API 和视频由一个 JAR 提供。
+
+学生“我的学习”、教师“学习统计”、积分、能力雷达与班级排行的规则和部署说明见 [学习统计说明](docs/learning.md)。
+
 Vue 3 + Spring Boot 大学物理实验多模态智能指导平台。AI 能力通过自建 Dify 工作流对接（未配置 API Key 时使用 JSON 内置 Mock 响应）。
 
 ## 项目结构
@@ -68,7 +72,7 @@ chmod +x scripts/start.sh
 |---|---|
 | 开发环境启动前后端 | `scripts/start.bat` |
 | 使用已构建的后端 JAR 启动 | `scripts/start-deploy.bat` |
-| 单独启动前端 / 后端 JAR | `启动前端.cmd` / `启动后端.cmd` |
+| 单独启动前端 / 后端 JAR | `scripts/run-frontend.bat` / `scripts/run-backend-jar.bat` |
 | 停止服务 | `scripts/stop.bat` |
 | 安装前端依赖 | `scripts/npm-install.bat` |
 | 生成 Windows 部署包 | `scripts/pack-deploy.bat` |
@@ -249,6 +253,28 @@ experiments/
 求助时（**含带图**）后端会先调用 `/datasets/{datasetId}/retrieve`，将召回内容写入 `inputs.kb_context` 再调 Chatflow。Dify 工作流开始节点需增加变量：`experiment_code`、`kb_context`、`dataset_id`（可选）、`step_title` 等；**带图分支的 LLM 也要引用 `kb_context`**，不要只做视觉分析。
 
 知识库检索 API Key 可在 `config/dify.env` 的 `DIFY_KB_API_KEY` 单独配置，留空则使用 `DIFY_API_KEY`。
+
+### 前端启动与日志
+
+Windows 双击 `scripts/start.bat` 分别打开前后端窗口，前端直接在自己的窗口中运行 Vite；请保留窗口（可以最小化），关闭前端运行窗口会停止前端。后端已运行时显示后端状态窗口，不会强制结束已有服务。默认访问 `http://localhost:5174/`，后端端口为 `8082`，均以 `config/ports.env` 为准。
+
+此前改成的 WMI 隐藏后台监护方式已从默认启动链路移除：现场出现过监护进程与 Vite 一起消失、状态文件仍写着 running 的情况。单独验证“杀掉子进程后重启”无法覆盖这一问题。历史日志没有进程终止审计，无法确认具体结束者，不能将它说成 Vite 页面异常或已证实的 Windows 内存回收。
+
+可单独运行 `scripts/run-frontend.bat`；`scripts/start-frontend.ps1` 兼容入口也在前台直接运行，不创建 WMI worker。重复启动只复用该项目的实际端口进程，不依赖旧的 JSON 状态。前端避免标准输入关闭引发 Vite 自动退出。
+
+Windows 启动脚本在 Node 22 及以上使用 `--no-maglev`，规避本机 Windows 26200 / Node 24 上疑似 Maglev 原生崩溃兼容问题（已观察退出码 `-1073740791 / 0xC0000409`；相关记录见 [Node #62260](https://github.com/nodejs/node/issues/62260)）。若原生异常退出码为 `0xC0000409` 或 `0xC0000005`，同一窗口最多重试 3 次，每次间隔 2 秒；正常退出、端口冲突、主动停止均不重试。退出码及重试次数写入 `logs/frontend-launcher.log`，实际 Node 参数写入生命周期日志。此兼容措施不等同于已通过转储确认具体崩溃模块。
+
+`logs/frontend-lifecycle.jsonl` 记录前端启动、退出、异常和每分钟心跳（含进程号与内存使用），日志写入失败不会影响服务。旧的 `frontend-service*.json` 只作为历史记录保留。停止服务用 `scripts/stop.bat`；只停止前端用 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-frontend.ps1`。验证启动链路可运行 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-frontend-startup.ps1`，它使用独立临时端口，不会停止正在使用的服务。
+
+## 管理端与工位
+
+- 管理员进入“实验室与工位”，维护工位编号、名称、视频流地址或摄像头 IP、启用状态。
+- 教师进入“课堂巡视”，选择实验室即可看到各工位视频，支持放大查看。观看不依赖实验项目、教学班、课次、学生登录或终端配对。
+- 教师可在工位上选择教学班、勾选学生并保存当前座位绑定；支持多人同组、调整和整室清空。同一学生在同一实验室只能绑定一个工位，教师只能管理本班名单。课前核对、课后清空，不需要学生扫码或登录。
+- 学生端不显示入座和摄像头绑定入口。当前巡视不做自动身份识别和 AI 巡检，已有历史数据保留。
+- IP 模式按 `config/lab.properties` 的 `wuxiaozhi.lab.ip-stream-template` 展开该型号实际播放路径；不同型号可直接填写完整 FLV 视频地址。RTSP 需先由视频网关转换。
+- 教师与管理员可观看巡视画面；学生无权查看，视频仍通过后端鉴权转发。
+- 部署配置和正式包构建见 [实验室摄像头部署说明](docs/lab-deployment.md)。
 
 ## API 概览
 

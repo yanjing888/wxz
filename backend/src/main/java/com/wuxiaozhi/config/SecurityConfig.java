@@ -44,10 +44,16 @@ public class SecurityConfig {
                 .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) ->
                         response.sendError(401, "Unauthorized")))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/", "/login", "/lab", "/teacher", "/home",
+                        // 视频响应的异步续写沿用首次请求的校验，转发循环也会复查教师身份。
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC, jakarta.servlet.DispatcherType.ERROR).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/", "/login", "/lab", "/teacher", "/admin", "/home",
                                 "/ai/**", "/experiment/**", "/experiments/**", "/data/**", "/after/**",
-                                "/agents/**", "/prep/**", "/monitor", "/files", "/profile").permitAll()
-                        .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/password",
+                                "/agents/**", "/prep/**", "/monitor", "/files", "/profile", "/learning").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/newton-rings-prelab/**", "/newton-rings-simulation/**").permitAll()
+                        .requestMatchers("/api/student/**").hasRole("STUDENT")
+                        .requestMatchers("/api/auth/login", "/api/auth/register",
+                                "/api/workstation-agent/*/frame",
                                 "/api/public/experiments/**",
                                 "/api/system/**", "/uploads/**", "/download/**", "/app/**", "/assets/**", "/images/**", "/h2-console/**").permitAll()
                         .anyRequest().authenticated())

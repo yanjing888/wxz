@@ -28,9 +28,15 @@ public class User {
     @Column(length = 64)
     private String studentClass;
 
-    /** STUDENT | TEACHER；教师可查看 studentClass 对应班级（留空则查看全部学生） */
+    /** STUDENT | TEACHER | ADMIN */
     @Column(nullable = false, length = 16)
     private String role = UserRole.STUDENT;
+
+    @Column(nullable=false,columnDefinition="boolean default true")
+    private boolean enabled=true;
+
+    @Column(nullable=false,columnDefinition="integer default 0")
+    private int authVersion=0;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

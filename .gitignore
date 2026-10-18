@@ -19,6 +19,8 @@ backend/src/main/resources/application-local.yml
 *.err
 .env
 config/*.env
+config/lab.properties
+backups/
 !config/dify.env
 !config/ports.env
 __pycache__/

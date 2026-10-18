@@ -32,8 +32,8 @@ const portsEnv = readFromProject('config/ports.env')
 
 assertContains(
   appConfig,
-  'browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:/ws/hdl/hlsram/live0.flv}',
-  'default browser stream URL should use the camera WebSocket path through the laptop origin'
+  'browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:}',
+  'legacy global camera must not assume an unconfigured device address'
 )
 assertContains(
   appConfig,

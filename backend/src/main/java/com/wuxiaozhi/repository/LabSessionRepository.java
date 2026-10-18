@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface LabSessionRepository extends JpaRepository<LabSession, Long> {
+    List<LabSession> findByUserIdIn(Collection<Long> userIds);
     List<LabSession> findByUserIdOrderByStartTimeDesc(Long userId);
     List<LabSession> findByUserIdAndExperimentCodeOrderByStartTimeDesc(Long userId, String experimentCode);
     @Query("""

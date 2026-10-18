@@ -6,11 +6,16 @@ set "ROOT=%CD%"
 call "%~dp0_read-ports.bat"
 
 echo Ports: backend=%BACKEND_PORT% frontend=%FRONTEND_PORT%
-echo Free ports if already in use ...
-call "%~dp0_free-port.bat" %BACKEND_PORT% backend
-call "%~dp0_free-port.bat" %FRONTEND_PORT% frontend
-echo Starting...
-
-start "WXZ-Backend" /D "%ROOT%" cmd.exe /k "scripts\run-backend.bat"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\check-service-owner.ps1" -Port %BACKEND_PORT% -Role backend
+set "BACKEND_STATE=%ERRORLEVEL%"
+if "%BACKEND_STATE%"=="2" (
+  pause
+  exit /b 1
+)
+if "%BACKEND_STATE%"=="0" (
+  start "WXZ-Backend" /D "%ROOT%" powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\watch-backend.ps1" -Port %BACKEND_PORT%
+) else (
+  start "WXZ-Backend" /D "%ROOT%" cmd.exe /k "scripts\run-backend.bat"
+)
 start "WXZ-Frontend" /D "%ROOT%" cmd.exe /k "scripts\run-frontend.bat"
 exit /b 0

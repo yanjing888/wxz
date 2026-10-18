@@ -51,7 +51,7 @@
       </template>
 
       <!-- 登录模式 -->
-      <form v-else-if="mode === 'login'" class="auth-form" @submit.prevent="submitLogin">
+      <form v-else class="auth-form" @submit.prevent="submitLogin">
         <div class="auth-header">
           <h2>账号登录</h2>
           <p>请输入账号和密码登录系统</p>
@@ -99,7 +99,7 @@
             <input v-model="rememberMe" type="checkbox" />
             <span>记住账号</span>
           </label>
-          <button type="button" class="link-btn" @click="mode = 'reset'">忘记密码？</button>
+          <button type="button" class="link-btn" @click="showTip('请联系管理员重置密码')">忘记密码？</button>
         </div>
 
         <p v-if="tip" class="auth-tip">{{ tip }}</p>
@@ -109,179 +109,15 @@
           {{ loading ? '登录中...' : '登 录' }}
         </button>
 
-        <div class="auth-footer">
-          还没有账号？
-          <button type="button" class="link-btn" @click="mode = 'register'">立即注册</button>
-        </div>
+        <div class="auth-footer">账号由管理员维护；学生名单也可由任课教师导入。</div>
       </form>
 
-      <!-- 注册模式 -->
-      <form v-else-if="mode === 'register'" class="auth-form" @submit.prevent="submitRegister">
-        <div class="auth-header">
-          <h2>新用户注册</h2>
-          <p>填写信息创建学生账号</p>
-        </div>
-
-        <div class="field-group">
-          <label class="auth-field">
-            <span class="field-label">账号</span>
-            <div class="field-input-wrap">
-              <svg class="field-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <input v-model.trim="registerForm.username" autocomplete="username" placeholder="3-64 位账号" />
-            </div>
-          </label>
-
-          <label class="auth-field">
-            <span class="field-label">姓名</span>
-            <div class="field-input-wrap">
-              <svg class="field-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3v4M3 7h4M10 7h.01M10 3v4M6 11h12M6 15h12M6 19h12" />
-              </svg>
-              <input v-model.trim="registerForm.displayName" placeholder="真实姓名" />
-            </div>
-          </label>
-
-          <label class="auth-field">
-            <span class="field-label">班级 <em>选填</em></span>
-            <div class="field-input-wrap">
-              <svg class="field-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6m0-6l-9-5v6l9 5v-6z" />
-              </svg>
-              <input v-model.trim="registerForm.studentClass" placeholder="如：物理 2401 班" />
-            </div>
-          </label>
-
-          <label class="auth-field">
-            <span class="field-label">密码</span>
-            <div class="field-input-wrap">
-              <svg class="field-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              <input
-                v-model="registerForm.password"
-                :type="showPassword ? 'text' : 'password'"
-                autocomplete="new-password"
-                placeholder="至少 6 位密码"
-              />
-              <button type="button" class="field-toggle" @click="showPassword = !showPassword">
-                <svg v-if="showPassword" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88L3.121 3.121m6.758 6.758L3.12 3.12M21 3l-18 18" />
-                </svg>
-              </button>
-            </div>
-          </label>
-
-          <label class="auth-field">
-            <span class="field-label">确认密码</span>
-            <div class="field-input-wrap">
-              <svg class="field-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <input
-                v-model="registerForm.confirmPassword"
-                :type="showPassword ? 'text' : 'password'"
-                autocomplete="new-password"
-                placeholder="再次输入密码"
-              />
-            </div>
-          </label>
-        </div>
-
-        <p v-if="tip" class="auth-tip">{{ tip }}</p>
-
-        <button type="submit" class="primary-btn" :disabled="loading">
-          <span v-if="loading" class="btn-spinner" />
-          {{ loading ? '注册中...' : '注 册' }}
-        </button>
-
-        <div class="auth-footer">
-          已有账号？
-          <button type="button" class="link-btn" @click="mode = 'login'">返回登录</button>
-        </div>
-      </form>
-
-      <!-- 忘记密码模式 -->
-      <form v-else-if="mode === 'reset'" class="auth-form" @submit.prevent="submitReset">
-        <div class="auth-header">
-          <h2>重置密码</h2>
-          <p>输入账号和新密码</p>
-        </div>
-
-        <div class="field-group">
-          <label class="auth-field">
-            <span class="field-label">账号</span>
-            <div class="field-input-wrap">
-              <svg class="field-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <input v-model.trim="resetForm.username" autocomplete="username" placeholder="请输入账号" />
-            </div>
-          </label>
-
-          <label class="auth-field">
-            <span class="field-label">新密码</span>
-            <div class="field-input-wrap">
-              <svg class="field-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              <input
-                v-model="resetForm.newPassword"
-                :type="showPassword ? 'text' : 'password'"
-                autocomplete="new-password"
-                placeholder="至少 6 位新密码"
-              />
-              <button type="button" class="field-toggle" @click="showPassword = !showPassword">
-                <svg v-if="showPassword" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88L3.121 3.121m6.758 6.758L3.12 3.12M21 3l-18 18" />
-                </svg>
-              </button>
-            </div>
-          </label>
-
-          <label class="auth-field">
-            <span class="field-label">确认新密码</span>
-            <div class="field-input-wrap">
-              <svg class="field-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <input
-                v-model="resetForm.confirmPassword"
-                :type="showPassword ? 'text' : 'password'"
-                autocomplete="new-password"
-                placeholder="再次输入新密码"
-              />
-            </div>
-          </label>
-        </div>
-
-        <p v-if="tip" class="auth-tip">{{ tip }}</p>
-
-        <button type="submit" class="primary-btn" :disabled="loading">
-          <span v-if="loading" class="btn-spinner" />
-          {{ loading ? '重置中...' : '重置密码' }}
-        </button>
-
-        <div class="auth-footer">
-          想起来了？
-          <button type="button" class="link-btn" @click="mode = 'login'">返回登录</button>
-        </div>
-      </form>
     </section>
   </main>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
@@ -296,7 +132,6 @@ const router = useRouter()
 const loading = ref(false)
 const tip = ref('')
 const showPassword = ref(false)
-const mode = ref('login')
 const rememberMe = ref(false)
 const tabletHomeVisible = ref(false)
 const tabletStatus = ref('checking')
@@ -306,20 +141,6 @@ const selectedCode = ref('')
 const loginForm = reactive({
   username: localStorage.getItem('wxz_remember_user') || '',
   password: ''
-})
-
-const registerForm = reactive({
-  username: '',
-  displayName: '',
-  studentClass: '',
-  password: '',
-  confirmPassword: ''
-})
-
-const resetForm = reactive({
-  username: '',
-  newPassword: '',
-  confirmPassword: ''
 })
 
 const tabletStatusText = computed(() => {
@@ -337,10 +158,6 @@ function showTip(message) {
     tip.value = ''
   }, 3500)
 }
-
-watch(mode, () => {
-  tip.value = ''
-})
 
 async function submitLogin() {
   tip.value = ''
@@ -363,58 +180,6 @@ async function submitLogin() {
     await router.replace(auth.homeRoute())
   } catch (e) {
     showTip(e.response?.data?.message || e.message || '账号或密码错误')
-  } finally {
-    loading.value = false
-  }
-}
-
-async function submitRegister() {
-  tip.value = ''
-  if (!registerForm.username) return showTip('请输入账号')
-  if (registerForm.username.length < 3) return showTip('账号至少 3 个字符')
-  if (!registerForm.displayName) return showTip('请输入姓名')
-  if (!registerForm.password) return showTip('请输入密码')
-  if (registerForm.password.length < 6) return showTip('密码至少 6 位')
-  if (registerForm.password !== registerForm.confirmPassword) return showTip('两次密码不一致')
-
-  loading.value = true
-  try {
-    await auth.register({
-      username: registerForm.username,
-      password: registerForm.password,
-      displayName: registerForm.displayName,
-      studentClass: registerForm.studentClass
-    })
-    lab.$reset()
-    await router.replace(auth.homeRoute())
-  } catch (e) {
-    showTip(e.response?.data?.message || e.message || '注册失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-async function submitReset() {
-  tip.value = ''
-  if (!resetForm.username) return showTip('请输入账号')
-  if (!resetForm.newPassword) return showTip('请输入新密码')
-  if (resetForm.newPassword.length < 6) return showTip('密码至少 6 位')
-  if (resetForm.newPassword !== resetForm.confirmPassword) return showTip('两次密码不一致')
-
-  loading.value = true
-  try {
-    await auth.resetPassword({
-      username: resetForm.username,
-      newPassword: resetForm.newPassword
-    })
-    showTip('密码重置成功，请使用新密码登录')
-    loginForm.username = resetForm.username
-    loginForm.password = ''
-    resetForm.newPassword = ''
-    resetForm.confirmPassword = ''
-    setTimeout(() => { mode.value = 'login' }, 800)
-  } catch (e) {
-    showTip(e.response?.data?.message || e.message || '重置失败')
   } finally {
     loading.value = false
   }

@@ -19,8 +19,17 @@ const routes = [
     meta: studentMeta,
     children: [
       { path: '', redirect: { name: 'lab' } },
+      { path: 'learning', name: 'my-learning', component: () => import('../views/MyLearningView.vue'), meta: studentMeta },
       { path: 'tasks', name: 'student-tasks', redirect: { name: 'lab' } },
-      { path: 'reports', name: 'student-reports', component: () => import('../views/TaskCenterView.vue'), meta: studentMeta },
+      {
+        path: 'reports',
+        name: 'student-reports',
+        redirect: () => {
+          const code = useTaskStore().current?.experimentCode || lastExperiment() || localStorage.getItem('wxz_exp')
+          return code ? { name: 'after-center', params: { code }, query: { tab: 'report' } } : { name: 'lab' }
+        },
+        meta: studentMeta
+      },
       {
         path: 'experiments',
         name: 'experiments',
@@ -65,7 +74,7 @@ const routes = [
       {
         path: 'monitor',
         name: 'lab-monitor',
-        component: () => import('../views/LabMonitorView.vue'),
+        redirect: to => ({ name: 'lab', query: to.query }),
         meta: studentMeta
       },
       {
@@ -98,6 +107,7 @@ const routes = [
     ]
   },
   { path: '/home', redirect: { name: 'lab' } },
+  { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true, role: 'ADMIN' } },
   { path: '/ai', redirect: { name: 'agents' } },
   { path: '/ai/:code', redirect: { name: 'agents' } },
   { path: '/experiment/:code', redirect: (to) => ({ name: 'lab', query: { exp: to.params.code } }) },
@@ -140,11 +150,8 @@ router.beforeEach(async (to) => {
   if (to.name === 'login' && auth.token) {
     return auth.homeRoute()
   }
-  if (role === 'TEACHER' && !auth.isTeacher) {
+  if (role && auth.role !== role) {
     return auth.homeRoute()
-  }
-  if (role === 'STUDENT' && auth.isTeacher) {
-    return '/teacher'
   }
   // Resolve the current assignment inside the original experiment page.
   if (['lab', 'lab-monitor'].includes(String(to.name)) && !to.query.exp && auth.token && !auth.isTeacher) {

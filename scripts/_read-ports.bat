@@ -2,7 +2,7 @@
 rem Load BACKEND_PORT, FRONTEND_PORT from config\ports.env (caller must set ROOT).
 set "BACKEND_PORT=8082"
 set "FRONTEND_PORT=5174"
-set "BENCH_CAMERA_IP=188.18.31.195"
+set "BENCH_CAMERA_IP="
 set "UVC_CAMERA_PORT=8765"
 if not exist "%ROOT%\config\ports.env" goto :eof
 for /f "usebackq eol=# tokens=1,* delims==" %%a in ("%ROOT%\config\ports.env") do (

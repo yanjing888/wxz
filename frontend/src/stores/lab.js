@@ -1558,6 +1558,8 @@ export const useLabStore = defineStore('lab', {
     },
     startEnvTimer() {
       this.stopEnvTimer()
+      // 固定工位的自动巡检由后端调度，切换页面不会启动第二套巡检。
+      if (localStorage.getItem('wxz_terminal_token')) return
       if (!this.envCheckAvailable) {
         this.applyEnvDifyStatus()
         return

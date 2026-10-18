@@ -22,10 +22,6 @@
             <h2>{{ experimentName || '实验报告' }}</h2>
           </div>
           <div class="header-actions">
-            <button type="button" class="btn-plain" :disabled="!sessionId || generating || reportDone" @click="generateFromSession">
-              {{ generating ? '恢复中…' : '从实验记录填充' }}
-            </button>
-            <button type="button" class="btn-plain" :disabled="!hasContent" @click="copyFullReport">复制全文</button>
             <button type="button" class="btn-plain" :disabled="!sessionId || exporting" @click="downloadDocx">
               {{ exporting ? '导出中…' : '导出 Word' }}
             </button>
@@ -36,8 +32,7 @@
         </header>
 
         <!-- 工具栏 -->
-        <p class="draft-save-status" role="status">{{ reportDone ? '报告已正式提交，正文只读；教师批改后可在报告列表查看成绩。' : completionMessage || '草稿会自动保存到服务器，可在宿舍登录后继续写作。' }}</p>
-        <div v-if="!reportDone" class="rep-toolbar">
+        <div class="rep-toolbar">
           <button type="button" class="tool-btn" title="加粗" @mousedown.prevent="execFmt('bold')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"/></svg>
           </button>
@@ -69,6 +64,16 @@
 
         <!-- 报告内容 -->
         <div class="report-content custom-scroll flex-1 min-h-0">
+          <article class="report-paper" aria-label="实验报告文档">
+            <header class="paper-heading">
+              <p class="paper-caption">大学物理实验报告</p>
+              <h1>{{ experimentName || '实验报告' }}</h1>
+              <div class="paper-meta">
+                <span>姓名：{{ studentName }}</span>
+                <span v-if="auth.studentClass">班级：{{ auth.studentClass }}</span>
+                <span>日期：{{ todayStr }}</span>
+              </div>
+            </header>
           <section
             v-for="def in sectionDefs"
             :id="`sec-${def.key}`"
@@ -81,7 +86,7 @@
             </label>
             <div
               class="rep-editor"
-              :contenteditable="!reportDone"
+              contenteditable="true"
               :data-key="def.key"
               :data-placeholder="placeholders[def.key]"
               @input="onEditorInput(def.key, $event)"
@@ -89,6 +94,7 @@
               @blur="saveDraft"
             />
           </section>
+          </article>
         </div>
       </div>
 
@@ -202,18 +208,16 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import AskPanel from './AskPanel.vue'
 import { useAuthStore } from '../../stores/auth'
-import { useTaskStore } from '../../stores/tasks'
 import { sessionApi, studentExperimentApi } from '../../api'
 import {
   REPORT_SECTION_DEFS,
   buildReportSections,
   buildReportAssistContext,
   defaultSections,
-  sectionsToExportPayload,
-  sectionsToFullText
+  sectionsToExportPayload
 } from '../../utils/sessionReport'
 import { extractReportSections, readLocalReportDrafts, reportSectionsLength, syncSubmittedReportDrafts } from '../../utils/reportDraftSync'
 import { renderMathInMarkdown } from '../../utils/markdown'
@@ -250,22 +254,20 @@ const formulaText = ref('')
 const formulaInputRef = ref(null)
 const imageInputRef = ref(null)
 const previewOpen = ref(false)
-let draftTimer,pendingDraft=null,saveSequence=0,loadSequence=0
 
 const REPORT_MAIN_WIDTH_KEY = 'wxz_report_main_width'
-const DEFAULT_REPORT_MAIN_WIDTH = 720
 const MIN_REPORT_MAIN_WIDTH = 360
-const MIN_REPORT_ASIDE_WIDTH = 280
+const MIN_REPORT_ASIDE_WIDTH = 360
 const reportFrame = ref(null)
 const reportMainWidth = ref(readStoredReportMainWidth())
 
-const reportColumns = computed(() => ({
-  '--report-main-width': `${reportMainWidth.value}px`
-}))
+const reportColumns = computed(() => reportMainWidth.value
+  ? { '--report-main-width': `${reportMainWidth.value}px` }
+  : {})
 
 function readStoredReportMainWidth() {
   const raw = Number(localStorage.getItem(REPORT_MAIN_WIDTH_KEY))
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_REPORT_MAIN_WIDTH
+  return Number.isFinite(raw) && raw > 0 ? raw : null
 }
 
 function clampReportMainWidth(width) {
@@ -302,11 +304,6 @@ function startReportResize(event) {
 }
 
 onMounted(() => {
-  nextTick(() => {
-    if (!localStorage.getItem(REPORT_MAIN_WIDTH_KEY) && reportFrame.value) {
-      reportMainWidth.value = clampReportMainWidth(reportFrame.value.clientWidth - 350)
-    }
-  })
   syncSubmittedReportDrafts()
 })
 
@@ -362,7 +359,6 @@ function escapeHtml(text) {
 
 function onEditorInput(key, event) {
   form[key] = event.target.innerHTML
-  saveDraft()
 }
 
 function setEditorContent(key, content) {
@@ -456,24 +452,14 @@ function draftKey() {
   return props.sessionId ? `wxz_report_draft_${props.sessionId}` : ''
 }
 
-async function flushServerDraft(){
-  clearTimeout(draftTimer)
-  const draft=pendingDraft;pendingDraft=null;if(!draft)return
-  const sequence=++saveSequence
-  try{await studentExperimentApi.saveReportDraft(draft.code,draft.payload);if(sequence===saveSequence)completionMessage.value="草稿已保存到服务器，可换设备继续写作。"}
-  catch(e){if(sequence===saveSequence)completionMessage.value="草稿已保存在本机，服务器保存失败："+(e.response?.data?.message||"请检查网络后重试")}
-}
-onBeforeUnmount(()=>{loadSequence++;flushServerDraft()})
 function saveDraft() {
   const key = draftKey()
   if (!key) return
   localStorage.setItem(key, JSON.stringify({
     experimentCode: props.experimentCode,
     sessionId: props.sessionId,
-    draftUpdatedAt: new Date().toISOString(),
     ...form
   }))
-  if(!reportDone.value){pendingDraft={code:props.experimentCode,payload:{sessionId:Number(props.sessionId),sections:currentSectionsPayload()}};clearTimeout(draftTimer);draftTimer=setTimeout(flushServerDraft,900)}
 }
 
 function applySections(sections) {
@@ -496,38 +482,39 @@ function loadDraft() {
       // fall through
     }
   }
-  return false
+  const others = readLocalReportDrafts().filter((d) =>
+    !d.experimentCode || !props.experimentCode || d.experimentCode === props.experimentCode
+  )
+  return others.length ? applySections(others[0].sections) : false
 }
 
 async function onSessionChange() {
-  const sequence=++loadSequence
-  flushServerDraft()
   completionMessage.value = ''
   reportDone.value = false
   sourceReport.value = null
   Object.keys(form).forEach((k) => { form[k] = '' })
   if (!props.sessionId) return
-  let serverSections = null, serverUpdatedAt=null
+  let serverSections = null
   if (props.experimentCode) {
     try {
       const { data } = await studentExperimentApi.getProgress(props.experimentCode)
       reportDone.value = !!data?.reportCompleted
       serverSections = data?.reportSections || null
-      serverUpdatedAt=data?.reportUpdatedAt
     } catch {
       reportDone.value = false
     }
   }
-  if(sequence!==loadSequence)return
-  let localUpdatedAt=null;try{localUpdatedAt=JSON.parse(localStorage.getItem(draftKey())||'null')?.draftUpdatedAt}catch{}
-  let loadedLocal=false
-  if(reportDone.value)applySections(serverSections)
-  else if(serverSections&&reportSectionsLength(extractReportSections(serverSections))>0&&(!localUpdatedAt||Date.parse(serverUpdatedAt)>=Date.parse(localUpdatedAt)))applySections(serverSections)
-  else loadedLocal=loadDraft()||applySections(serverSections)
+  const loadedLocal = loadDraft()
+  if (!loadedLocal) applySections(serverSections)
+  else if (reportSectionsLength(extractReportSections(serverSections)) > reportSectionsLength(extractReportSections(form))) {
+    applySections(serverSections)
+  }
   await nextTick()
   syncEditorsFromForm()
   await loadSourceReport()
-  if(sequence!==loadSequence)return
+  if (reportDone.value && hasContent.value) {
+    persistReportToServer().catch(() => {})
+  }
   if (loadedLocal || hasContent.value) return
   await generateFromSession()
 }
@@ -545,12 +532,10 @@ async function loadSourceReport() {
 }
 
 async function generateFromSession() {
-  if (!props.sessionId || reportDone.value) return
-  const sequence=loadSequence
+  if (!props.sessionId) return
   generating.value = true
   try {
     await loadSourceReport()
-    if(sequence!==loadSequence)return
     const built = buildReportSections(sourceReport.value, props.experimentCode)
     Object.keys(form).forEach((k) => {
       const raw = built[k] || ''
@@ -588,24 +573,12 @@ async function markReportComplete({ silent = false } = {}) {
   reportCompleting.value = true
   if (!silent) completionMessage.value = ''
   try {
-    await flushServerDraft()
     await persistReportToServer()
     reportDone.value = true
-    useTaskStore().load().catch(()=>{})
     if (!silent) completionMessage.value = '报告状态已同步，教师端可在报告评阅中查看。'
   } finally {
     reportCompleting.value = false
   }
-}
-
-function fullText() {
-  const plain = {}
-  Object.keys(form).forEach((k) => { plain[k] = stripHtml(form[k]) })
-  return sectionsToFullText(plain, props.experimentName)
-}
-
-function copyFullReport() {
-  navigator.clipboard?.writeText(fullText()).catch(() => {})
 }
 
 async function downloadDocx() {
@@ -649,12 +622,11 @@ async function confirmSubmit() {
 </script>
 
 <style scoped>
-.draft-save-status{flex-shrink:0;padding:8px 16px;background:#f7fafb;color:#6d8490;border-bottom:1px solid #e3e9ed;font-size:11px}
 .report-editor { @apply overflow-hidden bg-white; }
 
 .report-frame-resizable {
   display: grid;
-  grid-template-columns: var(--report-main-width, minmax(360px, 1fr)) 10px minmax(280px, 1fr);
+  grid-template-columns: minmax(360px, min(var(--report-main-width, calc(100% - 510px)), calc(100% - 370px))) 10px minmax(360px, 1fr);
   overflow: hidden;
 }
 
@@ -693,11 +665,32 @@ async function confirmSubmit() {
 
 /* ===== 报告内容 ===== */
 .report-content {
-  @apply px-4 py-3;
+  padding: 24px;
+  background: #f0f2f5;
   overflow-y: auto;
   flex: 1 1 0;
   min-height: 0;
 }
+.report-paper {
+  width: 100%;
+  max-width: 794px;
+  min-height: 1123px;
+  margin: 0 auto;
+  padding: 36px clamp(20px, 3vw, 48px) 48px;
+  border: 1px solid #d5dae2;
+  background: #fff;
+  box-shadow: 0 3px 14px rgba(30, 41, 59, 0.08);
+}
+.paper-heading {
+  margin-bottom: 28px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid #cbd1da;
+  text-align: center;
+}
+.paper-caption { margin: 0 0 10px; color: #64748b; font-size: 13px; letter-spacing: 2px; }
+.paper-heading h1 { margin: 0; color: #1e293b; font-size: 21px; font-weight: 700; line-height: 1.6; }
+.paper-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 24px; margin-top: 20px; color: #475569; font-size: 12px; line-height: 1.7; }
+.report-paper .report-field:last-child { margin-bottom: 0; }
 .report-field { @apply mb-5; }
 .rep-label {
   @apply flex items-center justify-between mb-1.5;
@@ -960,8 +953,10 @@ async function confirmSubmit() {
 
 @media (max-width: 1024px) {
   .report-frame-resizable {
-    grid-template-columns: minmax(0, 1fr) 10px minmax(240px, 320px);
+    grid-template-columns: minmax(0, 1fr) 10px minmax(320px, 380px);
   }
+  .report-content { padding: 16px; }
+  .report-paper { padding: 28px 20px 36px; }
 }
 @media (max-width: 768px) {
   .report-frame-resizable {
@@ -972,7 +967,9 @@ async function confirmSubmit() {
   .report-aside { width: 100%; height: 300px; border-top: 1px solid var(--line-soft, #e4e9f3); }
   .report-header { @apply flex-col items-start gap-2; }
   .header-actions { @apply w-full; }
-  .report-content { @apply px-4; }
+  .report-content { padding: 12px; }
+  .report-paper { padding: 24px 18px 32px; }
+  .paper-heading h1 { font-size: 18px; }
   .preview-wrapper { width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
   .preview-page { width: 100%; padding: 24px 20px; }
 }

@@ -32,17 +32,20 @@ public class SessionController {
     private final ReportService reportService;
     private final UvcCameraCaptureService uvcCameraCaptureService;
     private final StudentExperimentService studentExperimentService;
+    private final com.wuxiaozhi.service.WorkstationService workstations;
 
     public SessionController(LabSessionService labSessionService,
                              DeviceAcquisitionService deviceAcquisitionService,
                              ReportService reportService,
                              UvcCameraCaptureService uvcCameraCaptureService,
-                             StudentExperimentService studentExperimentService) {
+                             StudentExperimentService studentExperimentService,
+                             com.wuxiaozhi.service.WorkstationService workstations) {
         this.labSessionService = labSessionService;
         this.deviceAcquisitionService = deviceAcquisitionService;
         this.reportService = reportService;
         this.uvcCameraCaptureService = uvcCameraCaptureService;
         this.studentExperimentService = studentExperimentService;
+        this.workstations = workstations;
     }
 
     @PostMapping
@@ -204,7 +207,8 @@ public class SessionController {
 
     @PostMapping("/{sessionId:\\d+}/finish")
     public LabSession finish(@PathVariable Long sessionId, Authentication authentication) {
-        return labSessionService.finishSession(sessionId, currentUserId(authentication));
+        var session=labSessionService.finishSession(sessionId, currentUserId(authentication));
+        workstations.releaseFinished(currentUserId(authentication));return session;
     }
 
     @PostMapping("/{sessionId:\\d+}/archive")

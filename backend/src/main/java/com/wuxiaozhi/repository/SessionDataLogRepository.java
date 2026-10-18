@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface SessionDataLogRepository extends JpaRepository<SessionDataLog, Long> {
+    List<SessionDataLog> findBySessionIdIn(java.util.Collection<Long> sessionIds);
     List<SessionDataLog> findBySessionIdOrderByCreatedAtAsc(Long sessionId);
 
     @Query("""

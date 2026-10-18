@@ -13,7 +13,8 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isTeacher: (state) => state.role === 'TEACHER',
-    isStudent: (state) => state.role !== 'TEACHER'
+    isAdmin: (state) => state.role === 'ADMIN',
+    isStudent: (state) => state.role === 'STUDENT'
   },
   actions: {
     persist(data) {
@@ -82,6 +83,7 @@ export const useAuthStore = defineStore('auth', {
       ;['wxz_token', 'wxz_userId', 'wxz_username', 'wxz_displayName', 'wxz_role', 'wxz_class'].forEach((k) => localStorage.removeItem(k))
     },
     homeRoute() {
+      if (this.isAdmin) return '/admin'
       return this.isTeacher ? '/teacher' : '/experiments'
     }
   }

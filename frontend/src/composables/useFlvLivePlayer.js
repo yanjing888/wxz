@@ -34,8 +34,10 @@ export function useFlvLivePlayer() {
   const ready = ref(false)
   const error = ref('')
   let player = null
+  let generation = 0
 
   function cleanup() {
+    generation++
     if (player) {
       try {
         player.pause()
@@ -49,8 +51,9 @@ export function useFlvLivePlayer() {
     }
   }
 
-  async function start(video, browserStreamUrl) {
+  async function start(video, browserStreamUrl, headers = undefined) {
     cleanup()
+    const run = generation
     ready.value = false
     error.value = ''
 
@@ -72,6 +75,7 @@ export function useFlvLivePlayer() {
         cors: true
       }, {
         enableWorker: false,
+        headers,
         enableStashBuffer: false,
         stashInitialSize: 32,
         maxBufferLength: 0.3,
@@ -80,13 +84,20 @@ export function useFlvLivePlayer() {
         autoplay: true,
         muted: true
       })
+      player.on(flvjs.Events.ERROR, () => {
+        if (run !== generation) return
+        ready.value = false
+        error.value = '摄像头连接中断，请检查设备或网络'
+      })
       player.attachMediaElement(video)
       player.load()
-      await video.play()
-      await waitForVideoFrame(video)
+      await Promise.all([video.play(), waitForVideoFrame(video)])
+      if (run !== generation) return false
+      if (error.value) return false
       ready.value = true
       return true
     } catch {
+      if (run !== generation) return false
       error.value = '无法播放视频流'
       cleanup()
       if (video) {

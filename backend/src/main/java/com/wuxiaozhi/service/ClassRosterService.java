@@ -30,6 +30,11 @@ public class ClassRosterService {
     public List<User> students(User teacher,String requested){
         String scope=scope(teacher,requested);
         if(scope.isBlank())return users.findByRoleOrderByDisplayNameAsc(UserRole.STUDENT);
+        return studentsInClass(scope);
+    }
+    /** Caller must authorize access to this class before listing its roster. */
+    public List<User> studentsInClass(String scope){
+        if("未分班".equals(scope))return users.findByRoleOrderByDisplayNameAsc(UserRole.STUDENT).stream().filter(u->classes(u).contains(scope)).toList();
         Map<Long,User> result=new LinkedHashMap<>();
         users.findByRoleAndStudentClassOrderByDisplayNameAsc(UserRole.STUDENT,scope).forEach(u->result.put(u.getId(),u));
         var ids=memberships.findByClassName(scope).stream().map(StudentClassMembership::getUserId).toList();

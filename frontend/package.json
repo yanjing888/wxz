@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/run-vite.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test:photo-entry": "node scripts/check-photo-capture-entry.mjs",
@@ -13,6 +13,9 @@
     "test:tablet-viewport": "node scripts/check-tablet-viewport.mjs",
     "test:chat-bubbles": "node scripts/check-chat-bubble-width.mjs",
     "test:report-review": "node scripts/check-report-review.mjs",
+    "test:workstations": "node scripts/check-workstations.mjs",
+    "test:learning": "node scripts/check-learning.mjs",
+    "test:dev-lifecycle": "node scripts/check-dev-lifecycle.mjs",
     "test:resizable-workspace": "node scripts/check-resizable-workspace.mjs"
   },
   "dependencies": {

@@ -2,6 +2,8 @@ server:
   port: ${BACKEND_PORT:8082}
 
 spring:
+  config:
+    import: optional:file:./config/lab.properties,optional:file:../config/lab.properties
   application:
     name: wuxiaozhi-backend
   datasource:
@@ -26,18 +28,20 @@ spring:
       max-request-size: 20MB
 
 wuxiaozhi:
+  workstations:
+    scheduling-enabled: ${WORKSTATION_INSPECTION_ENABLED:false}
   jwt:
-    secret: change-this-jwt-secret-in-production-wuxiaozhi-2026
+    secret: ${WXZ_JWT_SECRET:change-this-jwt-secret-in-production-wuxiaozhi-2026}
     expiration-ms: 86400000
   upload:
     dir: ./uploads
   bench-camera:
-    enabled: ${BENCH_CAMERA_ENABLED:true}
+    enabled: ${BENCH_CAMERA_ENABLED:false}
     label: 实验台摄像头
     protocol: rtsp
-    rtsp-url: ${BENCH_CAMERA_RTSP_URL:rtsp://admin:admin@${BENCH_CAMERA_IP:188.18.31.195}/live/chn=0}
-    browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:/ws/hdl/hlsram/live0.flv}
-    browser-stream-url-direct: ${BENCH_CAMERA_BROWSER_STREAM_URL_DIRECT:/ws-direct/hdl/hlsram/live0.flv}
+    rtsp-url: ${BENCH_CAMERA_RTSP_URL:}
+    browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:}
+    browser-stream-url-direct: ${BENCH_CAMERA_BROWSER_STREAM_URL_DIRECT:}
     connection-mode: ${BENCH_CAMERA_MODE:auto}
   uvc-camera:
     enabled: ${UVC_CAMERA_ENABLED:true}

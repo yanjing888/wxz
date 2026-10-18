@@ -11,6 +11,7 @@ public class SpaController {
             "/login",
             "/lab",
             "/teacher",
+            "/admin",
             "/home",
             "/ai",
             "/ai/**",
@@ -22,7 +23,8 @@ public class SpaController {
             "/prep/**",
             "/monitor",
             "/files",
-            "/profile"
+            "/profile",
+            "/learning"
     })
     public String app() {
         return "forward:/app/index.html";

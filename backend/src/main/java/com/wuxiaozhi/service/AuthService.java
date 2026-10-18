@@ -25,6 +25,9 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    @org.springframework.beans.factory.annotation.Value("${WXZ_ADMIN_USERNAME:}") private String bootstrapUsername;
+    @org.springframework.beans.factory.annotation.Value("${WXZ_ADMIN_PASSWORD:}") private String bootstrapPassword;
+    @org.springframework.beans.factory.annotation.Value("${wuxiaozhi.auth.self-registration-enabled:false}") private boolean selfRegistrationEnabled;
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
         this.userRepository = userRepository;
@@ -34,6 +37,10 @@ public class AuthService {
 
     @PostConstruct
     public void ensureDefaultUsers() {
+        if(bootstrapUsername!=null&&!bootstrapUsername.isBlank()&&bootstrapPassword!=null&&!bootstrapPassword.isBlank()&&userRepository.countByRole(UserRole.ADMIN)==0) {
+            if(userRepository.existsByUsername(bootstrapUsername.trim()))throw new IllegalStateException("初始管理员账号与已有账号重名，请检查管理员配置");
+            var admin=new User();admin.setUsername(bootstrapUsername.trim());admin.setDisplayName("系统管理员");admin.setRole(UserRole.ADMIN);admin.setStudentClass("");admin.setPasswordHash(passwordEncoder.encode(bootstrapPassword));userRepository.save(admin);
+        }
         userRepository.findAll().forEach(user -> {
             if (user.getRole() == null || user.getRole().isBlank()) {
                 user.setRole(UserRole.STUDENT);
@@ -61,6 +68,7 @@ public class AuthService {
     }
 
     public AuthResponse register(RegisterRequest req) {
+        if(!selfRegistrationEnabled)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"账号由管理员统一维护，请联系管理员或任课教师");
         if (userRepository.existsByUsername(req.getUsername())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "用户名已存在");
         }
@@ -82,15 +90,12 @@ public class AuthService {
         if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "账号/姓名或密码错误");
         }
+        if(!user.isEnabled())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"账号已停用，请联系管理员");
         return buildAuthResponse(user);
     }
 
     public AuthResponse resetPassword(ResetPasswordRequest req) {
-        User user = userRepository.findByUsername(req.getUsername())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "账号不存在"));
-        user.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
-        userRepository.save(user);
-        return buildAuthResponse(user);
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,"请联系管理员重置密码");
     }
 
     public User getUser(Long userId) {
@@ -106,12 +111,13 @@ public class AuthService {
 
     private AuthResponse buildAuthResponse(User user) {
         String role = normalizeRole(user.getRole());
-        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), role);
+        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), role,user.getAuthVersion());
         return new AuthResponse(token, user.getId(), user.getUsername(), user.getDisplayName(),
                 role, safeClass(user.getStudentClass()));
     }
 
     private String normalizeRole(String role) {
+        if(UserRole.ADMIN.equalsIgnoreCase(role))return UserRole.ADMIN;
         return UserRole.TEACHER.equalsIgnoreCase(role) ? UserRole.TEACHER : UserRole.STUDENT;
     }
 

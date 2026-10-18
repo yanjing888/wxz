@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 
 public interface EnvCheckLogRepository extends JpaRepository<EnvCheckLog, Long> {
+    List<EnvCheckLog> findTop20ByWorkstationIdOrderByCreatedAtDesc(Long workstationId);
     List<EnvCheckLog> findBySessionIdOrderByCreatedAtDesc(Long sessionId);
 
     List<EnvCheckLog> findBySessionIdInOrderByCreatedAtDesc(Collection<Long> sessionIds);
