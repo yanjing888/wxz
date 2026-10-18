@@ -1,25 +1,16 @@
 #!/usr/bin/env bash
-# 物小智一键启动（读取 config/ports.env）
+# 物小智一键启动（读取 config/application.yml）
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PORTS_FILE="$ROOT/config/ports.env"
-
-BACKEND_PORT=8082
-FRONTEND_PORT=5174
-
-if [[ -f "$PORTS_FILE" ]]; then
-  while IFS='=' read -r key value; do
-    key="$(echo "$key" | tr -d '[:space:]')"
-    value="$(echo "$value" | tr -d '[:space:]')"
-    [[ "$key" =~ ^# ]] && continue
-    [[ -z "$key" ]] && continue
-    case "$key" in
-      BACKEND_PORT) BACKEND_PORT="$value" ;;
-      FRONTEND_PORT) FRONTEND_PORT="$value" ;;
-    esac
-  done < <(grep -E '^(BACKEND_PORT|FRONTEND_PORT)=' "$PORTS_FILE" || true)
-fi
+PORTS_FILE="$ROOT/config/application.yml"
+PORTS_OUTPUT="$(node "$ROOT/config/loadPorts.mjs" --cmd)"
+while IFS='=' read -r key value; do
+  case "$key" in
+    BACKEND_PORT) BACKEND_PORT="$value" ;;
+    FRONTEND_PORT) FRONTEND_PORT="$value" ;;
+  esac
+done <<< "$PORTS_OUTPUT"
 
 port_in_use() {
   local port="$1"
@@ -33,7 +24,7 @@ port_in_use() {
 check_port() {
   local port="$1" label="$2"
   if port_in_use "$port"; then
-    echo "端口 $port ($label) 已被占用，请修改 config/ports.env 后重试。" >&2
+    echo "端口 $port ($label) 已被占用，请修改 config/application.yml 后重试。" >&2
     exit 1
   fi
 }

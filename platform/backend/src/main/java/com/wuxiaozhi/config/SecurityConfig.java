@@ -55,7 +55,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login", "/api/auth/register",
                                 "/api/workstation-agent/*/frame",
                                 "/api/public/experiments/**",
-                                "/api/system/**", "/uploads/**", "/download/**", "/app/**", "/assets/**", "/images/**", "/h2-console/**").permitAll()
+                                "/api/system/**", "/uploads/**", "/download/**", "/app/**", "/assets/**", "/images/**").permitAll()
                         .anyRequest().authenticated())
                 .headers(h -> h.frameOptions(f -> f.sameOrigin()))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

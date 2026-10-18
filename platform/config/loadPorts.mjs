@@ -1,48 +1,34 @@
-import { readFileSync, existsSync } from 'fs'
-import { dirname, resolve } from 'path'
-import { fileURLToPath } from 'url'
+import { readFileSync, existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 
-const CONFIG_DIR = dirname(fileURLToPath(import.meta.url))
-const PORTS_FILE = resolve(CONFIG_DIR, 'ports.env')
-
-const DEFAULTS = {
-  BACKEND_PORT: 8082,
-  FRONTEND_PORT: 5174,
-  BENCH_CAMERA_IP: '',
-  BENCH_CAMERA_IP_DIRECT: '',
-  BENCH_CAMERA_MODE: 'auto'
+const require = createRequire(new URL('../frontend/package.json', import.meta.url))
+const { parse } = require('yaml')
+export const portsFilePath = resolve(dirname(fileURLToPath(import.meta.url)), 'application.yml')
+export function loadApplication(filePath = portsFilePath) {
+  if (!existsSync(filePath)) throw new Error(`Missing ${filePath}; copy application.yml.example and configure MySQL first.`)
+  try { return parse(readFileSync(filePath, 'utf8')) || {} }
+  catch { throw new Error(`Invalid YAML in ${filePath}; check indentation and duplicate keys.`) }
 }
-
-export function loadPorts(filePath = PORTS_FILE) {
-  const ports = { ...DEFAULTS }
-  if (!existsSync(filePath)) return ports
-
-  const content = readFileSync(filePath, 'utf8')
-  for (const line of content.split(/\r?\n/)) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const idx = trimmed.indexOf('=')
-    if (idx < 0) continue
-    const key = trimmed.slice(0, idx).trim()
-    const rawValue = trimmed.slice(idx + 1).trim()
-    const value = Number(rawValue)
-    if ((key === 'BACKEND_PORT' || key === 'FRONTEND_PORT') && Number.isFinite(value)) {
-      ports[key] = value
-    }
-    if (key === 'BENCH_CAMERA_IP' && rawValue) {
-      ports[key] = rawValue
-    }
-    if (key === 'BENCH_CAMERA_IP_DIRECT' && rawValue) {
-      ports[key] = rawValue
-    }
-    if (key === 'BENCH_CAMERA_MODE' && rawValue) {
-      ports[key] = rawValue
-    }
+export function loadPorts(filePath = portsFilePath) {
+  const config = loadApplication(filePath)
+  const app = config.wuxiaozhi || {}
+  const port = (value, name) => {
+    const number = Number(value)
+    if (!Number.isInteger(number) || number < 1 || number > 65535) throw new Error(`Invalid ${name} in ${filePath}`)
+    return number
   }
-  if (!ports.BENCH_CAMERA_IP_DIRECT) {
-    ports.BENCH_CAMERA_IP_DIRECT = ports.BENCH_CAMERA_IP
+  return {
+    BACKEND_PORT: port(config.server?.port, 'server.port'),
+    FRONTEND_PORT: port(app.frontend?.port, 'wuxiaozhi.frontend.port'),
+    BENCH_CAMERA_IP: app.lab?.['camera-host'] || '',
+    BENCH_CAMERA_IP_DIRECT: app.lab?.['camera-direct-host'] || app.lab?.['camera-host'] || '',
+    BENCH_CAMERA_MODE: app['bench-camera']?.['connection-mode'] || 'auto'
   }
-  return ports
 }
-
-export const portsFilePath = PORTS_FILE
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const ports = loadPorts()
+  if (process.argv.includes('--cmd')) console.log(`BACKEND_PORT=${ports.BACKEND_PORT}\nFRONTEND_PORT=${ports.FRONTEND_PORT}`)
+  else console.log(JSON.stringify(ports))
+}

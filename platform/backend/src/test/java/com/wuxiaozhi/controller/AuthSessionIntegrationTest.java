@@ -1,5 +1,7 @@
 package com.wuxiaozhi.controller;
 
+import com.wuxiaozhi.support.MySqlIntegrationTestSupport;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wuxiaozhi.entity.ChatMessage;
@@ -32,13 +34,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:auth-session-test;DB_CLOSE_DELAY=-1;MODE=MySQL",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "wuxiaozhi.test.database-id=auth-session-test",
+        "spring.jpa.hibernate.ddl-auto=create-drop","wuxiaozhi.auth.demo-users-enabled=true",
         "wuxiaozhi.auth.self-registration-enabled=true",
         "wuxiaozhi.jwt.secret=auth-session-test-secret-must-be-at-least-32-bytes",
         "wuxiaozhi.jwt.expiration-ms=86400000"
 })
-class AuthSessionIntegrationTest {
+class AuthSessionIntegrationTest extends MySqlIntegrationTestSupport {
 
     @Autowired
     MockMvc mockMvc;

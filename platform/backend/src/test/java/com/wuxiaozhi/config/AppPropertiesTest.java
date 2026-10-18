@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.StandardEnvironment;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.ByteArrayResource;
 import java.nio.charset.StandardCharsets;
 
@@ -21,7 +21,7 @@ class AppPropertiesTest {
     @Test
     void bindsCapturePathWithDevicePlaceholderFromApplicationYaml() throws Exception {
         var environment = new StandardEnvironment();
-        for (var source : new YamlPropertySourceLoader().load("application", new ClassPathResource("application.yml"))) {
+        for (var source : new YamlPropertySourceLoader().load("application", new FileSystemResource("../config/application.yml.example"))) {
             environment.getPropertySources().addLast(source);
         }
         var acquisition = Binder.get(environment).bind("wuxiaozhi.acquisition", AppProperties.Acquisition.class).get();

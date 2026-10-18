@@ -38,8 +38,8 @@ if exist "%ROOT%\frontend\node_modules" (
 )
 echo.>>"%OUT%"
 
-echo === mysql.env ===>>"%OUT%"
-if exist "%ROOT%\config\mysql.env" type "%ROOT%\config\mysql.env">>"%OUT%"
+echo === application.yml ===>>"%OUT%"
+if exist "%ROOT%\config\application.yml" (echo Configuration file exists. Credentials omitted.>>"%OUT%") else (echo Configuration file missing.>>"%OUT%")
 echo.>>"%OUT%"
 
 echo === ports ===>>"%OUT%"

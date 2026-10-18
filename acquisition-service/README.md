@@ -49,7 +49,7 @@ Copy-Item config/service.json.example config/service.json
 
 鉴权头为 `Authorization: Bearer <密钥>`。当前采集同步完成；相同请求在 60 秒内且仍在最近 8 个缓存结果中时复用成功结果。缓存仅在内存，重启后失效；设备占用返回 409，设备不可用返回 503。平台不自动重试采集，也不因请求失败重启采集进程。
 
-平台的 `config/lab.yml` 配置示例：
+平台的 `config/application.yml` 配置示例：
 
 ```yaml
 wuxiaozhi:
@@ -66,7 +66,7 @@ wuxiaozhi:
         api-token: "与采集服务相同的密钥"
 ```
 
-以上连接配置统一写在平台 `config/lab.yml`，修改后重启平台后端，无需修改源码或重新打包。`capture-path` 与采集服务实际接口一致，`{deviceId}` 由平台自动替换。`base-url` 可带反向代理前缀，最终请求地址为 `base-url` 加上替换后的 `capture-path`。`contracts` 是请求和响应格式的说明，不承担部署配置。
+以上连接配置统一写在平台 `config/application.yml`，修改后重启平台后端，无需修改源码或重新打包。`capture-path` 与采集服务实际接口一致，`{deviceId}` 由平台自动替换。`base-url` 可带反向代理前缀，最终请求地址为 `base-url` 加上替换后的 `capture-path`。`contracts` 是请求和响应格式的说明，不承担部署配置。
 
 新增平台连接节点时，在 `devices` 下增加配置，并在 `experiments` 下指定实验与配置名的对应关系。各节点可独立配置地址、设备编号、访问密钥和超时；本 Python 服务自己的设备参数仍在 `config/service.json` 维护。
 

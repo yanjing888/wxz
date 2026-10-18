@@ -11,7 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 @SpringBootApplication
@@ -21,12 +20,17 @@ public class WuxiaozhiApplication {
 
     public static void main(String[] args) {
         loadExternalEnvFiles();
-        activateMysqlProfileWhenEnabled();
-        SpringApplication.run(WuxiaozhiApplication.class, args);
+        SpringApplication application = new SpringApplication(WuxiaozhiApplication.class);
+        Path config = java.util.stream.Stream.of(Path.of("config", "application.yml"), Path.of("..", "config", "application.yml"))
+                .filter(Files::isRegularFile).findFirst()
+                .orElseThrow(() -> new IllegalStateException("Missing config/application.yml. Copy application.yml.example and configure MySQL before starting."));
+        application.setDefaultProperties(Map.of("spring.config.additional-location",
+                config.toAbsolutePath().normalize().toUri().toString()));
+        application.run(args);
     }
 
     private static void loadExternalEnvFiles() {
-        for (String name : new String[] { "ports.env", "dify.env", "mysql.env", "admin.env" }) {
+        for (String name : new String[] { "dify.env" }) {
             for (Path path : configCandidates(name)) {
                 if (Files.isRegularFile(path)) {
                     loadEnvFile(path);
@@ -71,29 +75,4 @@ public class WuxiaozhiApplication {
         }
     }
 
-    private static void activateMysqlProfileWhenEnabled() {
-        String enabled = propertyOrEnv("MYSQL_ENABLED");
-        if (!"true".equalsIgnoreCase(enabled)) {
-            return;
-        }
-
-        String active = propertyOrEnv("SPRING_PROFILES_ACTIVE");
-        if (active == null || active.isBlank()) {
-            System.setProperty("spring.profiles.active", "mysql");
-            System.setProperty("SPRING_PROFILES_ACTIVE", "mysql");
-            return;
-        }
-
-        String normalized = active.toLowerCase(Locale.ROOT);
-        if (!normalized.contains("mysql")) {
-            String next = active + ",mysql";
-            System.setProperty("spring.profiles.active", next);
-            System.setProperty("SPRING_PROFILES_ACTIVE", next);
-        }
-    }
-
-    private static String propertyOrEnv(String key) {
-        String value = System.getProperty(key);
-        return value != null ? value : System.getenv(key);
-    }
 }

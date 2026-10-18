@@ -1,5 +1,7 @@
 package com.wuxiaozhi.controller;
 
+import com.wuxiaozhi.support.MySqlIntegrationTestSupport;
+
 import com.fasterxml.jackson.databind.*;
 import com.wuxiaozhi.dto.EnvCheckResponse;
 import com.wuxiaozhi.entity.*;
@@ -27,8 +29,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest @AutoConfigureMockMvc
-@TestPropertySource(properties={"spring.datasource.url=jdbc:h2:mem:workstations;DB_CLOSE_DELAY=-1;MODE=MySQL","spring.jpa.hibernate.ddl-auto=create-drop","wuxiaozhi.jwt.secret=workstation-test-secret-long-enough-for-hs256","wuxiaozhi.workstations.scheduling-enabled=false","wuxiaozhi.lab.bootstrap-enabled=false","wuxiaozhi.lab.ip-stream-template=ws://{host}/ws/hdl/hlsram/live0.flv","wuxiaozhi.upload.dir=./.codex-logs/workstation-test-uploads"})
-class WorkstationIntegrationTest {
+@TestPropertySource(properties={"wuxiaozhi.test.database-id=workstations","spring.jpa.hibernate.ddl-auto=create-drop","wuxiaozhi.jwt.secret=workstation-test-secret-long-enough-for-hs256","wuxiaozhi.workstations.scheduling-enabled=false","wuxiaozhi.lab.bootstrap-enabled=false","wuxiaozhi.lab.ip-stream-template=ws://{host}/ws/hdl/hlsram/live0.flv","wuxiaozhi.upload.dir=./.codex-logs/workstation-test-uploads"})
+class WorkstationIntegrationTest extends MySqlIntegrationTestSupport {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired UserRepository users;

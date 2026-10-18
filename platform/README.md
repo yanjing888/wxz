@@ -13,7 +13,7 @@ Vue 3 + Spring Boot 大学物理实验多模态智能指导平台。AI 能力通
 ```
 物小智-项目/
 ├── config/
-│   ├── ports.env       # 前后端端口（唯一入口）
+│   ├── application.yml # 数据库、端口、管理员、摄像头及采集连接
 │   └── dify.env        # Dify 全部配置（唯一入口）
 ├── scripts/            # 启动、部署和知识库维护脚本
 ├── docs/               # 开发、部署及 Dify 接入说明
@@ -25,35 +25,49 @@ Vue 3 + Spring Boot 大学物理实验多模态智能指导平台。AI 能力通
 
 ### 端口配置（唯一入口）
 
-前后端端口统一写在项目根目录 `config/ports.env`：
+源码启动和正式部署均读取外部 `config/application.yml`。首次拉取源码后，将 `application.yml.example` 复制为 `application.yml` 并填写实际值。前后端端口配置示例：
 
-```env
-BACKEND_PORT=8082
-FRONTEND_PORT=5174
+```yaml
+server:
+  port: 8082
+wuxiaozhi:
+  frontend:
+    port: 5174
 ```
 
 部署到其他服务器时，若端口被占用，**只需修改该文件后重新启动**。前端开发服务器会自动将 `/api`、`/uploads` 代理到配置的后端端口。
 
 ### 数据库存储
 
-本地开发默认使用 H2 文件库：`backend/data/wuxiaozhi`，无需额外安装数据库。
+本地开发、测试和正式部署均使用 MySQL。在 `config/application.yml` 的现有 `spring.datasource` 中填写连接信息：
 
-学校实验室正式部署建议使用 MySQL。配置入口为 `config/mysql.env`：
-
-```env
-MYSQL_ENABLED=true
-MYSQL_HOST=127.0.0.1
-MYSQL_PORT=3306
-MYSQL_DATABASE=wuxiaozhi
-MYSQL_USER=root
-MYSQL_PASSWORD=你的密码
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/wuxiaozhi?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: wuxiaozhi
+    password: "数据库密码"
 ```
 
-启用后，`scripts/run-backend.bat` 和 `scripts/start.bat` 会自动设置 `SPRING_PROFILES_ACTIVE=mysql`，后端使用 `application-mysql.yml` 连接 MySQL。首次部署前请先在 MySQL 中创建数据库：
+MySQL 是唯一数据库，无需额外启用 profile。程序不再读取 `mysql.env`、`ports.env`、`admin.env` 或 `lab.yml`，JAR 内不再保留同名数据库默认配置。首次部署前请先创建数据库，并为专用账号授权：
 
 ```sql
 CREATE DATABASE wuxiaozhi DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
+
+### 后端自动化测试
+
+集成测试也使用 MySQL，每个测试上下文创建独立的 `wxz_test_...` 随机数据库，结束后自动删除，不连接教学数据库。测试账号需拥有创建、删除测试库及库内建表读写权限。PowerShell 中设置仅供测试进程使用的连接信息后执行：
+
+```powershell
+$env:WXZ_TEST_MYSQL_SERVER = 'jdbc:mysql://127.0.0.1:3306/'
+$env:WXZ_TEST_MYSQL_USER = '测试专用账号'
+$env:WXZ_TEST_MYSQL_PASSWORD = '测试专用密码'
+Set-Location backend
+mvn test
+```
+
+测试连接未配置或 MySQL 不可用时测试会失败，不使用运行环境的教学数据库或其他数据库替代。
 
 ### 一键启动
 
@@ -68,7 +82,7 @@ chmod +x scripts/start.sh
 ./scripts/start.sh
 ```
 
-脚本会读取 `config/ports.env` 并检查端口是否空闲。
+脚本会读取 `config/application.yml` 并检查端口是否空闲。
 
 | 操作 | 入口 |
 |---|---|
@@ -86,18 +100,17 @@ chmod +x scripts/start.sh
 ### 分别启动
 
 ```bat
-rem Windows（推荐，会自动读取 config/ports.env）
+rem Windows（推荐，会自动读取 config/application.yml）
 scripts\run-backend.bat
 scripts\run-frontend.bat
 ```
 
 ```bash
-# 前端（vite.config.js 自动读取 config/ports.env）
+# 前端（vite.config.js 自动读取 config/application.yml）
 cd frontend && npm install && npm run dev
 
-# 后端（需与 ports.env 中 BACKEND_PORT 一致）
-export BACKEND_PORT=8082   # 与 config/ports.env 保持一致
-cd backend && mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=$BACKEND_PORT
+# 后端（读取 ../config/application.yml）
+cd backend && mvn spring-boot:run
 ```
 
 ## 功能说明
@@ -113,7 +126,7 @@ cd backend && mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=$BAC
 
 ## Dify 配置（唯一入口）
 
-所有 Dify 相关配置集中在项目根目录 **`config/dify.env`**（与 `config/ports.env` 同级，格式相同）。部署时实施人员只需修改该文件并重启后端。
+所有 Dify 相关配置集中在项目根目录 **`config/dify.env`**，与 `application.yml` 同目录，保留独立的 env 格式。修改后重启后端。
 
 仓库同时提供 `config/dify.env.example` 作为配置模板。独立部署时，可参考模板修改 `config/dify.env` 中的地址与 API Key。
 
@@ -258,7 +271,7 @@ experiments/
 
 ### 前端启动与日志
 
-Windows 双击 `scripts/start.bat` 分别打开前后端窗口，前端直接在自己的窗口中运行 Vite；请保留窗口（可以最小化），关闭前端运行窗口会停止前端。后端已运行时显示后端状态窗口，不会强制结束已有服务。默认访问 `http://localhost:5174/`，后端端口为 `8082`，均以 `config/ports.env` 为准。
+Windows 双击 `scripts/start.bat` 分别打开前后端窗口，前端直接在自己的窗口中运行 Vite；请保留窗口（可以最小化），关闭前端运行窗口会停止前端。后端已运行时显示后端状态窗口，不会强制结束已有服务。默认访问 `http://localhost:5174/`，后端端口为 `8082`，均以 `config/application.yml` 为准。
 
 此前改成的 WMI 隐藏后台监护方式已从默认启动链路移除：现场出现过监护进程与 Vite 一起消失、状态文件仍写着 running 的情况。单独验证“杀掉子进程后重启”无法覆盖这一问题。历史日志没有进程终止审计，无法确认具体结束者，不能将它说成 Vite 页面异常或已证实的 Windows 内存回收。
 
@@ -274,7 +287,7 @@ Windows 启动脚本在 Node 22 及以上使用 `--no-maglev`，规避本机 Win
 - 教师进入“课堂巡视”，选择实验室即可看到各工位视频，支持放大查看。观看不依赖实验项目、教学班、课次、学生登录或终端配对。
 - 教师可在工位上选择教学班、勾选学生并保存当前座位绑定；支持多人同组、调整和整室清空。同一学生在同一实验室只能绑定一个工位，教师只能管理本班名单。课前核对、课后清空，不需要学生扫码或登录。
 - 学生端不显示入座和摄像头绑定入口。当前巡视不做自动身份识别和 AI 巡检，已有历史数据保留。
-- IP 模式按 `config/lab.yml` 的 `wuxiaozhi.lab.ip-stream-template` 展开该型号实际播放路径；不同型号可直接填写完整 FLV 视频地址。RTSP 需先由视频网关转换。
+- IP 模式按 `config/application.yml` 的 `wuxiaozhi.lab.ip-stream-template` 展开该型号实际播放路径；不同型号可直接填写完整 FLV 视频地址。RTSP 需先由视频网关转换。
 - 教师与管理员可观看巡视画面；学生无权查看，视频仍通过后端鉴权转发。
 - 部署配置和正式包构建见 [实验室摄像头部署说明](docs/lab-deployment.md)。
 

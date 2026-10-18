@@ -29,7 +29,7 @@
 
 优先填写设备或视频网关提供的完整 HTTP/HTTPS FLV、WS/WSS FLV 地址。RTSP 不能直接在浏览器里播放，需要部署视频网关转为可播放的 FLV；本系统负责转发，不转码。
 
-只有 IP 不能确定任意型号摄像头的视频路径。如果本实验室使用同型号设备，可在 `config/lab.yml` 中配置一次：
+只有 IP 不能确定任意型号摄像头的视频路径。如果本实验室使用同型号设备，可在 `config/application.yml` 中配置一次：
 
 ```yaml
 wuxiaozhi:
@@ -55,12 +55,12 @@ IP 展开后的完整地址保存在该工位的数据库配置中。修改模�
 
 | 内容 | 保存位置 |
 | --- | --- |
-| 服务端口 | 源码启动为 `config/ports.env`；正式包为 `lab.yml` 的 `server.port` |
-| IP 播放规则、旧摄像头代理主机、数据库连接、初始化管理员与 JWT 密钥 | `config/lab.yml` 或服务器环境变量 |
+| 服务端口 | `config/application.yml` 的 `server.port`；开发前端为 `wuxiaozhi.frontend.port` |
+| IP 播放规则、旧摄像头代理主机、数据库连接、初始化管理员与 JWT 密钥 | `config/application.yml` 或服务器环境变量 |
 | 实验室、工位、每个工位的视频地址、启用状态 | 管理端维护，存数据库 |
 | 当前工位学生绑定 | 教师端维护，数据库 `workstation_bindings` 表；无需额外配置文件 |
 
-实际 `lab.yml` 不提交版本库。应用从启动目录的 `config/lab.yml` 读取；源码在 `backend` 目录启动时也读取 `../config/lab.yml`。环境配置修改后重启后端，管理端的工位配置保存后生效。
+实际 `application.yml` 不提交版本库。应用从启动目录的 `config/application.yml` 读取；源码在 `backend` 目录启动时也读取 `../config/application.yml`。环境配置修改后重启后端，管理端的工位配置保存后生效。
 
 当前摄像头已登记在“牛顿环法测定平凸透镜曲率半径实验室”的 01 号工位，保留原 IP `188.18.31.195`。是否能显示真实画面还取决于设备供电、网络路由及其实际协议；本系统不生成模拟视频填充离线画面。
 
@@ -72,9 +72,9 @@ IP 展开后的完整地址保存在该工位的数据库配置中。修改模�
 powershell -ExecutionPolicy Bypass -File scripts/build-lab-release.ps1
 ```
 
-解压 `dist/lab-release-时间戳.zip` 到学校服务器固定目录。服务器只需安装 JDK 17+，编辑随包的 `config/lab.yml`，填写管理员初始化账号密码、随机 JWT 密钥和数据库连接，Windows 运行 `start.bat`，Linux 运行 `bash start.sh`。页面、API 和视频统一由 JAR 提供，默认访问 `http://服务器地址:8082/`。
+解压 `dist/lab-release-时间戳.zip` 到学校服务器固定目录。服务器只需安装 JDK 17+，编辑随包的 `config/application.yml`，填写管理员初始化账号密码、随机 JWT 密钥和数据库连接，Windows 运行 `start.bat`，Linux 运行 `bash start.sh`。页面、API 和视频统一由 JAR 提供，默认访问 `http://服务器地址:8082/`。
 
-正式包只携带空配置模板，不携带开发机实际密码或数据库。首次初始化管理员后可以移除配置中的初始化密码。学校部署建议使用 MySQL，按模板启用 `mysql` profile 并配置连接；源代码启动仍可使用原有 `config/mysql.env`。
+正式包携带外部 `config/application.yml` 模板，不携带开发机数据库。Dify 配置按项目现有内容保留。首次初始化管理员后可以移除配置中的初始化密码。所有环境均使用 MySQL，按模板修改 `spring.datasource`，无需额外启用 profile。源码启动与正式 JAR 使用同一配置格式，数据库不可用时启动报错。
 
 应用服务器需要能访问摄像头，教师终端需要能访问应用服务器。若前面使用 Nginx，视频路径 `/api/workstations/` 关闭响应缓冲、保留 Authorization 头，并设置足够长的读超时。
 
@@ -84,7 +84,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build-lab-release.ps1
 
 显微镜 UVC 采集已从教学平台拆出，源码位于同级 `acquisition-service`，运行与安装见 [采集服务说明](../../acquisition-service/README.md)。正式平台包只包含教学服务，不携带 Python 程序或设备驱动；采集服务在连接仪器的电脑上单独启动。
 
-平台 `config/lab.yml` 中配置采集服务 IP、端口、接口路径、设备编号、密钥和超时；正式包使用解压目录的同名文件，修改后重启平台后端，无需修改源码或重新打包：
+平台 `config/application.yml` 中配置采集服务 IP、端口、接口路径、设备编号、密钥和超时；正式包使用解压目录的同名文件，修改后重启平台后端，无需修改源码或重新打包：
 
 ```yaml
 wuxiaozhi:
@@ -111,7 +111,7 @@ wuxiaozhi:
 
 其他设备在 `devices` 中增加同级配置，在 `experiments` 中指定实验代码对应的配置名；未指定的实验使用 `default-device`。每台设备可配置不同的服务地址、密钥和超时。当前真实采集接口支持 JPEG 图像；新增数值和连续曲线采集时还需要对应的接口实现与数据格式，单纯增加配置不会自动接入未知仪器协议。
 
-升级前若使用 `lab.properties`，请按 `lab.yml.example` 将原有值迁入 YAML 层级；不能只改扩展名。当前版本只读取 `lab.yml`。本地迁移已将原文件备份至 `backups/config-before-yaml-*.properties`，数据库连接、摄像头配置和密钥保持原值。已有文件中请合并到同一个 `wuxiaozhi` 节点，避免复制示例产生重复根节点。
+旧的 `lab.yml`、`mysql.env`、`ports.env`、`admin.env` 已迁入外部 `config/application.yml`，不再读取。现有配置迁移前备份在 `backups/config-before-application-*`，数据库连接、摄像头及访问密钥保持原值。新部署只填写 `application.yml`，Dify 仍使用 `dify.env`。已有文件请合并到同一个根节点，避免重复节点。
 
 原 `UVC_CAMERA_*` 环境变量和 `wuxiaozhi.uvc-camera.*` 已停止使用。设备成像参数放在采集服务，平台的连接参数按上述设备层级配置。需要通过环境变量注入时，在设备 YAML 值中使用 `${变量名:默认值}`；外部 YAML 中填写的具体值覆盖程序内置默认值。工位巡视摄像头仍沿用管理端配置，二者互不替代。
 
@@ -119,4 +119,4 @@ wuxiaozhi:
 
 更新 JAR 前备份数据库与 uploads，保留原连接与存储目录。当前简化不删除学生、课次、入座或报告历史记录，也不要求转换已有工位。旧版本 MySQL 库若需新增独立实验室，先按 `config/lab-schema-migration.sql` 解除旧实验项目非空限制；新增字段由现有 `ddl-auto=update` 创建。禁止自动变更结构的部署环境应先在备份恢复的测试库审查变更。
 
-旧源码启动默认 H2 在 `backend/data/wuxiaozhi`，正式包默认在 `data/wuxiaozhi`。迁移时停止服务并复制原库或指定原绝对路径，避免因工作目录变化连到空库。
+迁移时备份并恢复原 MySQL 数据库，保留原有账号、报告、工位及摄像头数据；核对 `application.yml` 中的数据库地址和库名，避免连接到新建的空库。上传资料需另行迁移 `uploads` 目录。

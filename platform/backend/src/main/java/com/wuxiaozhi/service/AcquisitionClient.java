@@ -46,7 +46,7 @@ public class AcquisitionClient {
         String profile = experimentCode == null ? config.getDefaultDevice()
                 : config.getExperiments().getOrDefault(experimentCode, config.getDefaultDevice());
         AppProperties.AcquisitionDevice device = config.getDevices().get(profile);
-        if (device == null) throw unavailable("未配置该实验使用的采集设备，请检查 lab.yml 中的设备配置");
+        if (device == null) throw unavailable("未配置该实验使用的采集设备，请检查 application.yml 中的设备配置");
         if (!device.isEnabled()) throw unavailable("该采集设备未启用");
         String deviceId = device.getDeviceId();
         if (deviceId == null || !deviceId.matches("[A-Za-z0-9_-]{1,64}")) {

@@ -4,6 +4,7 @@ setlocal
 cd /d "%~dp0.."
 set "ROOT=%CD%"
 call "%~dp0_read-ports.bat"
+if errorlevel 1 exit /b 1
 
 where node.exe >nul 2>&1
 if errorlevel 1 (

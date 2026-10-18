@@ -4,6 +4,7 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0.."
 set "ROOT=%CD%"
 call "%~dp0_read-ports.bat"
+if errorlevel 1 exit /b 1
 
 echo Stopping services on ports %BACKEND_PORT% and %FRONTEND_PORT% ...
 

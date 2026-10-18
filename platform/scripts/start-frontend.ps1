@@ -8,10 +8,9 @@
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if ($Port -eq 0) {
-    $Port = 5174
-    foreach ($line in Get-Content -LiteralPath (Join-Path $projectRoot 'config\ports.env')) {
-        if ($line -match '^FRONTEND_PORT=(\d+)\s*$') { $Port = [int]$Matches[1] }
-    }
+    $portsJson = & node.exe (Join-Path $projectRoot 'config/loadPorts.mjs') --json
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read config/application.yml.' }
+    $Port = [int](($portsJson | ConvertFrom-Json).FRONTEND_PORT)
 }
 $checker = Join-Path $PSScriptRoot 'check-service-owner.ps1'
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $checker -Port $Port -Role frontend

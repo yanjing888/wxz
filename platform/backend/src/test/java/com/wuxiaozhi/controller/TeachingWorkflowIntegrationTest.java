@@ -1,5 +1,7 @@
 package com.wuxiaozhi.controller;
 
+import com.wuxiaozhi.support.MySqlIntegrationTestSupport;
+
 import com.fasterxml.jackson.databind.*;
 import com.wuxiaozhi.entity.*;
 import com.wuxiaozhi.repository.*;
@@ -17,8 +19,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest @AutoConfigureMockMvc
-@TestPropertySource(properties={"spring.datasource.url=jdbc:h2:mem:teaching-workflow;DB_CLOSE_DELAY=-1;MODE=MySQL","spring.jpa.hibernate.ddl-auto=create-drop","wuxiaozhi.jwt.secret=teaching-workflow-test-secret-long-enough-for-hs256"})
-class TeachingWorkflowIntegrationTest {
+@TestPropertySource(properties={"wuxiaozhi.test.database-id=teaching-workflow","spring.jpa.hibernate.ddl-auto=create-drop","wuxiaozhi.jwt.secret=teaching-workflow-test-secret-long-enough-for-hs256"})
+class TeachingWorkflowIntegrationTest extends MySqlIntegrationTestSupport {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired UserRepository users;

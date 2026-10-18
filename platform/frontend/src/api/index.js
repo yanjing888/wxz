@@ -68,7 +68,7 @@ export const uploadApi = {
         body: fd
       })
     } catch {
-      throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/ports.env）')
+      throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/application.yml）')
     }
 
     const text = await res.text()
@@ -101,7 +101,7 @@ export const voiceApi = {
         body: fd
       })
     } catch {
-      throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/ports.env）')
+      throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/application.yml）')
     }
 
     const text = await res.text()
@@ -166,7 +166,7 @@ export const studentFileApi = {
         body: fd
       })
     } catch {
-      throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/ports.env）')
+      throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/application.yml）')
     }
 
     const text = await res.text()

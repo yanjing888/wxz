@@ -7,6 +7,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import java.nio.charset.StandardCharsets;
@@ -43,7 +44,7 @@ public class WorkstationService {
             String stream=text(deployment.getInitialStreamUrl());
             if(stations.findAll().stream().noneMatch(s->"deployment-camera".equals(s.getCameraCode())||hash(stream).equals(s.getStreamHash()))) {
                 String name=text(deployment.getBootstrapRoomName()),code=text(deployment.getBootstrapStationCode());
-                if(name.isBlank()||name.length()>100||code.isBlank()||code.length()>32)throw new IllegalStateException("请检查 lab.yml 中的首次登记实验室和工位编号");
+                if(name.isBlank()||name.length()>100||code.isBlank()||code.length()>32)throw new IllegalStateException("请检查 application.yml 中的首次登记实验室和工位编号");
                 var target=rooms.findAll().stream().filter(r->name.equals(r.getName())).findFirst().orElseGet(()->{var r=new LabRoom();r.setName(name);return rooms.save(r);});
                 if(stations.findByRoomIdOrderByCodeAsc(target.getId()).stream().anyMatch(s->code.equalsIgnoreCase(s.getCode())))throw new IllegalStateException("首次登记工位编号已存在，请关闭 bootstrap-enabled 后在管理端接入设备");
                 var req=new WorkstationRequest(code,code+" 号实验台",2,true,"deployment-camera","NETWORK",stream,deployment.getInitialSnapshotUrl(),deployment.getCameraUsername(),deployment.getCameraPassword());
@@ -96,7 +97,7 @@ public class WorkstationService {
     @Transactional
     public Map<String,Object> importDeploymentCamera(Long adminId,Long roomId,String code) {
         deviceManager(teacher(adminId));
-        if(text(deployment.getInitialStreamUrl()).isBlank())throw fail(HttpStatus.CONFLICT,"请先在 config/lab.yml 中配置 initial-stream-url，重启后接入");
+        if(text(deployment.getInitialStreamUrl()).isBlank())throw fail(HttpStatus.CONFLICT,"请先在 config/application.yml 中配置 initial-stream-url，重启后接入");
         if(text(code).isBlank()||text(code).length()>32)throw fail(HttpStatus.BAD_REQUEST,"工位编号应为 1 至 32 个字符");
         var req=new WorkstationRequest(text(code),text(code)+" 号实验台",2,true,"deployment-camera","NETWORK",deployment.getInitialStreamUrl(),deployment.getInitialSnapshotUrl(),deployment.getCameraUsername(),deployment.getCameraPassword());
         return saveStation(adminId,null,roomId,null,req);
@@ -266,7 +267,8 @@ public class WorkstationService {
         result.put("lesson",lesson);result.put("lessonExperimentCode",lesson==null?null:lessonExperiment(lesson));
         result.put("myUse",cleanUses(s.getId()).stream().filter(u->u.getUserId().equals(userId)).findFirst().orElse(null));return result;
     }
-    @Transactional
+    // After waiting for the room/user lock, read the other transaction's committed seat.
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public WorkstationUse claim(Long userId,String token,Long sessionId) {
         var original=terminal(token);lockRoom(original.getRoomId());var s=lockStation(original.getId());
         if(!Objects.equals(s.getTerminalHash(),hash(token)))throw fail(HttpStatus.CONFLICT,"终端绑定已失效");
@@ -307,7 +309,7 @@ public class WorkstationService {
         var use=new WorkstationUse();use.setStationId(s.getId());use.setLessonId(lesson.getId());use.setUserId(userId);use.setSessionId(sessionId);
         use.setStudentName(user.getDisplayName());use.setClassName(lesson.getClassName());use.setCameraCode(s.getCameraCode());return uses.save(use);
     }
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public WorkstationUse addGroupMember(Long teacherId,Long id,Long sessionId) {
         var teacher=teacher(teacherId);var original=station(id);lockRoom(original.getRoomId());var s=lockStation(id);lessonAccess(teacher,activeLesson(s.getRoomId()));
         var session=sessions.findById(sessionId).orElseThrow(()->fail(HttpStatus.NOT_FOUND,"实验记录不存在"));return join(s,session.getUserId(),sessionId,true);
@@ -332,7 +334,7 @@ public class WorkstationService {
         String code=secret().substring(0,10);s.setGroupCodeHash(hash(code));s.setGroupCodeExpiresAt(LocalDateTime.now().plusMinutes(10));s.setGroupLessonId(lesson.getId());stations.save(s);
         return Map.of("code",code,"expiresAt",s.getGroupCodeExpiresAt());
     }
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public WorkstationUse joinGroup(Long userId,String code,Long sessionId) {
         var original=stations.findByGroupCodeHash(hash(text(code))).orElseThrow(()->fail(HttpStatus.BAD_REQUEST,"入组码无效或已失效"));
         lockRoom(original.getRoomId());var s=lockStation(original.getId());var lesson=activeLesson(s.getRoomId());

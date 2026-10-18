@@ -1,11 +1,10 @@
 @echo off
-rem Load BACKEND_PORT, FRONTEND_PORT from config\ports.env (caller must set ROOT).
-set "BACKEND_PORT=8082"
-set "FRONTEND_PORT=5174"
-set "BENCH_CAMERA_IP="
-if not exist "%ROOT%\config\ports.env" goto :eof
-for /f "usebackq eol=# tokens=1,* delims==" %%a in ("%ROOT%\config\ports.env") do (
-  if /i "%%a"=="BACKEND_PORT" for /f "tokens=*" %%v in ("%%b") do set "BACKEND_PORT=%%v"
-  if /i "%%a"=="FRONTEND_PORT" for /f "tokens=*" %%v in ("%%b") do set "FRONTEND_PORT=%%v"
-  if /i "%%a"=="BENCH_CAMERA_IP" for /f "tokens=*" %%v in ("%%b") do set "BENCH_CAMERA_IP=%%v"
+rem Development scripts and Vite read the same external YAML configuration.
+set "BACKEND_PORT="
+set "FRONTEND_PORT="
+for /f "tokens=1,* delims==" %%a in ('node "%ROOT%\config\loadPorts.mjs" --cmd') do set "%%a=%%b"
+if not defined BACKEND_PORT (
+  echo Could not read config\application.yml. Check the file and install frontend dependencies.
+  exit /b 1
 )
+exit /b 0

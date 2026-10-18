@@ -23,7 +23,7 @@ config/lab.properties
 config/lab.yml
 config/lab.yaml
 backups/
-!config/ports.env
+config/application.yml
 !config/dify.env
 __pycache__/
 *.py[cod]

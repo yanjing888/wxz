@@ -12,7 +12,9 @@ Windows 源码环境可双击根目录 `start.bat`，分别打开平台后端、
 
 首次启动采集服务需安装依赖，操作见其 README。日常也可分别使用两个目录自己的启动入口；关闭或重启平台不会结束采集服务。根目录 `stop.bat` 停止本工程的三个服务。
 
-平台访问采集服务的 IP、端口、接口路径、设备编号、密钥和超时，统一在 `platform/config/lab.yml` 中修改。正式包对应解压目录的 `config/lab.yml`，修改后重启平台后端即可，不需要修改源码或重新打包。
+平台访问采集服务的 IP、端口、接口路径、设备编号、密钥和超时，统一在 `platform/config/application.yml` 中修改。正式包对应解压目录的 `config/application.yml`，修改后重启平台后端即可，不需要修改源码或重新打包。
+
+开发、测试与正式部署均使用 MySQL。平台数据库连接、端口、管理员初始化及采集地址统一配置在 `platform/config/application.yml`，修改后重启对应服务。模板为同目录 `application.yml.example`；Dify 配置仍在 `dify.env`。旧的 `mysql.env`、`ports.env`、`admin.env` 和 `lab.yml` 已迁入新文件并停止读取。数据库不可用时启动报错，不切换到其他数据库。
 
 ```yaml
 wuxiaozhi:
@@ -31,7 +33,7 @@ wuxiaozhi:
 
 上例实际请求 `http://192.168.1.100:8765/api/v1/devices/microscope-01/captures`。接口路径须与采集服务实际提供的路径一致，请求和响应格式保持双方约定。`contracts` 只说明接口格式，程序不读取它作为部署配置，部署人员无需修改。
 
-增加设备时，在 `devices` 下增加同级配置，每台可连接不同 IP、端口及接口路径；在 `experiments` 下用实验代码指定配置名。未单独指定的实验使用 `default-device`，已指定但不存在或被停用的设备会明确报错，不回退到其他设备。完整模板见 `platform/config/lab.yml.example`。
+增加设备时，在 `devices` 下增加同级配置，每台可连接不同 IP、端口及接口路径；在 `experiments` 下用实验代码指定配置名。未单独指定的实验使用 `default-device`，已指定但不存在或被停用的设备会明确报错，不回退到其他设备。完整模板见 `platform/config/application.yml.example`。
 
 采集服务自己的监听地址和设备参数位于 `acquisition-service/config/service.json`。两端配置相同的访问密钥，真实密钥和数据库配置不进入 Git。设备驱动和成像参数只在采集服务维护。
 

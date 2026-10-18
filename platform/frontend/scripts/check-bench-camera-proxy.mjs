@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { parse } from 'yaml'
+import assert from 'node:assert/strict'
 
 const root = resolve(import.meta.dirname, '..')
 const projectRoot = resolve(root, '..')
@@ -24,15 +26,15 @@ function assertNotContains(body, text, message) {
   }
 }
 
-const appConfig = readFromProject('backend/src/main/resources/application.yml')
+const appConfig = readFromProject('config/application.yml.example')
 const viteConfig = readFromFrontend('vite.config.js')
 const panel = readFromFrontend('src/components/monitor/BenchCameraPanel.vue')
 const benchUtil = readFromFrontend('src/utils/benchCamera.js')
-const portsEnv = readFromProject('config/ports.env')
+const settings = parse(appConfig)
 
 assertContains(
   appConfig,
-  'browser-stream-url: ${BENCH_CAMERA_BROWSER_STREAM_URL:}',
+  'browser-stream-url: ""',
   'legacy global camera must not assume an unconfigured device address'
 )
 assertContains(
@@ -42,7 +44,7 @@ assertContains(
 )
 assertContains(
   appConfig,
-  'connection-mode: ${BENCH_CAMERA_MODE:auto}',
+  'connection-mode: auto',
   'application config should expose bench camera connection mode'
 )
 assertNotContains(
@@ -64,7 +66,7 @@ assertContains(panel, 'benchCameraStreamCandidates', 'camera panel should try la
 assertContains(panel, 'resolveBenchStreamUrl', 'camera panel should normalize proxy URLs before flv.js playback')
 assertContains(panel, 'startLiveBufferMonitor', 'camera panel should monitor and trim accumulated live buffer')
 
-assertContains(portsEnv, 'BENCH_CAMERA_IP_DIRECT', 'ports.env should document direct camera IP')
-assertContains(portsEnv, 'BENCH_CAMERA_MODE', 'ports.env should document camera connection mode')
+assert.equal(settings.wuxiaozhi.lab['camera-direct-host'], '')
+assert.equal(settings.wuxiaozhi['bench-camera']['connection-mode'], 'auto')
 
 console.log('bench camera proxy wiring present')

@@ -4,6 +4,7 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0.."
 set "ROOT=%CD%"
 call "%~dp0_read-ports.bat"
+if errorlevel 1 exit /b 1
 
 echo Ports: backend=%BACKEND_PORT% frontend=%FRONTEND_PORT%
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\check-service-owner.ps1" -Port %BACKEND_PORT% -Role backend

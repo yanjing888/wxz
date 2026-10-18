@@ -28,6 +28,7 @@ public class AuthService {
     @org.springframework.beans.factory.annotation.Value("${WXZ_ADMIN_USERNAME:}") private String bootstrapUsername;
     @org.springframework.beans.factory.annotation.Value("${WXZ_ADMIN_PASSWORD:}") private String bootstrapPassword;
     @org.springframework.beans.factory.annotation.Value("${wuxiaozhi.auth.self-registration-enabled:false}") private boolean selfRegistrationEnabled;
+    @org.springframework.beans.factory.annotation.Value("${wuxiaozhi.auth.demo-users-enabled:true}") private boolean demoUsersEnabled = true;
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
         this.userRepository = userRepository;
@@ -47,6 +48,7 @@ public class AuthService {
                 userRepository.save(user);
             }
         });
+        if (!demoUsersEnabled) return;
         if (!userRepository.existsByUsername(DEFAULT_USERNAME)) {
             User user = new User();
             user.setUsername(DEFAULT_USERNAME);

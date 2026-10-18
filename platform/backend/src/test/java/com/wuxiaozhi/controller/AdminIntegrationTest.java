@@ -1,4 +1,6 @@
 package com.wuxiaozhi.controller;
+
+import com.wuxiaozhi.support.MySqlIntegrationTestSupport;
 import com.fasterxml.jackson.databind.*;
 import com.wuxiaozhi.entity.*;
 import com.wuxiaozhi.repository.*;
@@ -15,8 +17,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest @AutoConfigureMockMvc
-@TestPropertySource(properties={"spring.datasource.url=jdbc:h2:mem:admin;DB_CLOSE_DELAY=-1;MODE=MySQL","spring.jpa.hibernate.ddl-auto=create-drop","wuxiaozhi.jwt.secret=admin-integration-test-secret-32-bytes-long","WXZ_ADMIN_USERNAME=admin","WXZ_ADMIN_PASSWORD=admin","wuxiaozhi.workstations.scheduling-enabled=false"})
-class AdminIntegrationTest {
+@TestPropertySource(properties={"wuxiaozhi.test.database-id=admin","spring.jpa.hibernate.ddl-auto=create-drop","wuxiaozhi.auth.demo-users-enabled=true","wuxiaozhi.jwt.secret=admin-integration-test-secret-32-bytes-long","WXZ_ADMIN_USERNAME=admin","WXZ_ADMIN_PASSWORD=admin","wuxiaozhi.workstations.scheduling-enabled=false"})
+class AdminIntegrationTest extends MySqlIntegrationTestSupport {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired UserRepository users;
