@@ -68,6 +68,8 @@ IP 展开后的完整地址保存在该工位的数据库配置中。修改模�
 
 构建电脑安装 Node.js、Maven 和 JDK 17+，在 `platform` 目录执行：
 
+项目编译目标固定为 Java 17。构建脚本会检查 JAR 中程序及依赖的字节码版本，防止本机 Maven 全局配置将产物改成仅支持更高 Java 版本。
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build-lab-release.ps1
 ```
@@ -117,6 +119,12 @@ wuxiaozhi:
 
 ## 升级和历史数据
 
-更新 JAR 前备份数据库与 uploads，保留原连接与存储目录。当前简化不删除学生、课次、入座或报告历史记录，也不要求转换已有工位。旧版本 MySQL 库若需新增独立实验室，先按 `config/lab-schema-migration.sql` 解除旧实验项目非空限制；新增字段由现有 `ddl-auto=update` 创建。禁止自动变更结构的部署环境应先在备份恢复的测试库审查变更。
+更新 JAR 前备份数据库；首次从磁盘存储版本升级时也保留原 uploads。当前简化不删除学生、课次、入座或报告历史记录，也不要求转换已有工位。旧版本 MySQL 库若需新增独立实验室，先按 `config/lab-schema-migration.sql` 解除旧实验项目非空限制；新增字段由现有 `ddl-auto=update` 创建。禁止自动变更结构的部署环境应先在备份恢复的测试库审查变更。
 
-迁移时备份并恢复原 MySQL 数据库，保留原有账号、报告、工位及摄像头数据；核对 `application.yml` 中的数据库地址和库名，避免连接到新建的空库。上传资料需另行迁移 `uploads` 目录。
+图片、采集成像、纠错标注和资料附件统一保存在 MySQL 的 `stored_uploads` 表中（二进制 LONGBLOB），原 `/uploads/文件名` 地址继续有效。新上传不会写入或创建本地 uploads 目录，Dify 直接读取数据库中的图片上传分析。
+
+对话框“获取图像”、选择图片和平板拍照只在浏览器保留待发送预览，不写数据库。学生点击“发送”带图问题时才上传入库并加入对话；清除、重拍、替换或离开页面时，未发送的图片不保存。采集预览接口返回 `previewDataUrl`（临时预览）而非已保存的 `url`。资料库主动上传、读数识别、巡视记录等原有明确提交操作继续按各自用途保存。
+
+首次升级必须先在有旧 uploads 的电脑启动新版。`wuxiaozhi.upload.dir` 仅用于指定旧目录（默认 `./uploads`，相对于平台启动目录）；启动时自动导入其中的历史文件，保留原文件名和问答地址，重复启动不会重复导入或覆盖已入库数据。日志出现 `Upload database migration complete` 后核对历史图片，再备份数据库。导入失败会阻止启动，修复后重启继续导入；原文件不会自动删除。升级回旧版时，旧版仍依赖磁盘且无法读取新版入库的新图片，应使用升级前备份。
+
+此后迁移时备份并恢复完整 MySQL 数据库（包括 stored_uploads 的表结构和数据，命令行导出建议 `mysqldump --single-transaction --hex-blob`），无需携带 uploads 文件夹。核对新电脑 `application.yml` 中的数据库地址和密码；程序与配置文件仍需正常部署。只导出问答表会遗漏图片。尚未完成旧文件入库前，仍需保留旧目录。

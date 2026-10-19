@@ -14,6 +14,7 @@ try {
     Copy-Item -Path (Join-Path $ProjectRoot 'frontend/dist/*') -Destination $staticPath -Recurse
     Push-Location (Join-Path $ProjectRoot 'backend')
     try { & mvn.cmd -q clean '-DskipTests' package; if ($LASTEXITCODE -ne 0) { throw 'Backend package failed.' } } finally { Pop-Location }
+    & (Join-Path $ProjectRoot 'scripts/assert-java-release.ps1') -Jar (Join-Path $ProjectRoot 'backend/target/wuxiaozhi-backend-1.0.0.jar') -JavaRelease 17
     $release = Join-Path $ProjectRoot ('dist/lab-release-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
     New-Item -ItemType Directory -Path (Join-Path $release 'config') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'backend/target/wuxiaozhi-backend-1.0.0.jar') -Destination (Join-Path $release 'app.jar')

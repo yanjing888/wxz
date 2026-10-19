@@ -10,7 +10,7 @@ import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
-import java.nio.file.Path;
+import java.io.ByteArrayInputStream;
 import java.util.List;
 import java.util.*;
 
@@ -54,8 +54,7 @@ public class MechanicalScaleReadingService {
 
     private BufferedImage readImage(String imageUrl) {
         try {
-            Path path = fileStorageService.resolve(imageUrl);
-            BufferedImage img = ImageIO.read(path.toFile());
+            BufferedImage img = ImageIO.read(new ByteArrayInputStream(fileStorageService.read(imageUrl).getData()));
             if (img == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无法读取刻度图片");
             }

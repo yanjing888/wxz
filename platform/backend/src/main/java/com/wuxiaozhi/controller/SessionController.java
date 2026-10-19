@@ -174,7 +174,7 @@ public class SessionController {
     @PostMapping("/{sessionId:\\d+}/ccd-capture")
     public Map<String, Object> ccdCapture(@PathVariable Long sessionId, Authentication authentication) {
         var session = labSessionService.getSession(sessionId, currentUserId(authentication));
-        return acquisitionClient.captureToUpload(session.getExperimentCode());
+        return acquisitionClient.capturePreview(session.getExperimentCode());
     }
 
     @PostMapping("/{sessionId:\\d+}/assist")

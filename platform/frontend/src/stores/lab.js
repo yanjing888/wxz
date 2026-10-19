@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { experimentApi, feedbackApi, sessionApi, studentExperimentApi, studentFileApi, systemApi, uploadApi } from '../api'
 import { mediaUrl } from '../api/runtime'
-import { sniffImageMime, readFileAsDataUrl } from '../utils/imageFile'
+import { sniffImageMime, readFileAsDataUrl, imageDataUrlToFile } from '../utils/imageFile'
 import { blobToFile, composeMarkedImage } from '../utils/markedImage'
 import { buildComposerDataAttachment, buildDataCorrectionPrompt, formatDataValuesSummary } from '../utils/composerData'
 import { countSessionDataLogs, normalizeSessionDataByStep } from '../utils/sessionReport'
@@ -141,6 +141,7 @@ export const useLabStore = defineStore('lab', {
     activeStep: 1,
     composerImageUrl: '',
     composerImagePreview: '',
+    composerImageFile: null,
     composerDataAttachment: null,
     composerDataLoading: false,
     messages: [],
@@ -162,6 +163,7 @@ export const useLabStore = defineStore('lab', {
     tutViewCount: 0,
     uploadingImage: false,
     ccdCaptureBusy: false,
+    ccdCaptureRunId: 0,
     lastDataSubmitMode: null,
     loadingAssist: false,
     assistStreamAbort: null,
@@ -282,6 +284,9 @@ export const useLabStore = defineStore('lab', {
       const raw = state.composerImageUrl
       if (!raw || !raw.startsWith('/uploads/')) return ''
       return raw.split('?')[0]
+    },
+    composerImageReady(state) {
+      return !state.uploadingImage && !!(state.composerImageFile || this.readyImageUrl)
     },
     envCheckDifyStatus(state) {
       return state.difyStatus?.workflowStatuses?.['env-check'] || null
@@ -603,8 +608,8 @@ export const useLabStore = defineStore('lab', {
       }
     },
     resetLabUi() {
-      this.composerImageUrl = ''
-      this.composerImagePreview = ''
+      this.clearComposerImage()
+      this.ccdCaptureRunId++
       this.composerDataAttachment = null
       this.composerDataLoading = false
       this.messages = []
@@ -1041,42 +1046,36 @@ export const useLabStore = defineStore('lab', {
       }
     },
     /**
-     * 上传图片到对话框附件区。
+     * 对话附件仅在浏览器暂存，发送问题时才上传保存。
      */
     async uploadImage(file) {
       if (!file || !file.size) {
         throw new Error('请选择有效的图片文件')
       }
 
-      const originalFile = file
-      const sniffed = await sniffImageMime(originalFile)
-      if (
-        sniffed.includes('heic') ||
-        sniffed.includes('heif') ||
-        /\.heic$/i.test(originalFile.name || '') ||
-        /\.heif$/i.test(originalFile.name || '')
-      ) {
-        throw new Error('当前浏览器不支持 HEIC/HEIF 格式，请先将图片转为 JPG 或 PNG')
-      }
-
       const seq = ++this.uploadSeq
       this.uploadingImage = true
       this.uploadError = ''
       this.clearComposerDataAttachment()
-
-      const dataUrl = await readFileAsDataUrl(originalFile)
-      this.composerImagePreview = dataUrl
+      this.composerImageFile = null
+      this.composerImageUrl = ''
+      this.composerImagePreview = ''
 
       try {
-        const { data } = await uploadApi.image(originalFile)
+        if (file.size > 20 * 1024 * 1024) throw new Error('图片超过 20MB 限制')
+        const sniffed = await sniffImageMime(file)
+        if (sniffed.includes('heic') || sniffed.includes('heif') || /\.hei[cf]$/i.test(file.name || '')) {
+          throw new Error('当前浏览器不支持 HEIC/HEIF 格式，请先将图片转为 JPG 或 PNG')
+        }
+        const dataUrl = await readFileAsDataUrl(file)
         if (seq !== this.uploadSeq) return
-
-        this.composerImageUrl = data.url
+        this.composerImageFile = file
+        this.composerImagePreview = dataUrl
       } catch (e) {
         if (seq !== this.uploadSeq) return
 
         this.composerImageUrl = ''
-        this.uploadError = e.response?.data?.message || e.message || '图片上传失败'
+        this.uploadError = e.message || '图片读取失败'
         throw e
       } finally {
         if (seq === this.uploadSeq) {
@@ -1088,19 +1087,24 @@ export const useLabStore = defineStore('lab', {
       if (!this.session?.id || this.ccdCaptureBusy) return false
 
       this.ccdCaptureBusy = true
+      const captureId = ++this.ccdCaptureRunId
+      const seq = ++this.uploadSeq
+      this.uploadingImage = false
+      const sessionId = this.session.id
       this.uploadError = ''
       this.clearComposerDataAttachment()
+      this.composerImageFile = null
+      this.composerImageUrl = ''
+      this.composerImagePreview = ''
 
       try {
-        const { data } = await sessionApi.ccdCapture(this.session.id)
-        const url = data?.url || ''
-        if (!url) {
-          throw new Error('没有获取到有效成像图片')
-        }
-        this.composerImageUrl = url
-        this.composerImagePreview = mediaUrl(url)
+        const { data } = await sessionApi.ccdCapture(sessionId)
+        if (seq !== this.uploadSeq || sessionId !== this.session?.id) return false
+        this.composerImageFile = imageDataUrlToFile(data?.previewDataUrl, data?.fileName)
+        this.composerImagePreview = data.previewDataUrl
         return data
       } catch (e) {
+        if (seq !== this.uploadSeq || sessionId !== this.session?.id) return false
         this.composerImageUrl = ''
         this.composerImagePreview = ''
         const msg = e.response?.data?.message || e.message || '电子显微镜未连接或无法成像，请检查 USB 后重试'
@@ -1108,7 +1112,7 @@ export const useLabStore = defineStore('lab', {
         emitAppAlert('获取成像失败', msg)
         return false
       } finally {
-        this.ccdCaptureBusy = false
+        if (captureId === this.ccdCaptureRunId) this.ccdCaptureBusy = false
       }
     },
     revokeBlobIfUnused(url) {
@@ -1119,10 +1123,14 @@ export const useLabStore = defineStore('lab', {
       }
     },
     clearComposerImage() {
-      this.revokeBlobIfUnused(this.composerImagePreview)
+      const previous = this.composerImagePreview
+      this.uploadSeq++
       this.composerImageUrl = ''
       this.composerImagePreview = ''
+      this.composerImageFile = null
+      this.uploadingImage = false
       this.uploadError = ''
+      this.revokeBlobIfUnused(previous)
     },
     clearComposerDataAttachment() {
       this.composerDataAttachment = null
@@ -1306,7 +1314,7 @@ export const useLabStore = defineStore('lab', {
       }
     },
     async sendMessage(userMessage) {
-      if (!this.session?.id || this.loadingAssist || this.uploadingImage || this.submittingData) return false
+      if (!this.session?.id || this.loadingAssist || this.uploadingImage || this.ccdCaptureBusy || this.submittingData) return false
       if (this.labQaLocked) return false
 
       if (this.composerDataAttachment) {
@@ -1323,13 +1331,12 @@ export const useLabStore = defineStore('lab', {
         )
       }
 
-      await this.refreshDifyStatusIfStale()
-
       const text = (userMessage || '').trim()
-      const imageUrl = this.readyImageUrl
+      let imageUrl = this.readyImageUrl
+      const pendingImage = this.composerImageFile
       const hasPreview = !!this.composerImagePreview
 
-      if (!text && !imageUrl) {
+      if (!text && !imageUrl && !pendingImage) {
         if (hasPreview) {
           emitAppAlert(
             this.uploadError ? '图片上传失败' : '图片仍在上传',
@@ -1345,6 +1352,44 @@ export const useLabStore = defineStore('lab', {
       this.loadingAssist = true
       const abortCtrl = new AbortController()
       this.assistStreamAbort = abortCtrl
+      const sessionId = this.session.id
+      const stepId = this.activeStep
+      const seq = this.uploadSeq
+      // Claim the send before awaiting network calls so double clicks cannot
+      // upload the same pending image twice. Failure leaves the draft intact.
+      try {
+        await this.refreshDifyStatusIfStale()
+        if (abortCtrl.signal.aborted || this.session?.id !== sessionId || this.uploadSeq !== seq) {
+          if (this.assistStreamAbort === abortCtrl) {
+            this.assistStreamAbort = null
+            this.loadingAssist = false
+          }
+          return false
+        }
+        if (pendingImage && !imageUrl) {
+          const { data } = await uploadApi.image(pendingImage, { signal: abortCtrl.signal })
+          imageUrl = data?.url || ''
+          if (!imageUrl.startsWith('/uploads/')) throw new Error('图片保存失败，请重试发送')
+          if (this.session?.id === sessionId && this.uploadSeq === seq) this.composerImageUrl = imageUrl
+        }
+        if (abortCtrl.signal.aborted || this.session?.id !== sessionId || this.uploadSeq !== seq) {
+          if (this.assistStreamAbort === abortCtrl) {
+            this.assistStreamAbort = null
+            this.loadingAssist = false
+          }
+          return false
+        }
+      } catch (e) {
+        if (this.assistStreamAbort === abortCtrl) {
+          this.loadingAssist = false
+          this.assistStreamAbort = null
+          if (!abortCtrl.signal.aborted) {
+            this.uploadError = e.message || '图片保存失败，请重试发送'
+            emitAppAlert('发送失败', this.uploadError)
+          }
+        }
+        return false
+      }
       const hadImage = !!imageUrl
       const displayImage = this.composerImagePreview || imageUrl
       const prompt = text || (hadImage ? '请分析上传的实验图片。' : '')
@@ -1371,24 +1416,26 @@ export const useLabStore = defineStore('lab', {
 
       try {
         await sessionApi.assistStream(
-          this.session.id,
+          sessionId,
           {
             userMessage: prompt,
             imageUrl: imageUrl || undefined,
-            stepId: this.activeStep
+            stepId
           },
           {
             onMarks: resolveMarks,
             onChunk: (chunk) => {
+              if (this.session?.id !== sessionId || abortCtrl.signal.aborted) return
               this.messages[aiIndex].text += chunk
             },
             onAnswerEnd: () => {
               if (this.messages[aiIndex]) {
                 this.messages[aiIndex].streaming = false
               }
-              this.loadingAssist = false
+              if (this.assistStreamAbort === abortCtrl) this.loadingAssist = false
             },
             onDone: async (data) => {
+              if (this.session?.id !== sessionId || abortCtrl.signal.aborted) return
               this.messages[aiIndex].streaming = false
               if (data.feedback) {
                 this.messages[aiIndex].text = data.feedback
@@ -1423,16 +1470,17 @@ export const useLabStore = defineStore('lab', {
           }
         }
       } finally {
-        this.loadingAssist = false
         if (this.assistStreamAbort === abortCtrl) {
+          this.loadingAssist = false
           this.assistStreamAbort = null
         }
         if (this.messages[aiIndex]) {
           this.messages[aiIndex].streaming = false
         }
       }
-      if (!abortCtrl.signal.aborted && this.session?.id) {
-        sessionApi.get(this.session.id).then(({ data }) => {
+      if (!abortCtrl.signal.aborted && this.session?.id === sessionId) {
+        sessionApi.get(sessionId).then(({ data }) => {
+          if (this.session?.id !== sessionId) return
           this.session = data
           this.loadSessionHistory(this.experiment?.code || '').catch(() => {})
         }).catch(() => {})

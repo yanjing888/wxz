@@ -23,6 +23,11 @@ public abstract class MySqlIntegrationTestSupport {
                         new org.springframework.core.io.FileSystemResource("../config/application.yml.example"))) {
                     context.getEnvironment().getPropertySources().addLast(source);
                 }
+                // Tests must never import real students' disk uploads. A test
+                // that exercises migration supplies its own higher-priority path.
+                var defaults = new org.springframework.core.env.MapPropertySource("test-upload-defaults",
+                        java.util.Map.of("wuxiaozhi.upload.dir", "target/test-legacy-uploads-" + UUID.randomUUID()));
+                context.getEnvironment().getPropertySources().addBefore("test-defaults", defaults);
             } catch (java.io.IOException error) {
                 throw new IllegalStateException("Missing platform/config/application.yml.example for integration tests", error);
             }

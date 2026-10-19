@@ -63,3 +63,11 @@ export function readFileAsDataUrl(file) {
     reader.readAsDataURL(file)
   })
 }
+
+export function imageDataUrlToFile(dataUrl, name = 'capture.jpg') {
+  const match = /^data:(image\/(?:jpeg|png|gif|webp|bmp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl || '')
+  if (!match) throw new Error('没有获取到有效成像图片')
+  const binary = atob(match[2])
+  const bytes = Uint8Array.from(binary, c => c.charCodeAt(0))
+  return new File([bytes], name, { type: match[1] })
+}

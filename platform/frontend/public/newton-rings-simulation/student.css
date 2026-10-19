@@ -145,6 +145,28 @@
   margin: 0 0 12px;
   color: #b3eee0;
 }
+.adjustment-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 12px;
+}
+.adjustment-value span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.adjustment-value input {
+  width: 80px;
+  padding: 7px 8px;
+  border: 1px solid #4c827e;
+  border-radius: 5px;
+  color: #b9f7e9;
+  background: #0b2130;
+  font: inherit;
+}
 .component-editor .control-row {
   margin: 12px 0;
   font-size: 11px;

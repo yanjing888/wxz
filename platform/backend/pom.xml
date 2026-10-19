@@ -19,6 +19,7 @@
 
     <properties>
         <java.version>17</java.version>
+        <maven.compiler.release>17</maven.compiler.release>
         <jjwt.version>0.12.5</jjwt.version>
     </properties>
 
@@ -80,6 +81,14 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Keep the release explicit: machine-wide Maven profiles must not change deployment compatibility. -->
+                    <release>17</release>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

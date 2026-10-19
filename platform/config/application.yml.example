@@ -28,6 +28,7 @@ wuxiaozhi:
     secret: ""
     expiration-ms: 86400000
   upload:
+    # Old uploads are imported into MySQL at startup. New uploads use the database.
     dir: ./uploads
   bench-camera:
     enabled: false

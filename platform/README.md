@@ -39,6 +39,10 @@ wuxiaozhi:
 
 ### 数据库存储
 
+问答图片、采集图片、标注图和资料附件均作为二进制存入 MySQL 的 `stored_uploads` 表，访问地址保持 `/uploads/文件名`。首次升级会从 `wuxiaozhi.upload.dir` 指定的旧目录自动导入历史文件，确认启动日志导入完成后，迁移完整数据库即可一并迁移图片，无需再迁移 uploads 目录。详见[升级和历史数据](docs/lab-deployment.md#升级和历史数据)。
+
+对话图片在点击“发送”时才保存；获取图像或选择照片后仅在浏览器预览，未发送即清除或离开页面的图片不入库。
+
 本地开发、测试和正式部署均使用 MySQL。在 `config/application.yml` 的现有 `spring.datasource` 中填写连接信息：
 
 ```yaml

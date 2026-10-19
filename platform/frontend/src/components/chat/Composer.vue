@@ -217,8 +217,8 @@ const canSend = computed(() =>
 )
 
 const attachHint = computed(() => {
-  if (props.uploadingImage) return '附件上传中…'
-  if (props.imagePreview && !props.imageReady) return '附件上传失败或未就绪，请重新选择'
+  if (props.uploadingImage) return '图片准备中…'
+  if (props.imagePreview && !props.imageReady) return '图片未就绪，请重新选择'
   if (props.imageReady) return '已添加附件，发送时一并提交'
   return ''
 })

@@ -20,13 +20,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
 class AcquisitionClientTest {
     private final ObjectMapper json = new ObjectMapper();
     private final AppProperties properties = new AppProperties();
-    private FileStorageService storage;
     private HttpServer server;
     private HttpHandler handler;
     private int responseStatus;
@@ -38,8 +35,6 @@ class AcquisitionClientTest {
 
     @BeforeEach
     void startCollector() throws Exception {
-        storage = mock(FileStorageService.class);
-        when(storage.storeImageBytes(any(byte[].class), eq(".jpg"))).thenReturn("/uploads/capture.jpg");
         device().setApiToken("unit-test-token");
         responseStatus = 200;
         mutate = body -> {};
@@ -75,12 +70,14 @@ class AcquisitionClientTest {
 
     private AppProperties.AcquisitionDevice device() { return properties.getAcquisition().getDevices().get("microscope"); }
 
-    private AcquisitionClient client() { return new AcquisitionClient(properties, storage, json); }
+    private AcquisitionClient client() { return new AcquisitionClient(properties, json); }
 
     @Test
-    void capturesOverHttpAndPreservesExistingFrontendResponse() {
-        var result = client().captureToUpload();
-        assertThat(result).containsEntry("url", "/uploads/capture.jpg")
+    void capturesOverHttpWithoutPersistingPreview() {
+        var result = client().capturePreview();
+        assertThat(result).doesNotContainKey("url");
+        assertThat(result.get("previewDataUrl").toString()).startsWith("data:image/jpeg;base64,");
+        assertThat(result)
                 .containsEntry("cameraName", "测试显微镜").containsEntry("width", 2)
                 .containsEntry("deviceId", "microscope-01");
         assertThat(result.get("requestId")).isNotNull();
@@ -92,58 +89,51 @@ class AcquisitionClientTest {
     @Test
     void offlineCollectorDoesNotStartProcessesOrReturnDemoData() {
         server.stop(0);
-        assertThatThrownBy(() -> client().captureToUpload()).isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> client().capturePreview()).isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("采集服务");
-        verifyNoInteractions(storage);
     }
 
     @Test
     void mismatchedRequestCannotBeSaved() {
         mutate = body -> body.put("requestId", "other-request");
-        assertThatThrownBy(() -> client().captureToUpload()).hasMessageContaining("不匹配");
-        verifyNoInteractions(storage);
+        assertThatThrownBy(() -> client().capturePreview()).hasMessageContaining("不匹配");
     }
 
     @Test
     void mismatchedDeviceCannotBeSaved() {
         mutate = body -> body.put("deviceId", "other-device");
-        assertThatThrownBy(() -> client().captureToUpload()).hasMessageContaining("不匹配");
-        verifyNoInteractions(storage);
+        assertThatThrownBy(() -> client().capturePreview()).hasMessageContaining("不匹配");
     }
 
     @Test
     void invalidImageCannotBeSaved() {
         mutate = body -> body.put("dataBase64", Base64.getEncoder().encodeToString("not-an-image".getBytes()));
-        assertThatThrownBy(() -> client().captureToUpload()).hasMessageContaining("有效 JPEG");
-        verifyNoInteractions(storage);
+        assertThatThrownBy(() -> client().capturePreview()).hasMessageContaining("有效 JPEG");
     }
 
     @Test
     void busyDeviceIsNotRetried() {
         responseStatus = 409;
-        assertThatThrownBy(() -> client().captureToUpload()).hasMessageContaining("正在采集");
+        assertThatThrownBy(() -> client().capturePreview()).hasMessageContaining("正在采集");
         assertThat(calls.get()).isEqualTo(1);
-        verifyNoInteractions(storage);
     }
 
     @Test
     void authenticationFailureExplainsConfigurationMismatch() {
         responseStatus = 401;
-        assertThatThrownBy(() -> client().captureToUpload()).hasMessageContaining("密钥不匹配");
-        verifyNoInteractions(storage);
+        assertThatThrownBy(() -> client().capturePreview()).hasMessageContaining("密钥不匹配");
     }
 
     @Test
     void wrongDimensionsCannotBeSaved() {
         mutate = body -> body.put("width", 900);
-        assertThatThrownBy(() -> client().captureToUpload()).hasMessageContaining("尺寸");
-        verifyNoInteractions(storage);
+        assertThatThrownBy(() -> client().capturePreview()).hasMessageContaining("尺寸");
     }
 
     @Test
     void disabledAcquisitionDoesNotCallCollector() {
         properties.getAcquisition().setEnabled(false);
-        assertThatThrownBy(() -> client().captureToUpload()).hasMessageContaining("未启用");
+        assertThatThrownBy(() -> client().capturePreview()).hasMessageContaining("未启用");
         assertThat(calls.get()).isZero();
     }
 
@@ -151,21 +141,21 @@ class AcquisitionClientTest {
     void usesConfiguredEndpointWithProxyPrefixAndDevicePlaceholder() {
         device().setBaseUrl(device().getBaseUrl() + "/collector/");
         device().setCapturePath("/custom-api/{deviceId}/image");
-        client().captureToUpload();
+        client().capturePreview();
         assertThat(path).isEqualTo("/collector/custom-api/microscope-01/image");
     }
 
     @Test
     void supportsFixedEndpointWithoutDeviceInPath() {
         device().setCapturePath("/instrument/capture");
-        client().captureToUpload();
+        client().capturePreview();
         assertThat(path).isEqualTo("/instrument/capture");
     }
 
     @Test
     void rejectsAnAbsoluteUrlInThePathFieldBeforeCallingCollector() {
         device().setCapturePath("https://wrong-server/capture");
-        assertThatThrownBy(() -> client().captureToUpload()).hasMessageContaining("接口路径必须");
+        assertThatThrownBy(() -> client().capturePreview()).hasMessageContaining("接口路径必须");
         assertThat(calls.get()).isZero();
     }
 
@@ -184,7 +174,7 @@ class AcquisitionClientTest {
             properties.getAcquisition().getDevices().put("other-camera", second);
             properties.getAcquisition().getExperiments().put("other_experiment", "other-camera");
             mutate = body -> body.put("deviceId", "camera-02");
-            var result = client().captureToUpload("other_experiment");
+            var result = client().capturePreview("other_experiment");
             assertThat(secondaryCalls.get()).isEqualTo(1);
             assertThat(path).isEqualTo("/other/camera-02/capture");
             assertThat(authorization).isEqualTo("Bearer second-service-token");
@@ -195,14 +185,14 @@ class AcquisitionClientTest {
     @Test
     void missingMappedDeviceDoesNotSilentlyUseDefaultDevice() {
         properties.getAcquisition().getExperiments().put("newton_rings", "missing");
-        assertThatThrownBy(() -> client().captureToUpload("newton_rings")).hasMessageContaining("未配置");
+        assertThatThrownBy(() -> client().capturePreview("newton_rings")).hasMessageContaining("未配置");
         assertThat(calls.get()).isZero();
     }
 
     @Test
     void disabledDeviceIsNotCalled() {
         device().setEnabled(false);
-        assertThatThrownBy(() -> client().captureToUpload()).hasMessageContaining("设备未启用");
+        assertThatThrownBy(() -> client().capturePreview()).hasMessageContaining("设备未启用");
         assertThat(calls.get()).isZero();
     }
 }

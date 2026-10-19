@@ -120,7 +120,7 @@
           :submitting-data="lab.submittingData"
           :uploading-image="lab.uploadingImage"
           :image-preview="lab.composerImagePreview"
-          :image-ready="!!lab.readyImageUrl"
+          :image-ready="lab.composerImageReady"
           :data-attachment="lab.composerDataAttachment"
           :suggestions="quickSuggestions"
           :read-only="labQaLocked"
@@ -511,6 +511,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   viewActive = false
+  lab.stopAssist()
+  lab.clearComposerImage()
   window.removeEventListener('wxz-app-alert', onGlobalAppAlert)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   lab.stopDifyStatusTimer()

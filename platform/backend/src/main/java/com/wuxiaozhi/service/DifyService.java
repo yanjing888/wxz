@@ -29,8 +29,6 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -901,18 +899,16 @@ public class DifyService {
     }
 
     private String uploadImageToDify(String imageUrl, String userId, String apiKey) {
-        Path path = fileStorageService.resolve(imageUrl);
-        if (!Files.exists(path)) {
-            throw new IllegalStateException("Image file not found: " + imageUrl);
-        }
+        com.wuxiaozhi.entity.StoredUpload file;
         byte[] bytes;
         try {
-            bytes = Files.readAllBytes(path);
+            file = fileStorageService.read(imageUrl);
+            bytes = file.getData();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to read image: " + imageUrl, e);
         }
-        String uploadName = buildDifyUploadFilename(path.getFileName().toString(), bytes);
-        log.info("Uploading image to Dify, stored={}, uploadName={}, bytes={}", path.getFileName(), uploadName, bytes.length);
+        String uploadName = buildDifyUploadFilename(file.getFilename(), bytes);
+        log.info("Uploading image to Dify, stored={}, uploadName={}, bytes={}", file.getFilename(), uploadName, bytes.length);
         return uploadBytesToDify(bytes, uploadName, userId, apiKey);
     }
 

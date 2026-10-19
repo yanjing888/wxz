@@ -1,13 +1,18 @@
 package com.wuxiaozhi.service;
 
 import com.wuxiaozhi.config.AppProperties;
+import com.wuxiaozhi.entity.StoredUpload;
+import com.wuxiaozhi.repository.StoredUploadRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.FileNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.LinkOption;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -32,10 +37,13 @@ public class FileStorageService {
     private static final long MAX_ATTACHMENT_BYTES = 20L * 1024 * 1024;
 
     private final Path uploadRoot;
+    private final StoredUploadRepository uploads;
 
-    public FileStorageService(AppProperties appProperties) throws IOException {
+    public FileStorageService(AppProperties appProperties, StoredUploadRepository uploads) {
+        this.uploads = uploads;
+        // Only used to import files written by older versions. New uploads never
+        // create this directory or write image bytes to the application disk.
         this.uploadRoot = Paths.get(appProperties.getUpload().getDir()).toAbsolutePath().normalize();
-        Files.createDirectories(uploadRoot);
     }
 
     /** 资料库附件：在图片之外额外放行常见的数据/文档格式 */
@@ -60,8 +68,7 @@ public class FileStorageService {
         }
 
         String filename = UUID.randomUUID() + ext;
-        Files.write(uploadRoot.resolve(filename), bytes);
-        return "/uploads/" + filename;
+        return persist(filename, bytes);
     }
 
     private static String attachmentExtensionFromFilename(String originalFilename) {
@@ -89,9 +96,7 @@ public class FileStorageService {
 
         String ext = resolveExtension(file.getOriginalFilename(), file.getContentType(), bytes);
         String filename = UUID.randomUUID() + ext;
-        Path target = uploadRoot.resolve(filename);
-        Files.write(target, bytes);
-        return "/uploads/" + filename;
+        return persist(filename, bytes);
     }
 
     public String storeImageBytes(byte[] bytes, String preferredExt) throws IOException {
@@ -107,12 +112,34 @@ public class FileStorageService {
             ext = ALLOWED_EXT.contains(normalized) ? normalized : ".jpg";
         }
         String filename = UUID.randomUUID() + ext;
-        Path target = uploadRoot.resolve(filename);
-        Files.write(target, bytes);
+        return persist(filename, bytes);
+    }
+
+    private String persist(String filename, byte[] bytes) {
+        if (bytes.length > MAX_ATTACHMENT_BYTES) {
+            throw new IllegalArgumentException("文件超过 20MB 限制");
+        }
+        StoredUpload upload = new StoredUpload();
+        upload.setFilename(filename);
+        upload.setData(bytes);
+        upload.setSizeBytes(bytes.length);
+        upload.setContentType(contentType(filename, bytes));
+        uploads.saveAndFlush(upload);
         return "/uploads/" + filename;
     }
 
-    public Path resolve(String urlPath) {
+    public StoredUpload read(String urlPath) throws IOException {
+        String filename = filename(urlPath);
+        return uploads.findById(filename)
+                .orElseThrow(() -> new FileNotFoundException("上传文件不存在"));
+    }
+
+    public long size(String urlPath) throws IOException {
+        return uploads.findSizeByFilename(filename(urlPath))
+                .orElseThrow(() -> new FileNotFoundException("上传文件不存在"));
+    }
+
+    private String filename(String urlPath) {
         if (urlPath == null || !urlPath.startsWith("/uploads/")) {
             throw new IllegalArgumentException("Invalid upload path");
         }
@@ -121,11 +148,54 @@ public class FileStorageService {
         if (queryIdx >= 0) {
             cleanPath = cleanPath.substring(0, queryIdx);
         }
-        Path resolved = uploadRoot.resolve(cleanPath.substring("/uploads/".length())).normalize();
-        if (!resolved.startsWith(uploadRoot)) {
+        String filename = cleanPath.substring("/uploads/".length());
+        if (!filename.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,254}")) {
             throw new IllegalArgumentException("Invalid upload path");
         }
-        return resolved;
+        return filename;
+    }
+
+    /** Idempotent import, preserving names and every historical URL. Originals
+     * are retained so an operator can verify the database backup before cleanup. */
+    public int importLegacyUploads() throws IOException {
+        if (!Files.isDirectory(uploadRoot, LinkOption.NOFOLLOW_LINKS)) return 0;
+        List<Path> paths;
+        try (var entries = Files.list(uploadRoot)) {
+            paths = entries.filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)).toList();
+        }
+        int imported = 0;
+        for (Path path : paths) {
+            String filename = path.getFileName().toString();
+            if (!filename.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,254}") ||
+                    attachmentExtensionFromFilename(filename).isEmpty()) continue;
+            if (uploads.existsById(filename)) continue;
+            if (Files.size(path) > MAX_ATTACHMENT_BYTES)
+                throw new IOException("旧上传文件超过 20MB，未完成数据库导入：" + filename);
+            persist(filename, Files.readAllBytes(path));
+            imported++;
+        }
+        return imported;
+    }
+
+    private static String contentType(String filename, byte[] bytes) {
+        String ext = extensionFromMagic(bytes);
+        if (ext.isEmpty()) ext = attachmentExtensionFromFilename(filename);
+        return switch (ext) {
+            case ".jpg", ".jpeg" -> "image/jpeg";
+            case ".png" -> "image/png";
+            case ".gif" -> "image/gif";
+            case ".webp" -> "image/webp";
+            case ".bmp" -> "image/bmp";
+            case ".pdf" -> "application/pdf";
+            case ".doc" -> "application/msword";
+            case ".docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case ".xls" -> "application/vnd.ms-excel";
+            case ".xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case ".csv" -> "text/csv";
+            case ".txt", ".md" -> "text/plain";
+            case ".json" -> "application/json";
+            default -> "application/octet-stream";
+        };
     }
 
     static String resolveExtension(String originalFilename, String contentType, byte[] bytes) {

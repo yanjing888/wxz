@@ -22,6 +22,7 @@ public class AppProperties {
 
     @Data
     public static class Upload {
+        /** Legacy disk directory to import once; all new uploads are stored in MySQL. */
         private String dir = "./uploads";
     }
 

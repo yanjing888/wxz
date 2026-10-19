@@ -2,6 +2,7 @@ node_modules/
 .vscode/
 dist/
 /deployment/
+/platform/uploads/
 .codex-tmp/
 .codex-logs/
 .codex-ppt-work/

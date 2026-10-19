@@ -1,7 +1,6 @@
 import { createLab } from "./model.js";
 import {
   DEFAULT_OPTICS,
-  opticalMetrics,
   drawField,
   videoSignal,
 } from "./optics.js";
@@ -18,6 +17,7 @@ import {
   makeChallenge,
 } from "./student-course.js";
 import { openReport, downloadReport, downloadData } from "./student-report.js";
+import { adjustmentGoals } from "./student-adjustment.js";
 const $ = (id) => document.getElementById(id),
   storageKey = `wxz-newton-student-v3:${localStorage.getItem("wxz_userId") || "guest"}`;
 const fresh = () => ({
@@ -101,67 +101,7 @@ function centered() {
   );
 }
 function goals() {
-  const o = state.optics,
-    m = opticalMetrics({ ...o, observationMode: "camera" }, allInstalled());
-  return [
-    {
-      id: "signal",
-      label: "CCD 供电、接线和屏幕",
-      points: 10,
-      ok:
-        allInstalled() &&
-        o.lightOn &&
-        o.cameraOn &&
-        o.videoConnected &&
-        o.monitorOn,
-    },
-    {
-      id: "illumination",
-      label: "光源与半反镜照明",
-      points: 10,
-      ok:
-        o.lightOn &&
-        Math.abs(o.lampPosition) <= 5 &&
-        Math.abs(o.mirrorAngle - 45) <= 2 &&
-        m.brightness >= 0.2 &&
-        m.throughput <= 1.35,
-    },
-    {
-      id: "reticle",
-      label: "十字丝清晰",
-      points: 10,
-      ok: Math.abs(o.reticle - (o.reticleTarget ?? 50)) <= 3,
-    },
-    {
-      id: "objective",
-      label: "物镜高度与环纹焦点",
-      points: 10,
-      ok: Math.abs(o.focus - (o.focusTarget ?? 50)) <= 3,
-    },
-    {
-      id: "reflection",
-      label: "底座反光镜收起",
-      points: 5,
-      ok: o.baseMirrorFolded,
-    },
-    {
-      id: "camera",
-      label: "CCD 图像清晰且不过曝",
-      points: 5,
-      ok:
-        Math.abs(o.cameraFocus - (o.cameraFocusTarget ?? 50)) <= 3 &&
-        m.sharpness >= 0.65 &&
-        m.contrast >= 0.45 &&
-        m.throughput <= 1.35 &&
-        o.aperture >= 30,
-    },
-    {
-      id: "centering",
-      label: "暗斑与十字丝交点重合",
-      points: 10,
-      ok: centered(),
-    },
-  ];
+  return adjustmentGoals(state.optics, allInstalled());
 }
 function challengePassed() {
   return !!state.challenge?.result?.passed;
@@ -311,7 +251,8 @@ function interact(raw, event) {
   }
   if (event.phase === "click") {
     if (action) change(action, !state.optics[action], "模型点击");
-    else if (c) stepControl(c, event.shiftKey ? -1 : 1, "模型点击");
+    else if (c && id !== "mirror")
+      stepControl(c, event.shiftKey ? -1 : 1, "模型点击");
   }
   if (event.phase === "drag") {
     if (c && activeGesture?.control === c) {
@@ -387,6 +328,9 @@ function adjust(raw, direction, event) {
     busy
   )
     return false;
+  // A drag uses the value at pointerdown. Do not mix wheel edits into that
+  // gesture, or its final pointerup would overwrite the wheel adjustment.
+  if (activeGesture) return true;
   if (state.selected !== id) selectUnit(id);
   activeRaw = raw;
   stepControl(control, direction, "模型滚轮", event);
@@ -398,10 +342,25 @@ function renderControl() {
     host = $("componentControl");
   host.innerHTML =
     installed(id) && state.stage !== 2 && state.stage !== 4
-      ? `<section class="component-editor"><h3>${UNIT_BY_ID[id].name} · 在模型上操作</h3><p>${gestures[id]}</p><p class="wheel-hint">直接按住模型拖动；滚轮微调。单击可小步调节，Shift + 单击反向，Shift + 拖动精调。</p></section>`
+      ? `<section class="component-editor"><h3>${UNIT_BY_ID[id].name} · 在模型上操作</h3><p>${gestures[id]}</p>${["mirror", "lamp"].includes(id) ? CONTROLS[id].map((c) => `<label class="adjustment-value">${c.label}<span><input data-optics-key="${c.key}" aria-label="${c.label}" type="number" min="${c.min}" max="${c.max}" step="${c.step}" value="${state.optics[c.key]}">${c.unit || ""}</span></label>`).join("") : ""}<p class="wheel-hint">${id === "mirror" ? "单击选中；拖动或滚轮调节角度，Shift + 拖动精调。" : "直接按住模型拖动；滚轮微调。单击可小步调节，Shift + 单击反向，Shift + 拖动精调。"}</p></section>`
       : "";
+  host.querySelectorAll("[data-optics-key]").forEach((input) => {
+    input.onchange = () => {
+      const c = CONTROLS[id].find((c) => c.key === input.dataset.opticsKey);
+      if (input.value.trim() && Number.isFinite(input.valueAsNumber)) {
+        const value = Number((Math.round(Math.max(c.min, Math.min(c.max, input.valueAsNumber)) / c.step) * c.step).toFixed(2));
+        change(c.key, value, "数值调节");
+        showManipulation(id);
+      }
+      input.value = state.optics[c.key];
+    };
+  });
 }
 function syncControls() {
+  $("componentControl").querySelectorAll("[data-optics-key]").forEach((input) => {
+    if (input !== document.activeElement)
+      input.value = state.optics[input.dataset.opticsKey];
+  });
   $("raysToggle").textContent = state.optics.showRays
     ? "显示光路 ✓"
     : "显示光路";
@@ -496,7 +455,7 @@ function paint() {
     $("guideGoals").innerHTML = goals()
       .map(
         (g) =>
-          `<li class="${g.ok ? "passed" : ""}">${g.ok ? "✓" : "○"} ${g.label}</li>`,
+          `<li class="${g.ok ? "passed" : ""}">${g.ok ? "✓" : "○"} ${g.label}${g.detail ? " · " + g.detail : ""}</li>`,
       )
       .join("");
   if (inChallenge() && $("challengeEdits"))
@@ -642,7 +601,7 @@ function renderGuide() {
           "还需要：" +
             checks
               .filter((g) => !g.ok)
-              .map((g) => g.label)
+              .map((g) => g.detail ? `${g.label}（${g.detail}）` : g.label)
               .join("、"),
         );
         log("引导装调未通过");

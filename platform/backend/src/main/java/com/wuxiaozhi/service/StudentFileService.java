@@ -10,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -78,11 +77,8 @@ public class StudentFileService {
         StudentFile file = fileRepository.findByIdAndUserId(fileId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "资料不存在"));
         fileRepository.delete(file);
-        try {
-            Files.deleteIfExists(fileStorageService.resolve(file.getUrl()));
-        } catch (IOException | IllegalArgumentException ignored) {
-            // 磁盘文件缺失不影响记录删除
-        }
+        // The same image may also appear in chat/report history. Removing a
+        // library entry must not remove the shared binary from those records.
     }
 
     @Transactional
@@ -115,7 +111,7 @@ public class StudentFileService {
 
     private long readSize(String url) {
         try {
-            return Files.size(fileStorageService.resolve(url));
+            return fileStorageService.size(url);
         } catch (IOException | IllegalArgumentException e) {
             return 0L;
         }

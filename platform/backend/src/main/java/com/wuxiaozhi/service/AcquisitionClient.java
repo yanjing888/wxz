@@ -25,21 +25,19 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class AcquisitionClient {
     private final AppProperties.Acquisition config;
-    private final FileStorageService storage;
     private final ObjectMapper json;
     private final Map<Long, HttpClient> clients = new ConcurrentHashMap<>();
 
-    public AcquisitionClient(AppProperties properties, FileStorageService storage, ObjectMapper json) {
+    public AcquisitionClient(AppProperties properties, ObjectMapper json) {
         this.config = properties.getAcquisition();
-        this.storage = storage;
         this.json = json;
     }
 
-    public Map<String, Object> captureToUpload() {
-        return captureToUpload(null);
+    public Map<String, Object> capturePreview() {
+        return capturePreview(null);
     }
 
-    public Map<String, Object> captureToUpload(String experimentCode) {
+    public Map<String, Object> capturePreview(String experimentCode) {
         if (!config.isEnabled()) {
             throw unavailable("仪器采集服务未启用");
         }
@@ -112,10 +110,11 @@ public class AcquisitionClient {
                     || decoded.getHeight() != result.path("height").asInt()) {
                 throw unavailable("采集图像尺寸与结果不一致");
             }
-            String url = storage.storeImageBytes(image, ".jpg");
             Map<String, Object> body = new LinkedHashMap<>();
-            body.put("url", url);
-            body.put("fileName", url.substring(url.lastIndexOf('/') + 1));
+            // Preview is held by the browser only. Persisting the image is a
+            // separate action performed when the student sends the question.
+            body.put("previewDataUrl", "data:image/jpeg;base64," + encoded);
+            body.put("fileName", "capture-" + requestId + ".jpg");
             body.put("label", device.getLabel());
             body.put("width", decoded.getWidth());
             body.put("height", decoded.getHeight());

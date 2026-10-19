@@ -55,7 +55,7 @@ export const sessionApi = {
 }
 
 export const uploadApi = {
-  async image(file) {
+  async image(file, { signal } = {}) {
     const fd = new FormData()
     fd.append('file', file, file.name || 'image.jpg')
     const token = localStorage.getItem('wxz_token')
@@ -65,9 +65,11 @@ export const uploadApi = {
       res = await fetch(apiUrl('/api/upload'), {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: fd
+        body: fd,
+        signal
       })
-    } catch {
+    } catch (error) {
+      if (error.name === 'AbortError' || signal?.aborted) throw error
       throw new Error('无法连接后端，请确认 backend 已启动（端口见 config/application.yml）')
     }
 
