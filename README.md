@@ -39,6 +39,8 @@ wuxiaozhi:
 
 正式部署：平台按 [部署说明](platform/docs/lab-deployment.md) 打包为单 JAR；采集服务单独部署在连接 USB/串口设备的电脑上。平台配置该采集电脑的地址，教师和学生浏览器仍统一访问平台。
 
+日常按改动服务单独打包：platform 改动使用 `platform/scripts/build-lab-release.ps1`，acquisition-service 改动使用 `acquisition-service/build-release.ps1`。各自在本服务 dist 中新增一个带时间后缀的 ZIP，保留已有 ZIP，不留展开目录或说明、测试报告；程序、运行脚本、配置与依赖清单保持完整。只有首次完整部署或两边都需要发布时，才使用本地 `deployment/build-windows-release.ps1` 生成根目录 dist 中的双服务包。deployment 目录仍按原约定仅在本地维护，不提交 Git。
+
 当前接口支持按实验选择预配置设备并采集 JPEG 图像。后续 Java 采集服务遵循同一份契约即可替换或接入，平台无需安装 Python、Java 设备 SDK 或驱动。同一实验下多个工位的设备自动路由、数值/曲线协议属于后续扩展。
 
 迁移保留原 Git 历史、数据库、上传文件、配置和历史发布包。原项目使用说明现位于 `platform/README.md`。

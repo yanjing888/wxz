@@ -1,6 +1,10 @@
-param([string]$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path)
+param(
+    [string]$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
+    [string]$StagingDirectory
+)
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
+$temporaryRoot = $null
 Push-Location $ProjectRoot
 try {
     & npm.cmd --prefix frontend run build -- --base=/app/
@@ -15,21 +19,39 @@ try {
     Push-Location (Join-Path $ProjectRoot 'backend')
     try { & mvn.cmd -q clean '-DskipTests' package; if ($LASTEXITCODE -ne 0) { throw 'Backend package failed.' } } finally { Pop-Location }
     & (Join-Path $ProjectRoot 'scripts/assert-java-release.ps1') -Jar (Join-Path $ProjectRoot 'backend/target/wuxiaozhi-backend-1.0.0.jar') -JavaRelease 17
-    $release = Join-Path $ProjectRoot ('dist/lab-release-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    if ($StagingDirectory) {
+        $release = [IO.Path]::GetFullPath($StagingDirectory)
+        if (Test-Path -LiteralPath $release) { throw 'Staging directory must not already exist.' }
+    } else {
+        $temporaryRoot = Join-Path $ProjectRoot ('.codex-tmp/platform-release-' + [Guid]::NewGuid().ToString('N'))
+        $release = Join-Path $temporaryRoot 'platform'
+    }
     New-Item -ItemType Directory -Path (Join-Path $release 'config') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'backend/target/wuxiaozhi-backend-1.0.0.jar') -Destination (Join-Path $release 'app.jar')
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'config/application.yml.example') -Destination (Join-Path $release 'config/application.yml')
     if (Test-Path -LiteralPath (Join-Path $ProjectRoot 'config/dify.env')) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot 'config/dify.env') -Destination (Join-Path $release 'config/dify.env')
     }
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot 'docs/lab-deployment.md') -Destination (Join-Path $release 'DEPLOY.md')
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot 'docs/learning.md') -Destination (Join-Path $release 'LEARNING.md')
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'config/lab-schema-migration.sql') -Destination (Join-Path $release 'config/lab-schema-migration.sql')
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'scripts/start-lab-release.bat') -Destination (Join-Path $release 'start.bat')
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'scripts/start-lab-release.sh') -Destination (Join-Path $release 'start.sh')
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'scripts/stop-lab-release.ps1') -Destination (Join-Path $release 'stop.ps1')
-    $zip = $release + '.zip'
-    Compress-Archive -Path (Join-Path $release '*') -DestinationPath $zip
-    Write-Host "Release: $release"
-    Write-Host "Archive: $zip"
-} finally { Pop-Location }
+    if (-not $StagingDirectory) {
+        $outputDirectory = Join-Path $ProjectRoot 'dist'
+        New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
+        $zip = Join-Path $outputDirectory ('lab-release-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.zip')
+        $pendingZip = Join-Path $temporaryRoot 'package.zip'
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::CreateFromDirectory($release, $pendingZip)
+        [IO.File]::Move($pendingZip, $zip)
+        Write-Host "Archive: $zip"
+    }
+} finally {
+    Pop-Location
+    if ($temporaryRoot -and (Test-Path -LiteralPath $temporaryRoot)) {
+        $allowedParent = [IO.Path]::GetFullPath((Join-Path $ProjectRoot '.codex-tmp')) + [IO.Path]::DirectorySeparatorChar
+        $resolvedTemporary = (Resolve-Path -LiteralPath $temporaryRoot).Path
+        if (-not $resolvedTemporary.StartsWith($allowedParent, [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid temporary build directory.' }
+        Remove-Item -LiteralPath $resolvedTemporary -Recurse -Force
+    }
+}

@@ -74,7 +74,11 @@ IP 展开后的完整地址保存在该工位的数据库配置中。修改模�
 powershell -ExecutionPolicy Bypass -File scripts/build-lab-release.ps1
 ```
 
-解压 `dist/lab-release-时间戳.zip` 到学校服务器固定目录。服务器只需安装 JDK 17+，编辑随包的 `config/application.yml`，填写管理员初始化账号密码、随机 JWT 密钥和数据库连接，Windows 运行 `start.bat`，Linux 运行 `bash start.sh`。页面、API 和视频统一由 JAR 提供，默认访问 `http://服务器地址:8082/`。
+日常更新按服务分别打包：只有平台改动时，运行上述平台脚本，只新增 `platform/dist/lab-release-时间戳.zip`（从 platform 目录看为 `dist/lab-release-时间戳.zip`），不重打采集服务；只有采集服务改动时，运行 `acquisition-service/build-release.ps1`，只新增该服务 dist 下的时间戳 ZIP。均保留已有 ZIP，不留解压目录或说明文件。
+
+仅首次完整部署或两边都需要发布时，才使用工程根目录的本地 `deployment/build-windows-release.ps1`，在根目录 dist 新增一个 `wuxiaozhi-windows-x64-时间戳.zip`，中间目录自动清理。包内保留完整程序、运行脚本、必要配置及离线依赖，不附带 README、测试报告、构建信息或校验说明文件。
+
+解压平台包到学校服务器固定目录。服务器只需安装 JDK 17+，编辑随包的 `config/application.yml`，填写管理员初始化账号密码、随机 JWT 密钥和数据库连接，Windows 运行 `start.bat`，Linux 运行 `bash start.sh`。页面、API 和视频统一由 JAR 提供，默认访问 `http://服务器地址:8082/`。
 
 正式包携带外部 `config/application.yml` 模板，不携带开发机数据库。Dify 配置按项目现有内容保留。首次初始化管理员后可以移除配置中的初始化密码。所有环境均使用 MySQL，按模板修改 `spring.datasource`，无需额外启用 profile。源码启动与正式 JAR 使用同一配置格式，数据库不可用时启动报错。
 

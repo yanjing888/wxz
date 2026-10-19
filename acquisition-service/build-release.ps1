@@ -1,6 +1,15 @@
+param([string]$StagingDirectory)
 $ErrorActionPreference = 'Stop'
 $serviceRoot = (Resolve-Path -LiteralPath $PSScriptRoot).Path
-$release = Join-Path $serviceRoot ('dist/acquisition-release-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$temporaryRoot = $null
+if ($StagingDirectory) {
+    $release = [IO.Path]::GetFullPath($StagingDirectory)
+    if (Test-Path -LiteralPath $release) { throw 'Staging directory must not already exist.' }
+} else {
+    $temporaryRoot = Join-Path $serviceRoot ('.codex-tmp/acquisition-release-' + [Guid]::NewGuid().ToString('N'))
+    $release = Join-Path $temporaryRoot 'acquisition-service'
+}
+try {
 New-Item -ItemType Directory -Path $release -Force | Out-Null
 foreach ($name in @('src','tools')) {
     $source = Join-Path $serviceRoot $name
@@ -17,7 +26,21 @@ foreach ($name in @('run.py','requirements.txt','start.bat','start.ps1','start.s
     Copy-Item -LiteralPath (Join-Path $serviceRoot $name) -Destination (Join-Path $release $name)
 }
 Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $serviceRoot) 'contracts/acquisition-v1.openapi.yaml') -Destination (Join-Path $release 'acquisition-v1.openapi.yaml')
-$readme = [IO.File]::ReadAllText((Join-Path $serviceRoot 'README.md')).Replace('../contracts/acquisition-v1.openapi.yaml', 'acquisition-v1.openapi.yaml')
-[IO.File]::WriteAllText((Join-Path $release 'README.md'), $readme, (New-Object Text.UTF8Encoding($false)))
-Compress-Archive -Path (Join-Path $release '*') -DestinationPath ($release + '.zip')
-Write-Output ('Release: ' + $release + '.zip')
+if (-not $StagingDirectory) {
+    $outputDirectory = Join-Path $serviceRoot 'dist'
+    New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
+    $zip = Join-Path $outputDirectory ('acquisition-release-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.zip')
+    $pendingZip = Join-Path $temporaryRoot 'package.zip'
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::CreateFromDirectory($release, $pendingZip)
+    [IO.File]::Move($pendingZip, $zip)
+    Write-Output ('Release: ' + $zip)
+}
+} finally {
+    if ($temporaryRoot -and (Test-Path -LiteralPath $temporaryRoot)) {
+        $allowedParent = [IO.Path]::GetFullPath((Join-Path $serviceRoot '.codex-tmp')) + [IO.Path]::DirectorySeparatorChar
+        $resolvedTemporary = (Resolve-Path -LiteralPath $temporaryRoot).Path
+        if (-not $resolvedTemporary.StartsWith($allowedParent, [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid temporary build directory.' }
+        Remove-Item -LiteralPath $resolvedTemporary -Recurse -Force
+    }
+}
