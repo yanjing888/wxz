@@ -73,16 +73,6 @@ export const STUDENT_AGENTS = [
     labTab: 'guide'
   },
   {
-    code: 'instrument-reading',
-    name: '读数助手',
-    group: 'lab',
-    blurb: '拍刻度识别读数并讲解过程，确认后才入库。',
-    aiLabel: 'AI 识读',
-    kind: 'lab',
-    labTab: 'guide',
-    labAction: 'reading'
-  },
-  {
     code: 'data-doctor',
     name: '数据体检',
     group: 'lab',

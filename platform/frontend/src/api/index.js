@@ -27,6 +27,14 @@ export const sessionApi = {
   get: (id) => http.get(`/api/sessions/${id}`),
   messages: (id) => http.get(`/api/sessions/${id}/messages`),
   attachLatestAiImage: (id, data) => http.patch(`/api/sessions/${id}/messages/latest-ai-image`, data),
+  process: (id) => http.get(`/api/sessions/${id}/process`),
+  completeStep: (id, stepId, data, images = []) => {
+    if (!images.length) return http.post(`/api/sessions/${id}/steps/${stepId}/complete`, data)
+    const form = new FormData()
+    form.append('submission', new Blob([JSON.stringify(data)], { type: 'application/json' }))
+    images.forEach(file => form.append('images', file, file.name || 'check-image.jpg'))
+    return http.post(`/api/sessions/${id}/steps/${stepId}/complete`, form, { timeout: 120000 })
+  },
   updateStep: (id, stepId) => http.patch(`/api/sessions/${id}/step?stepId=${stepId}`),
   updateCameraStatus: (id, data) => http.patch(`/api/sessions/${id}/camera-status`, data),
   updateEnvCheckEnabled: (id, data) => http.patch(`/api/sessions/${id}/env-check-enabled`, data),
@@ -139,6 +147,11 @@ export const studentExperimentApi = {
   completePreLab: (code) => http.post(`/api/student/experiments/${code}/progress/pre-lab`),
   completeSimulation: (code) => http.post(`/api/student/experiments/${code}/progress/simulation`),
   completeReport: (code, data) => http.post(`/api/student/experiments/${code}/progress/report`, data || {}),
+  uploadReport: (code, sessionId, file) => {
+    const data = new FormData(); data.append('file', file)
+    return http.post(`/api/student/experiments/${code}/report-file`, data, { params: { sessionId }, timeout: 120000 })
+  },
+  reportFile: (code, sessionId) => http.get(`/api/student/experiments/${code}/report-file`, { params: { sessionId }, responseType: 'blob' }),
   saveReportDraft: (code,data) => http.put(`/api/student/experiments/${code}/progress/report/draft`,data),
   completeRecap: (code) => http.post(`/api/student/experiments/${code}/progress/recap`)
 }
@@ -197,6 +210,14 @@ export const scaleReadingApi = {
 }
 
 export const teacherApi = {
+  exportGrades: (experimentCode) => http.get('/api/teacher/evaluation/exports/grades', { params: { experimentCode }, responseType: 'blob', timeout: 120000 }),
+  exportReports: (experimentCode) => http.get('/api/teacher/evaluation/exports/reports', { params: { experimentCode }, responseType: 'blob', timeout: 300000 }),
+  teachingContext: (experimentCode) => http.get('/api/teacher/teaching-context', { params: { experimentCode } }),
+  selectTeachingClass: (experimentCode, className) => http.put('/api/teacher/teaching-context', { className }, { params: { experimentCode } }),
+  processQueue: (params) => http.get('/api/teacher/process', { params }),
+  processDetail: (id) => http.get(`/api/teacher/sessions/${id}/process`),
+  reportFile: (id) => http.get(`/api/teacher/reports/${id}/file`, { responseType: 'blob' }),
+  reviewStep: (id, stepId, data) => http.post(`/api/teacher/sessions/${id}/steps/${stepId}/review`, data),
   classes: () => http.get('/api/teacher/classes'),
   overview: () => http.get('/api/teacher/overview'),
   reports: (params = {}) => http.get('/api/teacher/reports', { params }),

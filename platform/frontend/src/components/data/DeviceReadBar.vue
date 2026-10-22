@@ -8,18 +8,17 @@
           ? 'border-brand-200 bg-brand-50 text-brand-700'
           : 'border-line-soft bg-white text-ink-strong hover:border-brand-200 hover:bg-brand-50/50 hover:text-brand-700 shadow-card'"
         :disabled="disabled || busy"
-        title="仅采集电子显微镜（UVC）画面；显微镜未连接时将提示失败"
+        title="采集当前实验设备的数据"
         @click="$emit('ccd-capture')"
       >
         <svg v-if="busy" class="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 100 16z" />
         </svg>
-        <svg v-else class="w-4 h-4 shrink-0 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h4l2-3h4l2 3h4v12H4V7z" />
-          <circle cx="12" cy="13" r="2.5" />
+        <svg v-else class="w-4 h-4 shrink-0 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v11m-4-4 4 4 4-4M5 12l-2 5v4h18v-4l-2-5M3 17h5l2 2h4l2-2h5" />
         </svg>
-        <span>{{ busy ? '获取中…' : '获取成像' }}</span>
+        <span>{{ busy ? '采集中…' : '数据采集' }}</span>
       </button>
     </div>
     <p v-if="dataReady" class="mt-1.5 text-[10px] text-emerald-700 text-center leading-snug">

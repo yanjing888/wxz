@@ -46,7 +46,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 视频响应的异步续写沿用首次请求的校验，转发循环也会复查教师身份。
                         .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC, jakarta.servlet.DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/", "/login", "/lab", "/teacher", "/admin", "/home",
+                        .requestMatchers(HttpMethod.GET, "/", "/login", "/lab", "/teacher", "/teacher/process/*", "/admin", "/home",
                                 "/ai/**", "/experiment/**", "/experiments/**", "/data/**", "/after/**",
                                 "/agents/**", "/prep/**", "/monitor", "/files", "/profile", "/learning").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")

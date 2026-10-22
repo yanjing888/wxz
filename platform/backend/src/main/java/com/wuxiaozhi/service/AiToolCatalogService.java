@@ -47,6 +47,7 @@ public class AiToolCatalogService {
     }
 
     private boolean isVisibleTo(Authentication authentication, AiToolDefinition tool) {
+        if ("instrument-reading".equals(tool.getCode())) return false;
         if (tool.isStudentVisible()) {
             return true;
         }

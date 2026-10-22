@@ -1,5 +1,7 @@
 # 物小智智能体平台
 
+实验步骤完成确认、教师检查评分、整改复查及过程成绩配置见 [实验过程考核](docs/process-assessment.md)。
+
 本目录为教学平台。独立设备采集服务位于同级 [acquisition-service](../acquisition-service/README.md)，接口契约位于 [contracts](../contracts/acquisition-v1.openapi.yaml)。平台通过 HTTP 调用设备服务，不安装 Python 依赖、不管理采集进程。本文命令均以 `platform` 为工作目录。
 
 实验室正式部署、摄像头接入及“管理员配置工位 → 教师直接巡视”最小流程见 [实验室部署说明](docs/lab-deployment.md)。正式发行包使用 `scripts/build-lab-release.ps1` 构建，前端、API 和视频由一个 JAR 提供。

@@ -14,11 +14,11 @@
     <div v-else class="lab-page flex flex-col flex-1 min-h-0 w-full overflow-hidden">
     <!-- 顶栏 -->
     <LabHeader
-      :experiment-code="lab.experiment?.code || ''"
       :env-level="lab.envLevel"
       :dify-status="lab.difyStatus"
       :dify-status-loading="lab.difyStatusLoading"
       :session-finished="labQaLocked"
+      :can-finish="processState != null && processState.completedCount === processState.totalCount"
       @quick-stats="showQuickStats = true"
       @report="openReport"
     />
@@ -57,7 +57,8 @@
             :active-step="lab.activeStep"
             :step="lab.stepConfig"
             :collapsed="stepPanelCollapsed"
-            @select="lab.selectStep"
+            :can-advance="canAdvanceStep"
+            @select="onSelectStep"
             @tutorial="openTutorial"
             @instrument-guide="showInstrumentGuide = true"
             @collapse="stepPanelCollapsed = true"
@@ -85,11 +86,11 @@
               :validation-errors="lab.dataSubmitErrors"
               :read-only="labQaLocked"
               @update:values="dataFormValues = $event"
-              @recognize-field="openReadingAssist"
               @submit-check="onCheckStepData"
               @save-official="onSaveOfficialData"
             />
           </DataCollectionSection>
+          <StepAssessmentPanel :session-id="lab.session?.id" :step-id="lab.activeStep" @state="onProcessState" @select-step="onSelectStep" />
           <StepWorkPanel :step="lab.stepConfig" />
         </div>
       </aside>
@@ -170,25 +171,6 @@
       :data-fields="lab.currentDataFields"
       @close="showInstrumentGuide = false"
     />
-    <ReadingAssistModal
-      :visible="showReadingAssist"
-      :experiment-code="lab.experiment?.code || ''"
-      :experiment-name="lab.experiment?.name || ''"
-      :step-no="lab.activeStep"
-      :step-title="lab.stepConfig?.title || ''"
-      :step-desc="lab.stepConfig?.desc || ''"
-      :device-type="lab.stepConfig?.deviceType || lab.deviceType || ''"
-      :data-fields="lab.currentDataFields"
-      :initial-target-field-key="selectedReadingFieldKey"
-      @close="showReadingAssist = false"
-      @apply="onApplyReading"
-    />
-    <ScaleReadingModal
-      :visible="showScaleReading"
-      :field="selectedScaleField"
-      @close="showScaleReading = false"
-      @apply="onApplyReading"
-    />
     <TabletCameraCapture
       :visible="tabletCameraOpen"
       @close="tabletCameraOpen = false"
@@ -219,6 +201,7 @@ import LabHeader from '../components/layout/LabHeader.vue'
 import LabWorkbench from '../components/layout/LabWorkbench.vue'
 import StepPanel from '../components/step/StepPanel.vue'
 import StepWorkPanel from '../components/step/StepWorkPanel.vue'
+import StepAssessmentPanel from '../components/step/StepAssessmentPanel.vue'
 import DeviceReadBar from '../components/data/DeviceReadBar.vue'
 import DataCollectionSection from '../components/data/DataCollectionSection.vue'
 import DataCollectionPanel from '../components/data/DataCollectionPanel.vue'
@@ -226,13 +209,26 @@ import TabletCameraCapture from '../components/camera/TabletCameraCapture.vue'
 import TutorialModal from '../components/modals/TutorialModal.vue'
 import QuickStatsModal from '../components/modals/QuickStatsModal.vue'
 import InstrumentGuideModal from '../components/modals/InstrumentGuideModal.vue'
-import ReadingAssistModal from '../components/modals/ReadingAssistModal.vue'
-import ScaleReadingModal from '../components/modals/ScaleReadingModal.vue'
 import AppConfirmDialog from '../components/modals/AppConfirmDialog.vue'
 import { rememberVisit } from '../utils/experimentFlow'
 import { labEntryBlockedRoute } from '../utils/prepSimulation'
 import { studentFileApi, studentExperimentApi } from '../api'
 
+const processState = ref(null)
+const canAdvanceStep = computed(() => labQaLocked.value || !!processState.value?.steps?.find(s => s.stepId === lab.activeStep + 1)?.accessible)
+function onProcessState(state) {
+  processState.value = state
+  if (!state || labQaLocked.value) return
+  const current = state.steps.find(s => s.stepId === lab.activeStep)
+  if (current && !current.accessible) {
+    const next = state.steps.find(s => s.accessible && (!s.submitted || (s.blocking && s.status !== 'PASSED')))
+    if (next) onSelectStep(next.stepId)
+  }
+}
+async function onSelectStep(stepId) {
+  try { await lab.selectStep(stepId) }
+  catch (e) { await showAppAlert('暂不能切换步骤', e.response?.data?.message || e.message || '步骤切换失败') }
+}
 const lab = useLabStore()
 const auth = useAuthStore()
 const route = useRoute()
@@ -265,8 +261,6 @@ const sessionDataCount = computed(() => lab.sessionDataLogCount)
 const showTutorial = ref(false)
 const showQuickStats = ref(false)
 const showInstrumentGuide = ref(false)
-const showReadingAssist = ref(false)
-const showScaleReading = ref(false)
 const booting = ref(true)
 const bootError = ref('')
 const tabletCameraOpen = ref(false)
@@ -289,8 +283,6 @@ const workbenchTab = ref('guide')
 const stepPanelCollapsed = ref(false)
 const fileCount = ref(0)
 const dataFormValues = ref({})
-const selectedReadingFieldKey = ref('')
-const selectedScaleField = ref(null)
 let viewActive = true
 
 watch(
@@ -307,9 +299,6 @@ watch(
     const allowed = ['guide', 'record', 'data']
     if (typeof tab === 'string' && allowed.includes(tab)) {
       workbenchTab.value = tab
-    }
-    if (agent === 'reading') {
-      showReadingAssist.value = true
     }
   },
   { immediate: true }
@@ -537,17 +526,6 @@ function onComposerCapture() {
   tabletCameraOpen.value = true
 }
 
-function openReadingAssist(field = null) {
-  if (field?.scaleReading) {
-    selectedScaleField.value = field
-    showScaleReading.value = true
-    showReadingAssist.value = false
-    return
-  }
-  selectedReadingFieldKey.value = field?.key || ''
-  showReadingAssist.value = true
-}
-
 async function onTabletCameraCaptured(file) {
   tabletCameraOpen.value = false
   return uploadTo(file)
@@ -575,26 +553,8 @@ async function onCaptureCcdImage() {
     })
     workbenchTab.value = 'guide'
   } catch (e) {
-    await showAppAlert('获取成像失败', e.response?.data?.message || e.message || '电子显微镜未连接或无法成像，请检查 USB 后重试')
+    await showAppAlert('数据采集失败', e.response?.data?.message || e.message || '电子显微镜未连接或无法成像，请检查 USB 后重试')
   }
-}
-
-function onApplyReading(payload) {
-  if (labQaLocked.value) {
-    showAppAlert('实验已结束', '结束实验后不能再填入读数，仅可查看历史记录。')
-    return
-  }
-  const ok = lab.applyPhotoReadingToComposer(payload)
-  if (!ok) return
-  if (lab.hasDataPanel && lab.composerDataAttachment?.values) {
-    dataFormValues.value = {
-      ...dataFormValues.value,
-      ...lab.composerDataAttachment.values
-    }
-    lab.clearComposerDataAttachment()
-    return
-  }
-  workbenchTab.value = 'guide'
 }
 
 async function onCheckStepData(values) {
@@ -658,7 +618,7 @@ async function startNewSession() {
     const ok = await openAppDialog({
       title: '开始新的实验会话？',
       message: '当前实验会话会保留在历史记录中。',
-      detail: '新会话会从第 1 步重新开始，右侧问答也会使用新的上下文。',
+      detail: '新会话保留步骤进度和过程成绩，右侧问答使用新的上下文。',
       confirmText: '新建会话',
       cancelText: '继续当前会话'
     })

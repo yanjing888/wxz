@@ -11,6 +11,7 @@ public class SpaController {
             "/login",
             "/lab",
             "/teacher",
+            "/teacher/process/{sessionId}",
             "/admin",
             "/home",
             "/ai",

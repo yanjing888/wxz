@@ -41,6 +41,11 @@ public class StudentExperimentProgress {
     private String reportSectionsJson;
 
     private Long reportSessionId;
+    private LocalDateTime reportSubmittedAt;
+    private String reportFileUrl;
+    private String reportFileName;
+    private String reportFileType;
+    private Long reportFileSize;
 
     /** AI 预评原始分；对应分值上限记录于 aiReviewScoreMax。 */
     private Double aiReviewScore;

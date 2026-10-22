@@ -19,6 +19,8 @@ public class ExperimentConfig {
     private List<String> reportPath;
     private String reportGuidePath;
     private Map<String, StepConfig> steps;
+    /** Percentage of the final grade from classroom process assessment. */
+    private Double processScoreWeight = 40.0;
     private DataCollectionConfig dataCollection;
     /** Dify 侧配置：知识库 ID 等 */
     private ExperimentDifyConfig dify;

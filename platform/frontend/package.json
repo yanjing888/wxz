@@ -15,6 +15,7 @@
     "test:tablet-viewport": "node scripts/check-tablet-viewport.mjs",
     "test:chat-bubbles": "node scripts/check-chat-bubble-width.mjs",
     "test:report-review": "node scripts/check-report-review.mjs",
+    "test:process-assessment": "node scripts/check-process-assessment.mjs",
     "test:workstations": "node scripts/check-workstations.mjs",
     "test:learning": "node scripts/check-learning.mjs",
     "test:dev-lifecycle": "node scripts/check-dev-lifecycle.mjs",

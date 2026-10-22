@@ -118,6 +118,7 @@ const routes = [
     meta: { requiresAuth: true, role: 'TEACHER' }
   },
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
+  { path: '/teacher/process/:sessionId', name: 'teacher-process-detail', component: () => import('../views/TeacherProcessDetailView.vue'), meta: { requiresAuth: true, role: 'TEACHER' } },
   { path: '/:pathMatch(.*)*', redirect: { name: 'lab' } }
 ]
 

@@ -55,7 +55,8 @@
       <button
         type="button"
         class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-ink-muted hover:text-brand-600 hover:bg-brand-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-muted transition-all btn-active-scale"
-        :disabled="activeStep >= menuLabels.length"
+        :disabled="activeStep >= menuLabels.length || !canAdvance"
+        :title="canAdvance ? '进入下一步' : '请先提交本步检查材料；关键检查点需教师确认'"
         @click="$emit('select', activeStep + 1)"
       >
         下一步
@@ -70,6 +71,7 @@ defineProps({
   menuLabels: { type: Array, default: () => [] },
   activeStep: { type: Number, default: 1 },
   step: { type: Object, default: null },
+  canAdvance: { type: Boolean, default: false },
   collapsed: { type: Boolean, default: false }
 })
 

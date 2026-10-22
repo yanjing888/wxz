@@ -58,6 +58,7 @@ class TeachingWorkflowIntegrationTest extends MySqlIntegrationTestSupport {
         var lab=call("POST","/api/sessions",login,Map.of("experimentCode","newton_rings","studentName","测试同学","studentClass","伪造班级"),200);
         Long id=lab.get("id").asLong();assertThat(lab.get("studentClass").asText()).isEqualTo("实验一班");
         call("POST","/api/student/experiments/newton_rings/progress/report",login,Map.of("sessionId",id,"sections",Map.of("results","未结束实操的报告")),409);
+        completeProcessFixture(id);
         call("POST","/api/sessions/"+id+"/finish",login,null,200);
         queue=call("GET","/api/student/experiments/progress",login,null,200);assertThat(queue.findValuesAsText("taskState")).containsExactly("REPORT_PENDING","CURRENT");
         call("PUT","/api/student/experiments/newton_rings/progress/report/draft",login,Map.of("sessionId",id,"sections",Map.of("results","来自实验室的草稿")),200);
@@ -75,6 +76,7 @@ class TeachingWorkflowIntegrationTest extends MySqlIntegrationTestSupport {
         call("DELETE","/api/teacher/students/"+student.getId()+"/experiments/newton_rings",admin,null,409);
         var second=call("POST","/api/sessions",login,Map.of("experimentCode","air_wedge_thickness","studentName","测试同学","studentClass","实验一班"),200);
         Long secondId=second.get("id").asLong();assertThat(second.get("studentClass").asText()).isEqualTo("实验二班");
+        completeProcessFixture(secondId);
         call("POST","/api/sessions/"+secondId+"/finish",login,null,200);
         call("POST","/api/student/experiments/air_wedge_thickness/progress/report",login,Map.of("sessionId",id,"sections",Map.of("results","串实验的报告")),409);
         call("POST","/api/student/experiments/air_wedge_thickness/progress/report",login,Map.of("sessionId",secondId,"sections",Map.of("results","第二份报告")),200);

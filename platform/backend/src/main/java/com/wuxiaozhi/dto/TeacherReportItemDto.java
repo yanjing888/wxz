@@ -15,6 +15,9 @@ public class TeacherReportItemDto {
     private String status;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
+    private LocalDateTime reportSubmittedAt;
+    private String reportFileName;
+    private Double processScore;
     private int helpCount;
     private int errorPointCount;
     private boolean reportCompleted;

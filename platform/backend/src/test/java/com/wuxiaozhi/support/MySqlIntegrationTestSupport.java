@@ -15,6 +15,29 @@ import org.springframework.test.context.ContextConfiguration;
 @ContextConfiguration(initializers = MySqlIntegrationTestSupport.DatabaseInitializer.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 public abstract class MySqlIntegrationTestSupport {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.wuxiaozhi.repository.LabSessionRepository fixtureSessions;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.wuxiaozhi.repository.StepAssessmentRepository fixtureAssessments;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.wuxiaozhi.service.ExperimentConfigService fixtureExperiments;
+
+    /** Unrelated workflow tests need a completed-process fixture before ending an experiment.
+     * The process-specific integration test exercises completion and review through real APIs. */
+    protected void completeProcessFixture(Long sessionId) {
+        var session = fixtureSessions.findById(sessionId).orElseThrow();
+        fixtureExperiments.getByCode(session.getExperimentCode()).getSteps().forEach((id, config) -> {
+            int step = Integer.parseInt(id);
+            var row = fixtureAssessments.findByUserIdAndExperimentCodeAndStepId(session.getUserId(), session.getExperimentCode(), step)
+                    .orElseGet(com.wuxiaozhi.entity.StepAssessment::new);
+            row.setSessionId(sessionId); row.setUserId(session.getUserId()); row.setExperimentCode(session.getExperimentCode());
+            row.setStepId(step); row.setStatus(Boolean.FALSE.equals(config.getAssessmentRequired()) ? "COMPLETED" : "PASSED");
+            row.setSubmittedAt(java.time.LocalDateTime.now());
+            row.setEvidenceJson("{\"images\":[\"/uploads/test-fixture.png\"],\"table\":[[\"Reading\"],[\"1\"]]}");
+            row.setScore(config.getAssessmentMaxScore() == null ? 10.0 : config.getAssessmentMaxScore());
+            fixtureAssessments.saveAndFlush(row);
+        });
+    }
     public static class DatabaseInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
         @Override
         public void initialize(ConfigurableApplicationContext context) {

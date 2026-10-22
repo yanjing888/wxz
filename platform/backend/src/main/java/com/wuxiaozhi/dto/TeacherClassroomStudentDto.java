@@ -26,6 +26,7 @@ public class TeacherClassroomStudentDto {
     private String lastDataValidation;
     private List<String> recentCorrectionTypes = new ArrayList<>();
     private boolean reportCompleted;
+    private Double processScore;
     /** high | medium | normal */
     private String priority;
     private String priorityReason;

@@ -15,7 +15,7 @@ export const LOOP_NODES = [
     key: 'lab',
     label: '实验台',
     short: '实训',
-    lead: '课上主战场：指导纠错、拍照读数、逐步完成操作',
+    lead: '课上主战场：指导纠错、过程检查、逐步完成操作',
     route: (code) => ({ name: 'lab', query: { exp: code } })
   },
   {

@@ -22,14 +22,17 @@
             <h2>{{ experimentName || '实验报告' }}</h2>
           </div>
           <div class="header-actions">
+            <button v-if="!gradeProgress?.reportFileName" type="button" class="btn-plain" :disabled="fileUploading || reportCompleting || gradeProgress?.gradingCompleted" title="上传 PDF 或 Word（.docx）报告，最大 20MB" @click="reportUpload?.chooseFile()">上传报告</button>
             <button type="button" class="btn-plain" :disabled="!sessionId || exporting" @click="downloadDocx">
               {{ exporting ? '导出中…' : '导出 Word' }}
             </button>
-            <button type="button" class="btn-primary" :disabled="!hasContent || reportCompleting" @click="openPreview">
+            <button type="button" class="btn-primary" :disabled="!hasContent || reportCompleting || fileUploading || reportDone" @click="openPreview">
               {{ reportDone ? '已提交' : '提交报告' }}
             </button>
           </div>
         </header>
+        <ReportUploadPanel ref="reportUpload" :experiment-code="experimentCode" :session-id="sessionId" :progress="gradeProgress" @busy="fileUploading = $event" @submitted="onFileSubmitted" />
+        <ProcessScoreSummary :assessment="gradeProgress?.processAssessment" :report-submitted="!!gradeProgress?.reportCompleted" :report-score="gradeProgress?.gradingCompleted ? gradeProgress.teacherScore : null" :overall-score="gradeProgress?.overallScore" :process-weight="gradeProgress?.processScoreWeight" :loading="gradeLoading" :error="gradeError" @refresh="refreshGradeProgress" />
 
         <!-- 工具栏 -->
         <div class="rep-toolbar">
@@ -210,6 +213,9 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import AskPanel from './AskPanel.vue'
+import ProcessScoreSummary from '../experiment/ProcessScoreSummary.vue'
+import ReportUploadPanel from './ReportUploadPanel.vue'
+import { useReportProgress } from '../../composables/useReportProgress'
 import { useAuthStore } from '../../stores/auth'
 import { sessionApi, studentExperimentApi } from '../../api'
 import {
@@ -246,6 +252,11 @@ const generating = ref(false)
 const exporting = ref(false)
 const reportCompleting = ref(false)
 const reportDone = ref(false)
+const { progress: gradeProgress, loading: gradeLoading, error: gradeError, refresh: refreshGradeProgress, apply: applyGradeProgress } = useReportProgress(() => props.experimentCode, () => props.sessionId)
+const fileUploading = ref(false)
+const reportUpload = ref(null)
+function onFileSubmitted(progress) { applyGradeProgress(progress) }
+watch(gradeProgress, progress => { if (progress) reportDone.value = !!progress.reportCompleted })
 const completionMessage = ref('')
 const sourceReport = ref(null)
 const activeKey = ref('')
@@ -320,7 +331,7 @@ const reportAssistantSuggestions = computed(() => [
   '帮我把测量数据整理成表格'
 ])
 
-watch(() => props.sessionId, onSessionChange, { immediate: true })
+watch(() => [props.experimentCode, props.sessionId], onSessionChange, { immediate: true })
 
 // ===== 工具函数 =====
 
@@ -491,18 +502,16 @@ function loadDraft() {
 async function onSessionChange() {
   completionMessage.value = ''
   reportDone.value = false
+  gradeProgress.value = null
   sourceReport.value = null
   Object.keys(form).forEach((k) => { form[k] = '' })
   if (!props.sessionId) return
+  const session = props.sessionId, experiment = props.experimentCode
   let serverSections = null
   if (props.experimentCode) {
-    try {
-      const { data } = await studentExperimentApi.getProgress(props.experimentCode)
-      reportDone.value = !!data?.reportCompleted
-      serverSections = data?.reportSections || null
-    } catch {
-      reportDone.value = false
-    }
+    const data = await refreshGradeProgress()
+    if (session !== props.sessionId || experiment !== props.experimentCode) return
+    serverSections = data?.reportSections || null
   }
   const loadedLocal = loadDraft()
   if (!loadedLocal) applySections(serverSections)
@@ -562,10 +571,12 @@ function currentSectionsPayload() {
 }
 
 async function persistReportToServer() {
-  await studentExperimentApi.completeReport(props.experimentCode, {
+  const session = props.sessionId, experiment = props.experimentCode
+  const { data } = await studentExperimentApi.completeReport(experiment, {
     sessionId: props.sessionId ? Number(props.sessionId) : null,
     sections: currentSectionsPayload()
   })
+  if (session === props.sessionId && experiment === props.experimentCode) applyGradeProgress(data)
 }
 
 async function markReportComplete({ silent = false } = {}) {
@@ -593,7 +604,6 @@ async function downloadDocx() {
     a.download = `${props.experimentName || '实验'}-实验报告.docx`
     a.click()
     URL.revokeObjectURL(url)
-    await markReportComplete({ silent: true })
   } finally {
     exporting.value = false
   }

@@ -8,6 +8,12 @@ import java.util.List;
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class StepConfig {
+    /** Whether the step contributes a teacher-assessed score. */
+    private Boolean assessmentRequired;
+    /** Only explicitly configured checkpoints wait for a teacher before advancing. */
+    private Boolean assessmentBlocking;
+    private Double assessmentMaxScore;
+    private List<String> assessmentCriteria;
     private String title;
     private String desc;
     private String guidePath;

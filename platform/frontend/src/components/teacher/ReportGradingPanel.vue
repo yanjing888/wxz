@@ -10,7 +10,8 @@
     </section>
     <section class="teacher-grade-card">
       <header class="card-heading"><h2>教师批改</h2><button type="button" class="btn-adopt" :disabled="busy || aiScore == null" @click="adoptReview">采用 AI 结果</button></header>
-      <div class="teacher-score-row"><label for="teacher-score">实验得分</label><input id="teacher-score" v-model.number="scoreModel" type="number" min="0" :max="maxScore" step="0.1" placeholder="待评分" :disabled="busy" :aria-invalid="score != null && !canFinish" /><span>/ {{ maxScore }}</span></div>
+      <ProcessScoreSummary :assessment="processAssessment" :report-score="gradingCompleted ? publishedReportScore : null" :overall-score="overallScore" :process-weight="processWeight" />
+      <div class="teacher-score-row"><label for="teacher-score">报告得分</label><input id="teacher-score" v-model.number="scoreModel" type="number" min="0" :max="maxScore" step="0.1" placeholder="待评分" :disabled="busy" :aria-invalid="score != null && !canFinish" /><span>/ {{ maxScore }}</span></div>
       <p v-if="score != null && !canFinish" class="review-error">请输入 0–{{ maxScore }} 之间的分数。</p>
       <label class="field-label" for="teacher-comment">批改意见</label>
       <textarea id="teacher-comment" v-model="commentModel" class="comment-input" placeholder="填写批改意见" :disabled="busy" />
@@ -25,8 +26,13 @@
 
 <script setup>
 import { computed } from 'vue'
+import ProcessScoreSummary from '../experiment/ProcessScoreSummary.vue'
 
 const props = defineProps({
+  processAssessment: Object,
+  overallScore: { type: Number, default: null },
+  publishedReportScore: { type: Number, default: null },
+  processWeight: { type: Number, default: 40 },
   sessionId: { type: [Number, String], default: null },
   score: { type: Number, default: null },
   comment: { type: String, default: '' },

@@ -32,17 +32,6 @@ export const AGENTS = [
     needsSession: false
   },
   {
-    code: 'instrument-reading',
-    name: '读数助手',
-    tagline: '拍照识别刻度读数',
-    desc: '拍游标卡尺、螺旋测微器、读数显微镜，识别读数并讲解读数过程。',
-    group: 'during',
-    icon: '读',
-    tone: 'violet',
-    badge: 'NEW',
-    needsSession: false
-  },
-  {
     code: 'data-doctor',
     name: '数据体检',
     tagline: '这组数据合理吗',

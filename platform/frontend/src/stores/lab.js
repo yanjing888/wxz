@@ -560,7 +560,7 @@ export const useLabStore = defineStore('lab', {
       this.stopEnvTimer()
       const { data } = await sessionApi.start({ experimentCode, studentName, studentClass })
       this.session = data
-      this.activeStep = 1
+      this.activeStep = data.activeStep || 1
       this.resetLabUi()
       persistStoredSessionId(this.session)
       await this.loadSessionData()
@@ -728,14 +728,17 @@ export const useLabStore = defineStore('lab', {
       }
     },
     async selectStep(stepId) {
+      if (!this.session?.id) return
+      if (this.labQaLocked) {
+        if (this.experiment?.steps?.[String(stepId)]) this.activeStep = stepId
+        return
+      }
+      const { data } = await sessionApi.updateStep(this.session.id, stepId)
       this.teardownDevice()
       this.clearComposerDataAttachment()
-      this.activeStep = stepId
+      this.session = data
+      this.activeStep = data.activeStep
       this.dataSubmitErrors = []
-      if (this.session?.id) {
-        const { data } = await sessionApi.updateStep(this.session.id, stepId)
-        this.session = data
-      }
       if (this.useDeviceData) {
         await this.prepareDeviceStep()
       }
@@ -1109,7 +1112,7 @@ export const useLabStore = defineStore('lab', {
         this.composerImagePreview = ''
         const msg = e.response?.data?.message || e.message || '电子显微镜未连接或无法成像，请检查 USB 后重试'
         this.uploadError = msg
-        emitAppAlert('获取成像失败', msg)
+        emitAppAlert('数据采集失败', msg)
         return false
       } finally {
         if (captureId === this.ccdCaptureRunId) this.ccdCaptureBusy = false

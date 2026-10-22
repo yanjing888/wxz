@@ -72,7 +72,8 @@ class LabSessionServiceTest {
                 new ObjectMapper(),
                 mock(PlatformTransactionManager.class),
                 mock(com.wuxiaozhi.repository.MessageFeedbackRepository.class),
-                mock(StudentExperimentAccessService.class)
+                mock(StudentExperimentAccessService.class),
+                mock(ProcessAssessmentService.class)
         );
 
         service.envCheck(12L, null);
@@ -118,7 +119,8 @@ class LabSessionServiceTest {
                 new ObjectMapper(),
                 mock(PlatformTransactionManager.class),
                 mock(com.wuxiaozhi.repository.MessageFeedbackRepository.class),
-                mock(StudentExperimentAccessService.class)
+                mock(StudentExperimentAccessService.class),
+                mock(ProcessAssessmentService.class)
         );
 
         service.envCheck(12L, null);
@@ -192,7 +194,8 @@ class LabSessionServiceTest {
                 new ObjectMapper(),
                 mock(PlatformTransactionManager.class),
                 mock(com.wuxiaozhi.repository.MessageFeedbackRepository.class),
-                mock(StudentExperimentAccessService.class)
+                mock(StudentExperimentAccessService.class),
+                mock(ProcessAssessmentService.class)
         );
 
         AssistRequest request = new AssistRequest();

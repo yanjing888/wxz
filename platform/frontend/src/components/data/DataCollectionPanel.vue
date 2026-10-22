@@ -28,17 +28,7 @@
           :disabled="readOnly || submitting || isComputedField(field) || field.readOnly"
         />
         <span class="field-unit">{{ field.unit || '' }}</span>
-        <button
-          v-if="canUsePhotoAssist(field)"
-          type="button"
-          class="field-photo-btn"
-          :disabled="readOnly || submitting"
-          :title="field.scaleReading ? '拍摄机械刻度并自动识别' : '读数助手：拍刻度识别该字段'"
-          @click="$emit('recognize-field', field)"
-        >
-          {{ field.scaleReading ? '拍刻度' : '读数助手' }}
-        </button>
-        <span v-else-if="isComputedField(field) || field.readOnly" class="field-computed-label">自动计算</span>
+        <span v-if="isComputedField(field) || field.readOnly" class="field-computed-label">自动计算</span>
         <span v-else class="field-empty-label" />
       </div>
 
@@ -84,7 +74,7 @@ const props = defineProps({
   readOnly: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['submit-check', 'save-official', 'recognize-field', 'update:values'])
+const emit = defineEmits(['submit-check', 'save-official', 'update:values'])
 
 const localValues = ref({})
 let syncingFromProps = false
@@ -134,9 +124,6 @@ function isComputedField(field) {
   return !!String(field?.computed || '').trim()
 }
 
-function canUsePhotoAssist(field) {
-  return !isComputedField(field) && !field?.readOnly && field?.photoAssist !== false
-}
 
 function withComputedValues(values) {
   const next = { ...(values || {}) }

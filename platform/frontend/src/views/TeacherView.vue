@@ -38,11 +38,19 @@
         :experiment-code="selectedExpCode"
         @experiment-change="onExperimentChange"
       />
+      <label v-if="teachingTab" class="teaching-class-label">本次教学班
+        <select :value="selectedClass" :disabled="contextLoading || contextBusy || reportBusy" aria-label="本次教学班" @change="onTeachingClassChange($event.target.value)">
+          <option value="">未选择教学班</option><option v-for="name in teachingClasses" :key="name" :value="name">{{ name }}</option>
+        </select>
+      </label>
     </div>
     <p v-if="loadError && experimentContextVisible" class="teacher-load-error" role="alert">{{ loadError }} <button @click="refresh">重试</button></p>
+    <p v-if="teachingTab && contextError" class="teacher-load-error" role="alert">{{ contextError }} <button @click="loadTeachingContext">重试</button></p>
     <!-- ====== 加载/空 ====== -->
     <div v-if="loading && !loadedOnce && !['camera', 'overview'].includes(activeTab)" class="terminal-state">加载中…</div>
     <div v-else-if="!selectedExpCode && !['camera', 'overview'].includes(activeTab)" class="terminal-state">暂无可查看的实验。</div>
+    <div v-else-if="teachingTab && (contextLoading || contextBusy)" class="terminal-state">加载中…</div>
+    <div v-else-if="teachingTab && !selectedClass" class="terminal-state">当前实验未选择教学班</div>
 
     <!-- ====== 内容区 ====== -->
     <div v-else class="terminal-content">
@@ -52,6 +60,7 @@
         <nav class="analysis-menu" aria-label="学情分析菜单">
           <button type="button" :class="{ active: analysisPage === 'overview' }" :aria-pressed="analysisPage === 'overview'" @click="analysisPage = 'overview'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 4h7v7H4zM14 4h6v7h-6zM4 14h7v6H4zM14 14h6v6h-6z" /></svg>学情总览</button>
           <button type="button" :class="{ active: analysisPage === 'learning' }" :aria-pressed="analysisPage === 'learning'" @click="analysisPage = 'learning'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 20h16M7 16V9m5 7V4m5 12v-5" /></svg>学习统计</button>
+          <button type="button" :class="{ active: analysisPage === 'feedback' }" :aria-pressed="analysisPage === 'feedback'" @click="analysisPage = 'feedback'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 0 1-4-.8L3 20l1.3-3.9A7.96 7.96 0 0 1 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8Z" /></svg>问答反馈</button>
         </nav>
         <div class="analysis-content">
       <div v-show="analysisPage === 'overview'" class="tab-panel overview-panel">
@@ -189,29 +198,15 @@
 
               <div class="detail-quick-actions">
                 <button type="button" @click="activeTab = 'camera'">查看摄像头</button>
-                <button type="button" @click="activeTab = 'feedback'; selectedFeedbackUserId = selectedStudent.userId">查看问答反馈</button>
+                <button type="button" @click="analysisPage = 'feedback'; selectedFeedbackUserId = selectedStudent.userId">查看问答反馈</button>
               </div>
             </aside>
           </transition>
         </div>
       </div>
       <div v-if="activeTab === 'overview' && analysisPage === 'learning'" class="tab-panel learning-tab"><TeacherLearningPanel :experiment-code="selectedExpCode" /></div>
-        </div>
-      </div>
-
-      <!-- ========== Tab 2: 学生管理 ========== -->
-      <div v-show="activeTab === 'students'" class="tab-panel student-manage-panel">
-        <StudentManagePanel
-          :experiment-steps="experiments.find(e => e.code === selectedExpCode)?.steps || []"
-          :experiment-code="selectedExpCode"
-          :experiment-name="currentExperimentName"
-          :all-students="students"
-          @refresh="refresh"
-        />
-      </div>
-
       <!-- ========== Tab 3: 问答反馈 ========== -->
-      <div v-show="activeTab === 'feedback'" class="tab-panel">
+      <div v-show="analysisPage === 'feedback'" class="tab-panel">
         <!-- 列表视图 -->
         <template v-if="!selectedFeedbackId">
           <div class="fb-tabs">
@@ -325,22 +320,40 @@
         </template>
       </div>
 
+        </div>
+      </div>
+
+      <!-- ========== Tab 2: 学生管理 ========== -->
+      <div v-show="activeTab === 'students'" class="tab-panel student-manage-panel">
+        <StudentManagePanel
+          :experiment-steps="experiments.find(e => e.code === selectedExpCode)?.steps || []"
+          :experiment-code="selectedExpCode"
+          :experiment-name="currentExperimentName"
+          :all-students="students"
+          @refresh="refresh"
+        />
+      </div>
+
       <!-- ========== Tab 4: 摄像头监控 ========== -->
       <div v-show="activeTab === 'camera'" class="tab-panel camera-tab">
         <TeacherWorkstationMonitor :active="activeTab === 'camera'" />
       </div>
 
+      <div v-show="activeTab === 'process'" class="tab-panel process-tab">
+        <TeacherProcessAssessment v-if="selectedClass" :key="selectedExpCode + '|' + selectedClass" :active="activeTab === 'process' && !loading && !contextBusy" :experiment-code="selectedExpCode" :class-name="selectedClass" />
+      </div>
       <!-- ========== Tab 5: 报告分析 ========== -->
-      <div v-show="activeTab === 'report'" class="tab-panel report-workspace" :class="{ immersive: reportImmersive, 'compact-list': reportCompactList }">
+      <TeacherReportTable v-show="activeTab === 'report' && reportPage === 'list'" :key="selectedExpCode" :rows="reportsByClass.flatMap(group => group.students)" :loading="loading" :exporting="exportingEvaluation" :export-error="exportError" @review="openReportReview" @review-all="openAllReports" @export-grades="exportEvaluation('grades')" @export-reports="exportEvaluation('reports')" @process="openProcessDetail" @download="downloadReportRow" @refresh="refresh" />
+      <div v-show="activeTab === 'report' && reportPage === 'review'" class="tab-panel report-workspace" :class="{ immersive: reportImmersive, 'compact-list': reportCompactList, 'single-review': reviewStudentId != null }">
         <div class="report-workspace-toolbar">
-          <span>{{ submittedReportCount }} 份已提交<span class="toolbar-muted"> / {{ cameraStudents.length }} 条记录</span></span>
+          <button type="button" :disabled="reportBusy" @click="reportPage = 'list'">← 返回评价列表</button><span>{{ reviewStudentId != null ? '单份报告批阅' : '全部报告 · ' + submittedReportCount + ' 份已提交' }}</span>
           <div class="workspace-actions">
-            <button type="button" :aria-pressed="reportCompactList" @click="reportCompactList = !reportCompactList">{{ reportCompactList ? '卡片视图' : '紧凑视图' }}</button>
+            <button v-if="reviewStudentId == null" type="button" :aria-pressed="reportCompactList" @click="reportCompactList = !reportCompactList">{{ reportCompactList ? '卡片视图' : '紧凑视图' }}</button>
             <button type="button" :aria-pressed="reportImmersive" @click="reportImmersive = !reportImmersive">{{ reportImmersive ? '退出沉浸' : '沉浸批改' }}</button>
           </div>
         </div>
         <div class="report-layout">
-          <section class="report-list-section" aria-label="学生报告列表">
+          <section v-if="reviewStudentId == null" class="report-list-section" aria-label="学生报告列表">
             <div class="report-status-tabs" role="group" aria-label="报告状态">
               <button v-for="status in reportStatuses" :key="status.key" type="button" :class="{ active: reportStateFilter === status.key }" :aria-pressed="reportStateFilter === status.key" :disabled="reportBusy" @click="reportStateFilter = status.key">{{ status.label }} <span>{{ status.count }}</span></button>
             </div>
@@ -365,7 +378,7 @@
                     :aria-pressed="!!stu.report && selectedReportId === stu.report.sessionId" @click="selectReportItem(stu.report?.sessionId || stu.sessionId)">
                     <span class="report-student-heading"><strong>{{ stu.studentName }}</strong><span class="report-status-badge" :class="stu.report?.gradingCompleted ? 'graded' : stu.submitted ? 'waiting' : 'unsubmitted'">{{ stu.report?.gradingCompleted ? '已批改' : stu.submitted ? '待批改' : '未提交' }}</span></span>
                     <span class="report-student-id">{{ stu.username || '—' }}</span>
-                    <span class="report-submission-time">{{ stu.submitted ? '提交：' + formatTime(stu.report?.endTime || stu.report?.startTime) : '报告尚未提交' }}</span>
+                    <span class="report-submission-time">{{ stu.submitted ? '提交：' + formatTime(stu.report?.reportSubmittedAt) : '报告尚未提交' }}</span>
                     <span class="report-student-scores"><span>AI 预评 <b>{{ stu.report?.aiReviewScore ?? '—' }}</b></span><span>实验得分 <b>{{ stu.report?.teacherScore ?? '—' }}</b><small>/100</small></span></span>
                   </button>
                 </div>
@@ -379,15 +392,17 @@
                 <div><h2>{{ selectedReportItem.studentName }}</h2><p>{{ selectedReportItem.studentClass }} · {{ selectedReportItem.username || '报告 #' + selectedReportItem.sessionId }}</p></div>
                 <div class="rd-actions"><button type="button" @click="downloadReport(selectedReportItem.sessionId, selectedReportItem.experimentName)">下载报告</button></div>
               </header>
-              <nav class="report-section-nav custom-scroll" aria-label="报告章节">
+              <nav v-if="!selectedReportPreview?.reportFileName" class="report-section-nav custom-scroll" aria-label="报告章节">
                 <button v-for="(section, index) in reportSections" :key="section.key" type="button" :class="{ active: reportActiveSection === section.key }" :aria-current="reportActiveSection === section.key ? 'location' : undefined" :disabled="previewLoading || !selectedReportPreview" @click="goToReportSection(section.key)"><span>{{ index + 1 }}</span>{{ section.label.replace(/^\d+\.\s*/, '') }}</button>
               </nav>
               <div v-if="previewLoading" class="empty-state" role="status">正在读取报告…</div>
-              <div v-else-if="selectedReportPreview" class="rd-body custom-scroll"><StudentReportDocument ref="reportDocument" :report="selectedReportPreview" compact /></div>
+              <div v-else-if="selectedReportPreview" class="rd-body custom-scroll"><ReportFilePreview v-if="selectedReportPreview.reportFileName && reportPage === 'review' && activeTab === 'report'" :session-id="selectedReportId" :file-name="selectedReportPreview.reportFileName" :file-type="selectedReportPreview.reportFileType" /><StudentReportDocument v-else-if="!selectedReportPreview.reportFileName" ref="reportDocument" :report="selectedReportPreview" compact /></div>
               <div v-else class="empty-state">报告读取失败，请<button type="button" @click="loadPreviewReport(selectedReportId)">重试</button>。</div>
             </template>
           </section>
           <ReportGradingPanel v-if="selectedReportItem"
+            :process-assessment="selectedReportPreview?.processAssessment" :overall-score="selectedReportPreview?.overallScore"
+            :published-report-score="selectedReportPreview?.teacherScore" :process-weight="selectedReportPreview?.processScoreWeight ?? 40"
             :session-id="selectedReportItem.sessionId" v-model:score="gradeScore" v-model:comment="gradeComment" :max-score="100"
             :ai-score="aiReviewScore" :ai-comment="aiReviewComment" :review-error="reviewError" :reviewing="reviewingReport" :saving="savingGrade"
             :loading="previewLoading || !selectedReportPreview" :grading-completed="gradingCompleted" :draft-pending="gradeDraftPending"
@@ -416,8 +431,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { experimentApi, teacherApi } from '../api'
 import { REPORT_SECTION_DEFS } from '../utils/sessionReport'
 import { useAuthStore } from '../stores/auth'
@@ -428,10 +443,14 @@ import ReportGradingPanel from '../components/teacher/ReportGradingPanel.vue'
 import StudentManagePanel from '../components/teacher/StudentManagePanel.vue'
 import TeacherWorkstationMonitor from '../components/teacher/TeacherWorkstationMonitor.vue'
 import TeacherLearningPanel from '../components/teacher/TeacherLearningPanel.vue'
+import TeacherProcessAssessment from '../components/teacher/TeacherProcessAssessment.vue'
+import TeacherReportTable from '../components/teacher/TeacherReportTable.vue'
+import ReportFilePreview from '../components/teacher/ReportFilePreview.vue'
 
 const CURRENT_EXP_KEY = 'wxz_teacher_current_exp'
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const userInitial = computed(() => {
   const n = (auth.displayName || auth.username || '').trim()
@@ -448,7 +467,52 @@ const feedbackList = ref([])
 const selectedFeedbackId = ref(null)
 const students = ref([])
 const selectedExpCode = ref('')
-const activeTab = ref('overview')
+const selectedClass = ref(''), teachingClasses = ref([]), contextBusy = ref(false)
+const contextLoading = ref(false), contextError = ref('')
+let contextSequence = 0
+const activeTab = ref(route.query.tab === 'report' ? 'report' : 'overview')
+const reportPage = ref('list')
+const reviewStudentId = ref(null), evaluationClasses = ref([])
+const exportingEvaluation = ref(''), exportError = ref('')
+watch(activeTab, tab => { if (tab === 'report') reportPage.value = 'list' })
+async function openReportReview(row) {
+  if (!row.submitted || reportBusy.value) return
+  reviewStudentId.value = row.report?.sessionId || row.sessionId
+  reportSearch.value = ''; reportClassFilter.value = ''; reportStateFilter.value = 'all'
+  await nextTick()
+  selectReportItem(row.report?.sessionId || row.sessionId)
+  reportPage.value = 'review'
+}
+async function openAllReports() {
+  if (reportBusy.value) return
+  reviewStudentId.value = null
+  reportSearch.value = ''; reportClassFilter.value = ''; reportStateFilter.value = 'all'
+  await nextTick()
+  const pending = reportsByClass.value.flatMap(group => group.students).find(row => row.submitted && !row.report?.gradingCompleted)
+  selectReportItem(pending?.report?.sessionId || reportNavigation.value[0])
+  reportPage.value = 'review'
+}
+async function exportEvaluation(kind) {
+  if (exportingEvaluation.value) return
+  const code = selectedExpCode.value, name = currentExperimentName.value
+  exportingEvaluation.value = kind; exportError.value = ''
+  try {
+    const { data } = await (kind === 'grades' ? teacherApi.exportGrades(code) : teacherApi.exportReports(code))
+    const url = URL.createObjectURL(data), link = document.createElement('a')
+    link.href = url; link.download = `${name}-${kind === 'grades' ? '实验成绩.xlsx' : '全部实验报告.zip'}`; link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch (e) {
+    let message = e.response?.data?.message
+    if (e.response?.data instanceof Blob) { try { message = JSON.parse(await e.response.data.text()).message } catch {} }
+    exportError.value = message || '导出失败，请重试'
+  } finally { exportingEvaluation.value = '' }
+}
+function openProcessDetail(row) {
+  const id = row.report?.sessionId || row.sessionId
+  if (id) router.push({ name: 'teacher-process-detail', params: { sessionId: id } })
+}
+function downloadReportRow(row) { return downloadReport(row.report?.sessionId || row.sessionId, row.report?.experimentName) }
+const teachingTab = computed(() => activeTab.value === 'process')
 const analysisPage = ref('overview')
 const experimentContextVisible = computed(() => activeTab.value !== 'camera')
 const loadError=ref('')
@@ -498,14 +562,14 @@ function selectClassStudent(row){selectedUserId.value=row.userId;selectedStudent
 const filteredReportsByClass = computed(() => reportsByClass.value
   .filter(group => !reportClassFilter.value || group.className === reportClassFilter.value)
   .map(group => ({ ...group, students: group.students.filter(student =>
-    matchesStudent(student, reportSearch.value) && (reportStateFilter.value === 'all' ||
+    (reviewStudentId.value == null || student.report?.sessionId === reviewStudentId.value) && matchesStudent(student, reportSearch.value) && (reportStateFilter.value === 'all' ||
     (reportStateFilter.value === 'pending' && !student.submitted) ||
     (reportStateFilter.value === 'submitted' && student.submitted && !student.report?.gradingCompleted) ||
     (reportStateFilter.value === 'graded' && student.submitted && student.report?.gradingCompleted))
   ).sort((a, b) => {
     const value = student => reportSortField.value === 'name' ? student.studentName || ''
       : reportSortField.value === 'score' ? student.report?.teacherScore ?? -1
-      : timeValue(student.report?.endTime || student.report?.startTime)
+      : timeValue(student.report?.reportSubmittedAt)
     const av = value(a), bv = value(b)
     const comparison = typeof av === 'string' ? av.localeCompare(bv, 'zh-CN') : av - bv
     return reportSortDirection.value === 'asc' ? comparison : -comparison
@@ -557,7 +621,6 @@ const finishedCount = computed(() => overviewStudents.value.filter((s) => s.stat
 
 const studentsByClass = computed(() => {
   const groups = new Map()
-  for (const student of students.value) groups.set(student.studentClass || '未分班', [])
   for (const s of classroomStudents.value) {
     const cls = s.studentClass || '未分班'
     if (!groups.has(cls)) groups.set(cls, [])
@@ -588,20 +651,7 @@ const currentFeedback = computed(() =>
   feedbackList.value.filter((f) => f.experimentCode === selectedExpCode.value)
 )
 
-const cameraStudents = computed(() => {
-  if (classroomStudents.value.length) return classroomStudents.value
-  return students.value
-    .filter((s) => !selectedExpCode.value || (s.assignedExperimentCodes || []).includes(selectedExpCode.value))
-    .map((s) => ({
-      userId: s.userId,
-      username: s.username,
-      studentName: s.displayName || s.username,
-      studentClass: s.studentClass,
-      status: 'NOT_STARTED',
-      stepTitle: '',
-      cameraActive: false
-    }))
-})
+const cameraStudents = computed(() => classroomStudents.value)
 
 const selectedStudent = computed(() =>
   overviewStudents.value.find((s) => s.userId === selectedUserId.value && (!selectedStudentClass.value || s.studentClass === selectedStudentClass.value)) || null
@@ -637,7 +687,7 @@ const selectedFeedbackDetail = computed(() =>
 
 const sortedReports = computed(() =>
   [...currentReports.value].sort((a, b) =>
-    timeValue(b.endTime || b.startTime) - timeValue(a.endTime || a.startTime)
+    timeValue(b.reportSubmittedAt) - timeValue(a.reportSubmittedAt)
   )
 )
 
@@ -647,7 +697,7 @@ const reportsByClass = computed(() => {
     const key = (r.userId || r.studentName)+'|'+(r.studentClass||'未分班')
     reportMap.set(key, r)
   })
-  const allStudents = cameraStudents.value
+  const allStudents = cameraStudents.value.filter(student => evaluationClasses.value.includes(student.studentClass || '未分班'))
   const classMap = new Map()
   allStudents.forEach((s) => {
     const cls = s.studentClass || '未分班'
@@ -656,7 +706,7 @@ const reportsByClass = computed(() => {
     }
     const group = classMap.get(cls)
     const report = reportMap.get(s.userId+'|'+cls)
-    const submitted = !!(s.reportCompleted || report?.reportCompleted)
+    const submitted = !!report?.reportCompleted
     group.students.push({
       ...s,
       report: report || null,
@@ -726,19 +776,18 @@ const navTabs = computed(() => [
     badge: ''
   },
   {
-    key: 'feedback', label: '问答反馈', color: '#10b981',
-    icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 20l1.3-3.9A7.96 7.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
-    iconFill: 'M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 20l1.3-3.9A7.96 7.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
-    badge: unprocessedCount.value ? String(unprocessedCount.value) : ''
-  },
-  {
     key: 'camera', label: '课堂巡视', color: '#f59e0b',
     icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
     iconFill: 'M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
     badge: ''
   },
   {
-    key: 'report', label: '报告分析', color: '#ec4899',
+    key: 'process', label: '过程考核', color: '#4f46e5',
+    icon: 'M9 12l2 2 4-4M5 3h14v18H5z',
+    iconFill: '', badge: ''
+  },
+  {
+    key: 'report', label: '实验评价', color: '#6366f1',
     icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
     iconFill: 'M7 3a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2',
     badge: ''
@@ -768,7 +817,7 @@ async function loadInitial() {
     ])
     experiments.value = expRes.data || []
     students.value = studentRes.data || []
-    const saved = localStorage.getItem(CURRENT_EXP_KEY)
+    const saved = route.query.exp || localStorage.getItem(CURRENT_EXP_KEY)
     selectedExpCode.value = experimentOptions.value.some((e) => e.code === saved)
       ? saved
       : experimentOptions.value[0]?.code || ''
@@ -780,16 +829,20 @@ async function loadInitial() {
 }
 
 async function loadExperimentData() {
-  if (!selectedExpCode.value) return
   const sequence=++teachingLoadSequence
-  const [overviewRes, classroomRes, reportRes, feedbackRes] = await Promise.all([
+  const code = selectedExpCode.value
+  if (!code) return
+  const scope = { experimentCode: code }
+  const [overviewRes, classroomRes, reportRes, feedbackRes, contextRes] = await Promise.all([
     teacherApi.overview(),
-    teacherApi.classroom(requestScope.value),
-    teacherApi.reports(requestScope.value),
-    teacherApi.feedback({ experimentCode: selectedExpCode.value })
+    teacherApi.classroom(scope),
+    teacherApi.reports(scope),
+    teacherApi.feedback(scope),
+    teacherApi.teachingContext(code)
   ])
   if(sequence!==teachingLoadSequence)return
   overview.value = overviewRes.data
+  evaluationClasses.value = contextRes.data.classes || []
   classroom.value = classroomRes.data
   reports.value = reportRes.data || []
   feedbackList.value = feedbackRes.data || []
@@ -799,6 +852,42 @@ async function loadExperimentData() {
   if (!visibleIds.includes(selectedReportId.value)) selectedReportId.value = visibleIds[0] || null
   await loadPreviewReport(selectedReportId.value)
 }
+
+function clearTeachingData() {
+  rememberGradeDraft(selectedReportId.value)
+  previewSequence++
+  classroom.value = null; reports.value = []; feedbackList.value = []; overview.value = null
+  selectedUserId.value = null; selectedStudentClass.value = ''; selectedFeedbackId.value = null
+  selectedReportId.value = null; selectedReportPreview.value = null; reportClassFilter.value = ''
+  selectedReport.value = null; selectedReportSessionId.value = null; reportVisible.value = false
+}
+
+async function onTeachingClassChange(name) {
+  if (contextBusy.value || contextLoading.value || reportBusy.value) return
+  const code = selectedExpCode.value
+  contextBusy.value = true; contextError.value = ''; selectedClass.value = ''
+  try {
+    await teacherApi.selectTeachingClass(code, name)
+    if (code === selectedExpCode.value) await loadTeachingContext()
+  } catch (e) { contextError.value = e.response?.data?.message || '教学班切换失败，请重试' }
+  finally { contextBusy.value = false }
+}
+
+async function loadTeachingContext() {
+  const run = ++contextSequence, code = selectedExpCode.value
+  selectedClass.value = ''; teachingClasses.value = []; contextError.value = ''
+  contextLoading.value = true
+  try {
+    if (!code) return
+    const { data } = await teacherApi.teachingContext(code)
+    if (run !== contextSequence || code !== selectedExpCode.value) return
+    teachingClasses.value = data.classes || []; selectedClass.value = data.className || ''
+  } catch (e) { if (run === contextSequence) contextError.value = e.response?.data?.message || '教学班加载失败，请重试' }
+  finally { if (run === contextSequence) contextLoading.value = false }
+}
+watch(selectedExpCode, loadTeachingContext)
+watch(activeTab, tab => { if (tab === 'process') loadTeachingContext() })
+onUnmounted(() => { contextSequence++; teachingLoadSequence++; previewSequence++ })
 
 async function refresh() {
   loading.value = true;loadError.value=''
@@ -812,22 +901,28 @@ async function refresh() {
 }
 
 async function onExperimentChange(code) {
+  if (contextBusy.value || reportBusy.value) return
   if (code) selectedExpCode.value = code
+  reviewStudentId.value = null; exportError.value = ''; evaluationClasses.value = []
+  reportPage.value = 'list'
   localStorage.setItem(CURRENT_EXP_KEY, selectedExpCode.value)
   rememberGradeDraft(selectedReportId.value)
   reportClassFilter.value = ''
   selectedUserId.value = null
   selectedReportId.value = null
   selectedReportPreview.value = null
+  clearTeachingData()
   loading.value = true
   try {
     await loadExperimentData()
+  } catch (e) { loadError.value = e.response?.data?.message || '教学数据加载失败，请重试'
   } finally {
     loading.value = false
   }
 }
 
 function selectReportItem(sessionId) {
+  if (reviewStudentId.value != null && sessionId !== reviewStudentId.value) return
   if (reportBusy.value || sessionId === selectedReportId.value || !sessionId) return
   rememberGradeDraft(selectedReportId.value)
   selectedReportId.value = sessionId
@@ -963,6 +1058,7 @@ async function finishGrade() {
       comment: gradeComment.value || ''
     })
     if (sessionId === selectedReportId.value) {
+      selectedReportPreview.value = data
       applyGradeFromReport(data)
       gradingCompleted.value = true
     }
@@ -976,16 +1072,19 @@ async function finishGrade() {
 }
 
 async function downloadReport(sessionId, experimentName) {
-  const { data } = await teacherApi.reportDocx(sessionId)
-  const blob = new Blob([data], {
+  try {
+  const report = reports.value.find(item => item.sessionId === sessionId)
+  const { data } = report?.reportFileName ? await teacherApi.reportFile(sessionId) : await teacherApi.reportDocx(sessionId)
+  const blob = report?.reportFileName ? data : new Blob([data], {
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `实验报告-${experimentName || currentExperimentName.value || '实验'}.docx`
+  a.download = report?.reportFileName || `实验报告-${experimentName || currentExperimentName.value || '实验'}.docx`
   a.click()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch { loadError.value = '报告下载失败，请重试' }
 }
 
 async function downloadSelectedReport() {
@@ -1062,6 +1161,8 @@ function logout() {
 </script>
 
 <style scoped>
+.report-workspace.single-review .report-layout{grid-template-columns:minmax(0,2fr) minmax(310px,1fr);max-width:1440px;width:100%;margin:0 auto}.single-review :deep(.grade-panel){grid-column:auto}@media(max-width:768px){.report-workspace.single-review .report-layout{display:flex}}
+.teaching-class-label{display:flex;align-items:center;gap:10px;font-size:12px;color:#64748b;margin-left:16px}.teaching-class-label select{min-width:180px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:7px 10px;color:#334155;font-size:12px}.teaching-class-label select:disabled{opacity:.6}@media(max-width:700px){.experiment-context{flex-wrap:wrap}.teaching-class-label{margin-left:0}}
 .teacher-terminal {
   height: 100vh;
   overflow: hidden;
@@ -1153,6 +1254,7 @@ function logout() {
 .terminal-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 .tab-panel { height: 100%; overflow: hidden; display: flex; flex-direction: column; padding: 14px 24px 20px; }
 .tab-panel:has(.report-layout) { padding: 0; }
+.tab-panel.process-tab { padding: 0; }
 .tab-panel.learning-tab{padding:0}
 .analysis-shell{flex:1;min-height:0;display:grid;grid-template-columns:156px minmax(0,1fr);overflow:hidden;background:#f8fafc}
 .analysis-menu{display:flex;flex-direction:column;gap:7px;padding:18px 12px;border-right:1px solid #e4e9f3;background:#fff}

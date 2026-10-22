@@ -19,6 +19,9 @@ public class ExperimentProgressDto {
     /** CURRENT | QUEUED | REPORT_PENDING | SUBMITTED | GRADED */
     private String taskState;
     private Double teacherScore;
+    private Map<String, Object> processAssessment;
+    private Double processScoreWeight;
+    private Double overallScore;
     private String teacherComment;
     private boolean gradingCompleted;
     private java.time.LocalDateTime reportUpdatedAt;
@@ -38,6 +41,10 @@ public class ExperimentProgressDto {
     /** 已点击「结束实验」，实验台仅可查看历史对话 */
     private boolean labCompleted;
     private boolean reportCompleted;
+    private java.time.LocalDateTime reportSubmittedAt;
+    private String reportFileName;
+    private String reportFileType;
+    private Long reportFileSize;
     private boolean recapCompleted;
     private Map<String, String> reportSections = new LinkedHashMap<>();
     private List<ExperimentStepProgressDto> steps = new ArrayList<>();

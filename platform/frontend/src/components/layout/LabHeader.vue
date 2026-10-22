@@ -21,28 +21,6 @@
 
       <template v-if="!sessionFinished">
         <button
-          v-if="experimentCode"
-          type="button"
-          class="btn-ghost px-2.5 py-1.5 rounded-lg text-xs font-semibold relative"
-          title="暂未开放"
-          @click="showComingSoon"
-        >
-          资料
-          <span class="coming-soon-badge">暂未开放</span>
-        </button>
-
-        <button
-          v-if="experimentCode"
-          type="button"
-          class="btn-ghost px-2.5 py-1.5 rounded-lg text-xs font-semibold relative"
-          title="暂未开放"
-          @click="showComingSoon"
-        >
-          复盘
-          <span class="coming-soon-badge">暂未开放</span>
-        </button>
-
-        <button
           type="button"
           class="btn-ghost flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold btn-active-scale"
           title="实验数据速览"
@@ -57,7 +35,8 @@
         <button
           type="button"
           class="btn-brand flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold"
-          title="结束本次实验并生成当堂小结"
+          :disabled="!canFinish"
+          :title="canFinish ? '结束本次实验并生成当堂小结' : '请先提交全部步骤的检查材料，并通过关键检查点'"
           @click="$emit('report')"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -74,28 +53,14 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  experimentCode: { type: String, default: '' },
   envLevel: { type: String, default: 'L0' },
   difyStatus: { type: Object, default: null },
   difyStatusLoading: { type: Boolean, default: false },
+  canFinish: { type: Boolean, default: false },
   sessionFinished: { type: Boolean, default: false }
 })
 
 defineEmits(['quick-stats', 'report'])
-
-function showComingSoon(e) {
-  const btn = e.currentTarget
-  const badge = btn.querySelector('.coming-soon-badge')
-  if (!badge) return
-  const rect = btn.getBoundingClientRect()
-  badge.style.top = `${rect.bottom + 8}px`
-  badge.style.left = `${rect.left + rect.width / 2}px`
-  badge.classList.add('show')
-  clearTimeout(btn._comingSoonTimer)
-  btn._comingSoonTimer = setTimeout(() => {
-    badge.classList.remove('show')
-  }, 1800)
-}
 
 const envLevelLabel = computed(() => (props.envLevel === 'NA' ? '不可用' : props.envLevel))
 
@@ -169,35 +134,6 @@ const difyStatusTitle = computed(() => {
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
-}
-
-.coming-soon-badge {
-  position: fixed;
-  z-index: 9999;
-  white-space: nowrap;
-  background: #1e293b;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 5px 12px;
-  border-radius: 6px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  transform: translateX(-50%);
-}
-.coming-soon-badge.show {
-  opacity: 1;
-}
-.coming-soon-badge::after {
-  content: '';
-  position: absolute;
-  top: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-bottom-color: #1e293b;
 }
 
 .finished-badge {

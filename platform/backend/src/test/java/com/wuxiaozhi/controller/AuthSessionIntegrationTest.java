@@ -209,6 +209,7 @@ class AuthSessionIntegrationTest extends MySqlIntegrationTestSupport {
 
         long aNewton = startSession(authA, "newton_rings", "Student A").get("id").asLong();
         startSession(authA, "newton_rings", "Student A");
+        completeProcessFixture(aNewton);
         mockMvc.perform(post("/api/sessions/" + aNewton + "/finish")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + authA.get("token").asText()))
                 .andExpect(status().isOk());
@@ -275,6 +276,7 @@ class AuthSessionIntegrationTest extends MySqlIntegrationTestSupport {
 
         long finishedId = startSession(auth, "newton_rings", "Student A").get("id").asLong();
         saveChatMessage(finishedId, "How do I start?");
+        completeProcessFixture(finishedId);
         mockMvc.perform(post("/api/sessions/{sessionId}/finish", finishedId)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + auth.get("token").asText()))
                 .andExpect(status().isOk())

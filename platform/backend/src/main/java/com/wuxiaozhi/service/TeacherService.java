@@ -35,6 +35,7 @@ public class TeacherService {
 
     private final UserRepository userRepository;
     private final ClassRosterService roster;
+    private final ProcessAssessmentService processAssessment;
     private final LabSessionRepository sessionRepository;
     private final MessageFeedbackRepository feedbackRepository;
     private final StudentExperimentAssignmentRepository assignmentRepository;
@@ -50,6 +51,7 @@ public class TeacherService {
     private final DifyService difyService;
     private final ObjectMapper objectMapper;
     private final PasswordEncoder passwordEncoder;
+    private final ReportAttachmentService reportAttachments;
 
     public TeacherService(UserRepository userRepository,
                           LabSessionRepository sessionRepository,
@@ -66,9 +68,11 @@ public class TeacherService {
                           AiToolCatalogService aiToolCatalogService,
                           DifyService difyService,
                           ObjectMapper objectMapper,
-                          PasswordEncoder passwordEncoder, ClassRosterService roster) {
+                          PasswordEncoder passwordEncoder, ClassRosterService roster, ProcessAssessmentService processAssessment,
+                          ReportAttachmentService reportAttachments) {
         this.userRepository = userRepository;
         this.roster=roster;
+        this.processAssessment = processAssessment;
         this.sessionRepository = sessionRepository;
         this.feedbackRepository = feedbackRepository;
         this.assignmentRepository = assignmentRepository;
@@ -84,6 +88,7 @@ public class TeacherService {
         this.difyService = difyService;
         this.objectMapper = objectMapper;
         this.passwordEncoder = passwordEncoder;
+        this.reportAttachments = reportAttachments;
     }
 
     public User requireTeacher(Long userId) {
@@ -143,11 +148,18 @@ public class TeacherService {
                 .filter(progress->progress.getReportSessionId()==null||sessionId.equals(progress.getReportSessionId()))
                 .ifPresent(progress -> {
                     data.put("reportCompleted", progress.isReportCompleted());
+                    data.put("reportSubmittedAt", progress.getReportSubmittedAt());
+                    data.put("reportFileName", progress.getReportFileName());
+                    data.put("reportFileType", progress.getReportFileType());
+                    data.put("reportFileSize", progress.getReportFileSize());
                     data.put("studentReportSections", readReportSections(progress.getReportSectionsJson()));
                     data.put("aiReviewScore", progress.aiReviewScoreAsPercent());
                     data.put("aiReviewComment", progress.getAiReviewComment());
                     data.put("aiReviewJson", parseJsonObject(progress.getAiReviewJson()));
                     data.put("teacherScore", progress.teacherScoreAsPercent());
+                    data.put("processScoreWeight", processAssessment.processWeight(session.getExperimentCode()));
+                    data.put("overallScore", processAssessment.overallScore(processAssessment.summary(session),
+                            Boolean.TRUE.equals(progress.getGradingCompleted()) ? progress.teacherScoreAsPercent() : null, session.getExperimentCode()));
                     data.put("maxScore", 100);
                     data.put("teacherComment", progress.getTeacherComment());
                     data.put("gradingCompleted", Boolean.TRUE.equals(progress.getGradingCompleted()));
@@ -205,7 +217,7 @@ public class TeacherService {
     private String assignmentClass(StudentExperimentAssignment a,User u){return a.getClassName()==null||a.getClassName().isBlank()?ClassRosterService.classKey(u.getStudentClass()):a.getClassName();}
 
     /** Read-only compatibility for legacy sessions that did not save a class. */
-    private String resolvedSessionClass(LabSession session) {
+    public String resolvedSessionClass(LabSession session) {
         String saved = ClassRosterService.classKey(session.getStudentClass());
         if (!"未分班".equals(saved)) return saved;
         var student = userRepository.findById(session.getUserId()).orElse(null);
@@ -294,6 +306,7 @@ public class TeacherService {
         row.setExperimentCode(session.getExperimentCode());
         row.setExperimentName(session.getExperimentName());
         row.setSessionId(session.getId());
+        row.setProcessScore((Double) processAssessment.summary(session).get("score"));
         row.setStatus(session.getStatus());
         row.setActiveStep(session.getActiveStep());
         row.setHelpCount(session.getHelpCount());
@@ -408,9 +421,14 @@ public class TeacherService {
             }
         }
         try {
-            byte[] docx = getReportDocx(teacher, sessionId);
+            byte[] docx;
             String safeName = (experimentName.isBlank() ? "实验报告" : experimentName).replaceAll("[\\\\/:*?\"<>|]", "_");
-            String fileId = difyService.uploadDocument(docx, safeName + ".docx", userId, "report-review");
+            String filename = safeName + ".docx";
+            if (report.get("reportFileName") != null) {
+                docx = reportAttachments.read(getSessionForTeacher(teacher, sessionId)).getData();
+                filename = String.valueOf(report.get("reportFileName"));
+            } else docx = getReportDocx(teacher, sessionId);
+            String fileId = difyService.uploadDocument(docx, filename, userId, "report-review");
             inputs.put("student_report_file", difyService.documentFileRef(fileId));
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "学生报告文件上传失败，无法预评");
@@ -808,6 +826,9 @@ public class TeacherService {
         dto.setStatus(session.getStatus());
         dto.setStartTime(session.getStartTime());
         dto.setEndTime(session.getEndTime());
+        dto.setReportSubmittedAt(progress != null ? progress.getReportSubmittedAt() : null);
+        dto.setReportFileName(progress != null ? progress.getReportFileName() : null);
+        dto.setProcessScore((Double) processAssessment.summary(session).get("score"));
         dto.setHelpCount(session.getHelpCount());
         dto.setErrorPointCount(session.getErrorPointCount());
         dto.setReportCompleted(progress != null && progress.isReportCompleted());

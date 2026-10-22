@@ -124,6 +124,7 @@ class WorkstationIntegrationTest extends MySqlIntegrationTestSupport {
         // Browser/teacher refresh does not release students.
         call("GET","/api/workstations/terminal",student,terminalKey,null,200);
         assertThat(uses.findByStationIdAndEndedAtIsNull(stationId)).hasSize(2);
+        completeProcessFixture(sessionId);
         call("POST","/api/sessions/"+sessionId+"/finish",student,null,null,200);
         assertThat(uses.findByStationIdAndEndedAtIsNull(stationId)).extracting(WorkstationUse::getUserId).containsExactly(peer.getId());
         call("DELETE","/api/teacher/workstations/lesson?experimentCode="+CODE,admin,null,null,200);

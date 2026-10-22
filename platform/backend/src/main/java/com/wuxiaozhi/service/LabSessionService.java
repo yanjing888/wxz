@@ -57,6 +57,7 @@ public class LabSessionService {
     private final TransactionTemplate transactionTemplate;
     private final MessageFeedbackRepository messageFeedbackRepository;
     private final StudentExperimentAccessService accessService;
+    private final ProcessAssessmentService processAssessment;
 
     public LabSessionService(LabSessionRepository sessionRepository,
                              ChatMessageRepository chatMessageRepository,
@@ -71,7 +72,7 @@ public class LabSessionService {
                              ObjectMapper objectMapper,
                              PlatformTransactionManager transactionManager,
                              MessageFeedbackRepository messageFeedbackRepository,
-                             StudentExperimentAccessService accessService) {
+                             StudentExperimentAccessService accessService, ProcessAssessmentService processAssessment) {
         this.sessionRepository = sessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.correctionLogRepository = correctionLogRepository;
@@ -86,6 +87,7 @@ public class LabSessionService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.messageFeedbackRepository = messageFeedbackRepository;
         this.accessService = accessService;
+        this.processAssessment = processAssessment;
     }
 
     @Transactional
@@ -109,7 +111,7 @@ public class LabSessionService {
         session.setExperimentName(exp.getName());
         session.setStudentName(req.getStudentName().trim());
         session.setStudentClass(userId!=null&&userId>GUEST_USER_ID?accessService.assignmentClass(userId,exp.getCode()):(req.getStudentClass() != null ? req.getStudentClass().trim() : ""));
-        session.setActiveStep(1);
+        session.setActiveStep(processAssessment.resumeStep(session));
         session.setStatus("ACTIVE");
         return sessionRepository.save(session);
     }
@@ -196,6 +198,8 @@ public class LabSessionService {
     @Transactional
     public LabSession updateStep(Long sessionId, int stepId) {
         LabSession session = getSession(sessionId);
+        assertLabChatOpen(session);
+        processAssessment.requireAccessible(session, stepId);
         session.setActiveStep(stepId);
         return sessionRepository.save(session);
     }
@@ -203,6 +207,8 @@ public class LabSessionService {
     @Transactional
     public LabSession updateStep(Long sessionId, Long userId, int stepId) {
         LabSession session = getSession(sessionId, userId);
+        assertLabChatOpen(session);
+        processAssessment.requireAccessible(session, stepId);
         session.setActiveStep(stepId);
         return sessionRepository.save(session);
     }
@@ -490,6 +496,7 @@ public class LabSessionService {
         Long sessionId = session.getId();
         ExperimentConfig exp = experimentConfigService.getByCode(session.getExperimentCode());
         int stepId = req.getStepId() != null ? req.getStepId() : session.getActiveStep();
+        processAssessment.requireAccessible(session, stepId);
         StepConfig step = resolveStep(exp, stepId);
 
         if (!isDataStep(exp, step)) {
@@ -891,6 +898,7 @@ public class LabSessionService {
         putExperimentInputs(inputs, exp.getName(), exp.getCode());
 
         int stepId = resolveAssistStepId(session, req);
+        processAssessment.requireAccessible(session, stepId);
         if (session.getActiveStep() != stepId) {
             session.setActiveStep(stepId);
             sessionRepository.save(session);
@@ -1114,6 +1122,7 @@ public class LabSessionService {
     }
 
     private LabSession finishSession(LabSession session) {
+        if (!"FINISHED".equals(session.getStatus())) processAssessment.requireFinished(session);
         session.setStatus("FINISHED");
         session.setEndTime(LocalDateTime.now());
         session.setCameraActive(false);
@@ -1173,6 +1182,7 @@ public class LabSessionService {
 
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("sessionId", sessionId);
+        report.put("processAssessment", processAssessment.summary(session));
         report.put("experimentCode", session.getExperimentCode());
         report.put("experimentName", session.getExperimentName());
         report.put("studentName", session.getStudentName());

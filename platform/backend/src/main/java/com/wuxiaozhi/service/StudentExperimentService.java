@@ -47,6 +47,7 @@ public class StudentExperimentService {
     private final SessionDataLogRepository sessionDataLogRepository;
     private final StudentExperimentAccessService accessService;
     private final ObjectMapper objectMapper;
+    private final ProcessAssessmentService processAssessment;
 
     public StudentExperimentService(ExperimentConfigService experimentConfigService,
                                     StudentExperimentAssignmentRepository assignmentRepository,
@@ -54,7 +55,7 @@ public class StudentExperimentService {
                                     LabSessionRepository sessionRepository,
                                     SessionDataLogRepository sessionDataLogRepository,
                                     StudentExperimentAccessService accessService,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper, ProcessAssessmentService processAssessment) {
         this.experimentConfigService = experimentConfigService;
         this.assignmentRepository = assignmentRepository;
         this.progressRepository = progressRepository;
@@ -62,6 +63,7 @@ public class StudentExperimentService {
         this.sessionDataLogRepository = sessionDataLogRepository;
         this.accessService = accessService;
         this.objectMapper = objectMapper;
+        this.processAssessment = processAssessment;
     }
 
     public List<ExperimentProgressDto> listAssignedProgress(Long userId) {
@@ -138,7 +140,7 @@ public class StudentExperimentService {
         if(request==null||request.getSections()==null||!hasReportText(request.getSections()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请填写实验报告内容后再提交");
         StudentExperimentProgress progress = progressRepository.findByUserIdAndExperimentCode(userId, experimentCode)
                 .orElseGet(() -> newProgress(userId, experimentCode));
-        if(progress.isReportCompleted()&&hasReportText(readReportSections(progress)))return getProgress(userId,experimentCode);
+        if(progress.isReportCompleted()&&(progress.getReportFileUrl()!=null||hasReportText(readReportSections(progress))))return getProgress(userId,experimentCode);
         if(!progress.isReportCompleted()){
             progress.setGradingCompleted(false);
             progress.setTeacherScore(null);
@@ -146,6 +148,7 @@ public class StudentExperimentService {
             progress.setGradingAt(null);
         }
         progress.setReportCompleted(true);
+        progress.setReportSubmittedAt(LocalDateTime.now());
         progress.setReportSessionId(reportSession.getId());
         if (request != null) {
             if (request.getSessionId() != null) {
@@ -277,9 +280,23 @@ public class StudentExperimentService {
         dto.setSimulationUrl(simulationRequired ? simulation.getUrl().trim() : null);
         dto.setLabCompleted(labDone);
         dto.setReportCompleted(reportDone);
+        if (progress != null) {
+            dto.setReportSubmittedAt(progress.getReportSubmittedAt());
+            dto.setReportFileName(progress.getReportFileName());
+            dto.setReportFileType(progress.getReportFileType());
+            dto.setReportFileSize(progress.getReportFileSize());
+        }
         dto.setRecapCompleted(recapDone);
         dto.setReportSections(readReportSections(progress));
         dto.setSteps(buildSteps(statuses));
+        LabSession processSession = finished != null ? finished : active;
+        if (processSession != null) {
+            var assessment = processAssessment.summary(processSession);
+            dto.setProcessAssessment(assessment);
+            dto.setProcessScoreWeight(processAssessment.processWeight(code));
+            dto.setOverallScore(processAssessment.overallScore(assessment,
+                    progress != null && Boolean.TRUE.equals(progress.getGradingCompleted()) ? progress.teacherScoreAsPercent() : null, code));
+        }
         return dto;
     }
 

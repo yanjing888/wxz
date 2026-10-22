@@ -16,6 +16,12 @@
   "steps": {
     "1": {
       "title": "仪器摆放与光路装调",
+      "assessmentRequired": true,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "仪器和牛顿环组件摆放稳定、位置正确",
+        "光路调整正确，视场亮度均匀"
+      ],
       "correctionMode": "vision",
       "assistMock": {
         "errorType": "光路装调",
@@ -30,6 +36,13 @@
     },
     "2": {
       "title": "目镜视度调节与粗调成像",
+      "assessmentRequired": true,
+      "assessmentMaxScore": 25,
+      "assessmentCriteria": [
+        "十字丝调节清晰",
+        "环纹清晰、中心定位合理",
+        "调焦操作规范，避免碰撞"
+      ],
       "correctionMode": "vision",
       "dataFields": [
         {
@@ -78,6 +91,13 @@
     },
     "3": {
       "title": "暗环直径测量",
+      "assessmentRequired": true,
+      "assessmentMaxScore": 35,
+      "assessmentCriteria": [
+        "暗环级数选择及左右读数方法正确",
+        "测量操作规范，注意回程误差",
+        "原始数据记录完整，单位与有效数字规范"
+      ],
       "correctionMode": "data",
       "dataSource": "image",
       "deviceType": "reading_microscope",
@@ -101,6 +121,12 @@
     },
     "4": {
       "title": "曲率半径计算",
+      "assessmentRequired": true,
+      "assessmentMaxScore": 10,
+      "assessmentCriteria": [
+        "按实验要求计算曲率半径",
+        "计算过程、单位和结果记录规范"
+      ],
       "correctionMode": "data",
       "dataSource": "image",
       "dataFields": [
@@ -123,6 +149,12 @@
     },
     "5": {
       "title": "实验结束整理",
+      "assessmentRequired": true,
+      "assessmentMaxScore": 10,
+      "assessmentCriteria": [
+        "仪器按要求复位",
+        "实验台面整理到位"
+      ],
       "correctionMode": "vision",
       "assistMock": {
         "errorType": "收纳复原",
