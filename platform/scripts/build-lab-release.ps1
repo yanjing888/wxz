@@ -39,7 +39,9 @@ try {
     if (-not $StagingDirectory) {
         $outputDirectory = Join-Path $ProjectRoot 'dist'
         New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
-        $zip = Join-Path $outputDirectory ('lab-release-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.zip')
+        $releaseTime = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTimeOffset]::UtcNow, 'China Standard Time').ToString('yyyyMMddHHmm')
+        $zip = Join-Path $outputDirectory ('wuxiaozhi-' + $releaseTime + '.zip')
+        if (Test-Path -LiteralPath $zip) { throw "A package already exists for this minute: $zip. Retry in the next minute." }
         $pendingZip = Join-Path $temporaryRoot 'package.zip'
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         [IO.Compression.ZipFile]::CreateFromDirectory($release, $pendingZip)
