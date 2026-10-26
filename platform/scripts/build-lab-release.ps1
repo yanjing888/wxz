@@ -37,14 +37,15 @@ try {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'scripts/start-lab-release.sh') -Destination (Join-Path $release 'start.sh')
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'scripts/stop-lab-release.ps1') -Destination (Join-Path $release 'stop.ps1')
     if (-not $StagingDirectory) {
-        $outputDirectory = Join-Path $ProjectRoot 'dist'
+        $outputDirectory = Join-Path (Split-Path -Parent $ProjectRoot) 'dist'
         New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
+        & (Join-Path $ProjectRoot 'scripts/filter-release-config.ps1') -ReleaseDirectory $release -ArchiveDirectory $outputDirectory -ServiceName 'platform'
         $releaseTime = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTimeOffset]::UtcNow, 'China Standard Time').ToString('yyyyMMddHHmm')
         $zip = Join-Path $outputDirectory ('wuxiaozhi-' + $releaseTime + '.zip')
         if (Test-Path -LiteralPath $zip) { throw "A package already exists for this minute: $zip. Retry in the next minute." }
         $pendingZip = Join-Path $temporaryRoot 'package.zip'
         Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [IO.Compression.ZipFile]::CreateFromDirectory($release, $pendingZip)
+        [IO.Compression.ZipFile]::CreateFromDirectory($release, $pendingZip, [IO.Compression.CompressionLevel]::Optimal, $true)
         [IO.File]::Move($pendingZip, $zip)
         Write-Host "Archive: $zip"
     }

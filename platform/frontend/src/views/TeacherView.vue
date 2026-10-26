@@ -348,6 +348,9 @@
         <div class="report-workspace-toolbar">
           <button type="button" :disabled="reportBusy" @click="reportPage = 'list'">← 返回评价列表</button><span>{{ reviewStudentId != null ? '单份报告批阅' : '全部报告 · ' + submittedReportCount + ' 份已提交' }}</span>
           <div class="workspace-actions">
+            <nav v-if="reviewStudentId == null && reportNavigation.length > 1" class="report-pagination" aria-label="切换报告">
+              <button type="button" :disabled="reportBusy || previewLoading || reportSelectionIndex <= 0" @click="navigateReport(-1)">上一份</button><span>{{ reportSelectionIndex + 1 }} / {{ reportNavigation.length }}</span><button type="button" :disabled="reportBusy || previewLoading || reportSelectionIndex < 0 || reportSelectionIndex >= reportNavigation.length - 1" @click="navigateReport(1)">下一份</button>
+            </nav>
             <button v-if="reviewStudentId == null" type="button" :aria-pressed="reportCompactList" @click="reportCompactList = !reportCompactList">{{ reportCompactList ? '卡片视图' : '紧凑视图' }}</button>
             <button type="button" :aria-pressed="reportImmersive" @click="reportImmersive = !reportImmersive">{{ reportImmersive ? '退出沉浸' : '沉浸批改' }}</button>
           </div>
@@ -406,8 +409,7 @@
             :session-id="selectedReportItem.sessionId" v-model:score="gradeScore" v-model:comment="gradeComment" :max-score="100"
             :ai-score="aiReviewScore" :ai-comment="aiReviewComment" :review-error="reviewError" :reviewing="reviewingReport" :saving="savingGrade"
             :loading="previewLoading || !selectedReportPreview" :grading-completed="gradingCompleted" :draft-pending="gradeDraftPending"
-            :has-previous="reportSelectionIndex > 0" :has-next="reportSelectionIndex >= 0 && reportSelectionIndex < reportNavigation.length - 1"
-            @ai-review="runAiReviewInPlace" @finish="finishGrade" @previous="navigateReport(-1)" @next="navigateReport(1)" />
+            @ai-review="runAiReviewInPlace" @finish="finishGrade" />
           <aside v-else class="report-grade-empty empty-state">选择报告后开始批改</aside>
         </div>
       </div>
@@ -1728,9 +1730,10 @@ function logout() {
 /* Report review: roster, document and grading remain independently scrollable. */
 .report-workspace { background: #f8fafc; min-height: 0; }
 .report-workspace.immersive { position: fixed; inset: 0; z-index: 60; height: 100dvh; }
+.report-pagination{display:flex;align-items:center;gap:8px;margin-right:8px}.report-pagination span{font-variant-numeric:tabular-nums;color:#64748b;white-space:nowrap}
 .report-workspace-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 18px; color: #475569; font-size: 12px; flex-shrink: 0; background: #fff; border-bottom: 1px solid #e4e9f3; }
 .toolbar-muted { color: #94a3b8; }
-.workspace-actions { display: flex; gap: 8px; }
+.workspace-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .workspace-actions button { height: 30px; border: 1px solid #e4e9f3; border-radius: 6px; background: #fff; padding: 0 12px; color: #64748b; font-size: 12px; }
 .workspace-actions button[aria-pressed="true"] { color: #4f46e5; border-color: #c7d2fe; background: #eef2ff; }
 .report-workspace .report-layout { grid-template-columns: minmax(260px, .8fr) minmax(0, 1.8fr) minmax(310px, 1fr); gap: 14px; padding: 16px; overflow: hidden; }
