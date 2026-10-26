@@ -66,6 +66,7 @@ try {
 } catch {}
 let lab,
   busy = false,
+  explodedPreview = false,
   toastTimer,
   labels = true,
   notified = false;
@@ -152,7 +153,9 @@ function selectUnit(raw, context = {}) {
       : "待安装"
     : "已装调节机构";
   $("partDescription").textContent = unit.description;
-  $("partTip").textContent = inChallenge()
+  $("partTip").textContent = explodedPreview
+    ? "旋转或缩放观察组件位置；点击“返回装配图”继续操作。"
+    : inChallenge()
     ? "请独立观察视场进行调整。本轮不提供最佳位置提示。"
     : unit.tip;
   $("partsList")
@@ -160,6 +163,7 @@ function selectUnit(raw, context = {}) {
     .forEach((b) => b.classList.toggle("active", b.dataset.unit === id));
   renderControl();
   if (
+    !explodedPreview &&
     context.source === "model" &&
     id === "baseMirror" &&
     state.stage !== 2 &&
@@ -172,7 +176,7 @@ function selectUnit(raw, context = {}) {
   save();
 }
 function change(key, value, source = "控件") {
-  if (busy || state.stage === 2 || state.stage === 4) return;
+  if (busy || explodedPreview || state.stage === 2 || state.stage === 4) return;
   state.optics[key] = value;
   if (state.stage === 1) state.guidePassed = false;
   if (inChallenge()) {
@@ -216,7 +220,7 @@ let activeGesture = null,
   activeRaw = "";
 function interact(raw, event) {
   const id = UNIT_BY_ID[raw] ? raw : RAW_TO_UNIT[raw];
-  if (!id || busy || state.stage === 2 || state.stage === 4) return false;
+  if (!id || busy || explodedPreview || state.stage === 2 || state.stage === 4) return false;
   if (!installed(id)) {
     if (state.stage !== 0) return false;
     if (event.phase === "start") {
@@ -321,6 +325,7 @@ function adjust(raw, direction, event) {
   const id = UNIT_BY_ID[raw] ? raw : RAW_TO_UNIT[raw],
     control = directControl(raw);
   if (
+    explodedPreview ||
     !control ||
     !installed(id) ||
     state.stage === 2 ||
@@ -341,7 +346,7 @@ function renderControl() {
   const id = state.selected,
     host = $("componentControl");
   host.innerHTML =
-    installed(id) && state.stage !== 2 && state.stage !== 4
+    !explodedPreview && installed(id) && state.stage !== 2 && state.stage !== 4
       ? `<section class="component-editor"><h3>${UNIT_BY_ID[id].name} · 在模型上操作</h3><p>${gestures[id]}</p>${["mirror", "lamp"].includes(id) ? CONTROLS[id].map((c) => `<label class="adjustment-value">${c.label}<span><input data-optics-key="${c.key}" aria-label="${c.label}" type="number" min="${c.min}" max="${c.max}" step="${c.step}" value="${state.optics[c.key]}">${c.unit || ""}</span></label>`).join("") : ""}<p class="wheel-hint">${id === "mirror" ? "单击选中；拖动或滚轮调节角度，Shift + 拖动精调。" : "直接按住模型拖动；滚轮微调。单击可小步调节，Shift + 单击反向，Shift + 拖动精调。"}</p></section>`
       : "";
   host.querySelectorAll("[data-optics-key]").forEach((input) => {
@@ -374,11 +379,23 @@ function syncControls() {
   ]) {
     $(id).checked = !!state.optics[key];
     $(id).disabled =
-      (!!unit && !installed(unit)) || state.stage === 2 || state.stage === 4;
+      explodedPreview || (!!unit && !installed(unit)) || state.stage === 2 || state.stage === 4;
   }
 }
 function paint() {
   if (!lab) return;
+  if (explodedPreview) {
+    drawField($("rings"), { ...state.optics, observationMode: "unavailable" }, false);
+    lab.updateMonitor($("rings"));
+    $("observationMode").textContent = "爆炸图观察";
+    $("fieldStatus").textContent = "返回装配图后继续观察成像";
+    $("signalStatus").textContent = "正在查看组件结构，安装进度已保留";
+    $("signalStatus").classList.remove("online");
+    for (const key of ["brightness", "sharpness", "contrast"])
+      $(key + "Metric").textContent = "—";
+    syncControls();
+    return;
+  }
   const opticalAssembly = ["sample", "objective", "mirror", "lamp"].every(
     installed,
   );
@@ -535,18 +552,27 @@ function render() {
   renderProgress();
   save();
 }
+// This is a temporary model view; saved installation and assessment stay intact.
+function setExplodedPreview(enabled) {
+  explodedPreview = enabled;
+  activeGesture = null;
+  activeRaw = "";
+  lab.configureStudentUnits(UNITS, enabled ? [] : state.installed);
+  lab.explode(0);
+  lab.view(enabled ? "exploded" : "home");
+}
 function setStage(stage) {
   if (busy || !allowed(stage)) return;
+  setExplodedPreview(false);
   state.stage = stage;
-  lab.explode(0);
-  lab.view("home");
+  if (stage === 0 && !allInstalled()) lab.view("exploded");
   if (stage === 3 && !state.challenge) startChallenge();
   render();
   document.querySelector(".left-panel").scrollTop = 0;
 }
 async function installCurrent() {
   const current = INSTALL_UNITS.find((u) => !state.installed.includes(u.id));
-  if (!current || busy) return;
+  if (!current || busy || explodedPreview) return;
   if (state.selected !== current.id) {
     toast(`请先选择「${current.name}」。`);
     return;
@@ -581,7 +607,23 @@ function renderGuide() {
     const current = INSTALL_UNITS.find((u) => !state.installed.includes(u.id));
     host.innerHTML = `<ol class="install-list">${INSTALL_UNITS.map((u, i) => `<li class="${installed(u.id) ? "done" : current?.id === u.id ? "active" : ""}"><span class="number">${installed(u.id) ? "✓" : i + 1}</span>${u.name}</li>`).join("")}</ol>${current ? `<div class="guide-card active"><b>当前：${current.name}</b><p>${current.tip}</p></div><p class="feedback">${busy ? "组件正在就位…" : "直接点击场景中的组件模型进行安装。"}</p>` : '<div class="guide-card active"><b>六个组件安装完成</b><p>连接 CCD 电源、视频线和显示器，再进入引导调节。接线不会自动改善焦点或曝光。</p></div>'}<details class="help-toggle" open><summary>安装时观察什么？</summary><p>开启“显示光路”观察黄色入射光、绿色与紫色返回光。缺少部件时，光路会在对应位置中断。</p><p>目镜装好后先出现目视视场；CCD 安装后切换到示教视场。学生只安装完整组件，不拆镜片与螺钉。</p></details>`;
 
-    $("modelHint").textContent = current
+    if (!current) {
+      const toggle = document.createElement("button");
+      toggle.className = "operation";
+      toggle.id = "explodedToggle";
+      toggle.textContent = explodedPreview ? "返回装配图" : "查看爆炸图";
+      toggle.setAttribute("aria-pressed", String(explodedPreview));
+      toggle.onclick = () => {
+        if (busy) return;
+        setExplodedPreview(!explodedPreview);
+        render();
+      };
+      toggle.disabled = busy;
+      host.querySelector(".guide-card").append(toggle);
+    }
+    $("modelHint").textContent = explodedPreview
+      ? "爆炸图观察 · 可旋转、缩放、点选部件，安装进度已保留"
+      : current
       ? `下一步：点击三维${current.name}模型进行安装`
       : "安装完成，进入引导调节";
   }
@@ -816,7 +858,13 @@ for (const [id, key, unit] of [
   };
 document
   .querySelectorAll("[data-view]")
-  .forEach((b) => (b.onclick = () => lab.view(b.dataset.view)));
+  .forEach((b) => (b.onclick = () => {
+    if (explodedPreview) {
+      setExplodedPreview(false);
+      render();
+    }
+    lab.view(b.dataset.view);
+  }));
 $("raysToggle").onclick = () => {
   state.optics.showRays = !state.optics.showRays;
   lab.optics(state.optics);
@@ -846,6 +894,7 @@ $("reset").onclick = () => {
   if (!confirm("重新预习会清除本轮安装、测验和挑战进度。已下载报告保留。"))
     return;
   state = fresh();
+  explodedPreview = false;
   notified = false;
   lab.configureStudentUnits(UNITS, [], true);
   lab.optics(state.optics);

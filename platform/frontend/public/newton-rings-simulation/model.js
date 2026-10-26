@@ -1,6 +1,7 @@
 import * as T from "./vendor/three.module.js";
 import { OrbitControls } from "./vendor/OrbitControls.js";
 import { DEFAULT_OPTICS, opticalMetrics } from "./optics.js";
+import { createWorkbench } from "./workbench.js";
 
 // Reference numbers refer to PDF page 4 (JCD3) and page 15 (JCD-CCD).
 const specs = [
@@ -847,17 +848,8 @@ export function createLab(
   });
   let videoCurve = null,
     videoStamp = "";
-  const floor = mesh(
-    scene,
-    new T.BoxGeometry(8, 0.08, 5.8),
-    material(0x172a35, 0.05, 0.85),
-    [0.6, -0.1, -0.3],
-  );
-  const grid = new T.GridHelper(9, 45, 0x355361, 0x263d49);
-  grid.position.set(0.6, -0.052, -0.3);
-  grid.material.transparent = true;
-  grid.material.opacity = 0.32;
-  scene.add(grid);
+  const workbench = createWorkbench();
+  scene.add(workbench.group);
   const rays = new T.Group();
   scene.add(rays);
   let raySegments = [],
@@ -1179,8 +1171,7 @@ export function createLab(
     filmMode = name === "film";
     document.getElementById("filmExplanation").hidden = !filmMode;
     film.visible = filmMode;
-    floor.visible = !filmMode;
-    grid.visible = !filmMode;
+    workbench.group.visible = !filmMode;
     for (const g of Object.values(groups)) g.visible = !filmMode;
     const views = {
       home: [
@@ -1444,6 +1435,7 @@ export function createLab(
         targetView = null;
     }
     controls.update();
+    workbench.update(now);
     renderer.render(scene, camera);
   }
   requestAnimationFrame(animate);
