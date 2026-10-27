@@ -1,0 +1,77 @@
+.immersive { height:100dvh; overflow:hidden; --accent:#8bc9bb; }
+.immersive [hidden] { display:none !important; }
+.practice-header { height:56px; padding:0 22px; display:flex; align-items:center; justify-content:space-between; gap:20px; background:#0c1822; border-bottom:1px solid #273540; }
+.experiment-title { font-size:15px; font-weight:500; white-space:nowrap; }
+.immersive .journey { height:100%; border:0; background:transparent; gap:8px; }
+.immersive .journey button {
+  position:relative; isolation:isolate; height:100%; min-width:116px;
+  font-size:14px; letter-spacing:1px; padding:0 20px; border-radius:0;
+  background:transparent; transition:color .2s;
+}
+.immersive .journey button::before {
+  content:""; position:absolute; inset:8px 0 0; z-index:-1;
+  clip-path:polygon(12px 0,calc(100% - 12px) 0,100% 100%,0 100%);
+  background:linear-gradient(180deg,#80dbc000,#80dbc01f); opacity:0;
+  transition:opacity .2s;
+}
+.immersive .journey button::after {
+  content:""; position:absolute; bottom:0; left:20%; right:20%; height:3px;
+  border-radius:3px 3px 0 0; background:linear-gradient(90deg,#6bb9a4,#c8ffea,#6bb9a4);
+  box-shadow:0 -3px 14px #9de8cc40; opacity:0; transform:scaleX(.5);
+  transition:opacity .2s,transform .2s;
+}
+.immersive .journey button:not(:disabled):hover { background:transparent; color:#d7f3e9; }
+.immersive .journey button:not(:disabled):hover::before { opacity:.5; }
+.immersive .journey button.active { background:transparent; color:#bdf3df; font-weight:600; }
+.immersive .journey button.active::before,.immersive .journey button.active::after { opacity:1; transform:scaleX(1); }
+.immersive .journey button.completed { color:#abc7c2; }
+.quiet-button { background:transparent; border-color:transparent; color:#b8c7ce; }
+.immersive .workspace { display:block; position:relative; height:calc(100dvh - 56px); min-height:0; }
+.immersive .scene-panel { position:absolute; inset:0; height:100%; background:radial-gradient(ellipse at 50% 40%,#223743,#101c27 80%); }
+.immersive #viewport > .scene-atmosphere { position:absolute; inset:0; pointer-events:none; }
+.immersive #viewport > canvas:not(.scene-atmosphere) { position:relative; }
+.scene-actions,.scene-utilities { position:absolute; z-index:5; top:18px; display:flex; gap:8px; }
+.scene-actions { left:22px; }.scene-utilities { right:22px; }
+.scene-actions button,.scene-utilities button { background:#14232cdd; border-color:#3b4b56; font-size:12px; padding:10px 15px; }
+.immersive button[aria-expanded="true"],.immersive button[aria-pressed="true"] { background:#2b4247; border-color:#76978f; color:#eef7f5; }
+.immersive .primary { background:#a6d9c8; border-color:#a6d9c8; color:#132a25; font-weight:600; }.immersive .primary:hover { background:#c0eadc; }
+.current-task { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); width:min(660px,calc(100% - 44px)); min-height:90px; display:flex; align-items:center; gap:18px; padding:16px 20px; border:1px solid #4b5c65; border-radius:12px; background:#13222ded; box-shadow:0 10px 32px #0003; z-index:5; }
+#taskThumb { width:66px; height:54px; object-fit:contain; flex:0 0 auto; }.task-copy { flex:1; min-width:0; }
+#taskNumber { font-size:12px; color:#b6c4ca; font-variant-numeric:tabular-nums; }
+.immersive #taskTitle { font-size:17px; font-weight:500; margin:4px 0; letter-spacing:0; }
+#taskInstruction { font-size:13px; color:#bdcbd1; margin:4px 0 0; line-height:1.5; }#taskInstruction:empty { display:none; }
+#taskAction { white-space:nowrap; padding:12px 18px; font-size:13px; }
+.immersive .panel { position:absolute; top:66px; bottom:138px; z-index:6; width:300px; border:1px solid #40525f; border-radius:10px; padding:18px; background:#111f2bf5; box-shadow:0 12px 36px #0004; }
+.immersive .left-panel { left:22px; display:flex; height:auto; min-height:0; }.immersive .right-panel { right:22px; display:block; height:auto; }
+.drawer-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0; }.drawer-heading b { font-size:14px; font-weight:500; }.drawer-heading button { font-size:12px; border:0; padding:6px 8px; background:transparent; color:#b0c0c8; }
+.immersive .guide-footer { padding-top:12px; margin-top:auto; }.immersive .guide-footer span { font-size:12px; }
+.immersive .progress-track { flex-shrink:0; }
+.finished-installation { margin:4px 0 18px; }
+.immersive .install-list { margin:6px 0 16px; }.immersive .install-list li { font-size:13px; padding:9px 0; }.immersive .install-list li.done { color:#a4bcb8; }.immersive .install-list li.active { color:#e7ede9; }.immersive .install-list .number { font-size:11px; }
+.step-section { font-size:12px; color:#90a8b3; margin:16px 0 6px; }.immersive .goal-list li { font-size:13px; }
+.observation-panel { position:absolute; top:66px; right:22px; width:280px; padding:12px; border:1px solid #40525f; border-radius:10px; background:#111f2bf2; z-index:4; }
+.immersive .observation { margin:8px 0 0; }.immersive #fieldStatus { font-size:12px; line-height:1.5; }
+.immersive .right-panel details { border-bottom:1px solid #2d414e; padding:16px 0; }.immersive summary { cursor:pointer; font-size:13px; color:#d3e0e5; }.immersive summary:focus-visible { outline:2px solid var(--accent); outline-offset:5px; }
+.immersive .connection-panel { margin:12px 0 0; padding:0; background:transparent; border:0; grid-template-columns:1fr; }.immersive .connection-panel .switch-row { font-size:13px; margin:9px 0; }.immersive .connection-panel input { width:17px; height:17px; }.immersive .connection-panel p { font-size:12px; }
+.view-options { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }.view-options button { font-size:12px; }
+.immersive .parts-list { display:grid; grid-template-columns:1fr 1fr; gap:7px; padding:12px 0 0; overflow:visible; }.immersive .part-card { min-width:0; padding:8px; }.immersive .part-card img { width:60px; height:36px; }.immersive .part-card small { display:none; }
+.immersive .part-summary h2 { font-size:15px; }.immersive .part-summary p,.immersive .component-editor p { font-size:12px; }.immersive #reset { margin-top:18px; color:#a9bcc5; }
+.immersive #modelInteraction { bottom:136px; font-size:12px; padding:8px 12px; max-width:min(650px,90%); }.immersive .toast { bottom:145px; z-index:12; font-size:13px; }
+.immersive .part-label { font-size:12px; padding:6px 10px; background:#142833ee; }.immersive .part-label.selected { border-color:#b6dfcc; color:#e3f4ed; box-shadow:0 0 0 3px #a6d9c81a; }
+.immersive[data-stage="2"] .left-panel,.immersive[data-stage="4"] .left-panel { width:380px; bottom:22px; }
+.immersive .quiz-question { font-size:17px; line-height:1.6; }.immersive .answer { font-size:14px; }.immersive .quiz-result,.immersive .feedback { font-size:13px; }.immersive .challenge-box { font-size:13px; background:transparent; border:0; padding:0; }.immersive .challenge-timer { font-size:20px; }
+@media(max-width:900px) {
+  .practice-header { padding:0 14px; gap:8px; }.immersive .journey button { min-width:94px; padding:0 12px; }.immersive .panel { width:270px; }.observation-panel { width:230px; }.current-task { bottom:18px; padding:12px 16px; gap:12px; }
+}
+@media(max-width:600px) {
+  .practice-header { height:52px; padding:0 10px; }.experiment-title { display:none; }.immersive .journey { gap:0; }.immersive .journey button { min-width:0; padding:0 10px; font-size:12px; letter-spacing:0; }.immersive .workspace { height:calc(100dvh - 52px); }
+  .scene-actions { left:10px; top:12px; }.scene-utilities { right:10px; top:12px; gap:4px; }.scene-actions button,.scene-utilities button { padding:8px; font-size:11px; }
+  .current-task { width:calc(100% - 20px); bottom:10px; gap:10px; padding:12px; }#taskThumb { display:none; }.immersive #taskTitle { font-size:15px; }#taskInstruction { font-size:12px; }#taskAction { padding:11px; font-size:12px; }
+  .immersive .panel,.immersive[data-stage="2"] .left-panel,.immersive[data-stage="4"] .left-panel { top:55px; left:10px; right:10px; width:auto; bottom:132px; }.immersive[data-stage="2"] .left-panel,.immersive[data-stage="4"] .left-panel { bottom:10px; }.observation-panel { width:190px; top:55px; right:10px; padding:8px; }.immersive #modelInteraction { display:none; }
+}
+@media(max-height:560px) and (min-width:601px) { .current-task { min-height:70px; bottom:10px; padding:10px 16px; }.immersive .panel { bottom:106px; }.observation-panel { width:220px; } }
+@media(max-width:400px) {
+  .immersive .journey button { padding:0 7px; font-size:11px; }
+  .scene-utilities > [data-view="home"] { display:none; }
+  .practice-header > button { padding:8px; }
+}

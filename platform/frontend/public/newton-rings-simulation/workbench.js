@@ -58,6 +58,9 @@ export function createWorkbench() {
   const group = new T.Group();
   group.name = "optical-workbench";
   group.position.set(0.6, 0, -0.3);
+  // Widen the supporting tray for the immersive scene, keeping its height
+  // and the instrument geometry unchanged.
+  group.scale.set(1.25, 1, 1.2);
   const shape = outline(8, 5.8, 0.28);
   const body = new T.Mesh(
     new T.ExtrudeGeometry(shape, {

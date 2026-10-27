@@ -17,6 +17,7 @@ import {
   makeChallenge,
 } from "./student-course.js";
 import { openReport, downloadReport, downloadData } from "./student-report.js";
+import { PRACTICE_NAV, ADJUSTMENT_STEPS, practiceTask } from "./student-practice.js";
 import { adjustmentGoals } from "./student-adjustment.js";
 const $ = (id) => document.getElementById(id),
   storageKey = `wxz-newton-student-v3:${localStorage.getItem("wxz_userId") || "guest"}`;
@@ -68,8 +69,16 @@ let lab,
   busy = false,
   explodedPreview = false,
   toastTimer,
-  labels = true,
+  manipulationTimer,
+  labels = false,
+  backgroundMotion = true,
   notified = false;
+let stepsOpen = state.stage === 2 || state.stage === 4, toolsOpen = false,
+  observationOpen = state.stage === 1 || state.stage === 3;
+if (state.stage === 0 && state.installed.length === INSTALL_UNITS.length) {
+  state.stage = 1;
+  observationOpen = true;
+}
 const monitorBuffer = document.createElement("canvas");
 monitorBuffer.width = 480;
 monitorBuffer.height = 270;
@@ -318,8 +327,10 @@ function showManipulation(raw = activeRaw) {
     monitor: "点击示教屏幕开关电源",
   };
   host.textContent = id
-    ? `${UNIT_BY_ID[id].name} · ${specials[raw] || gestures[id]}${c ? " · " + c.label + " " + (c.key === "reading" ? state.optics[c.key].toFixed(2) : state.optics[c.key]) + (c.unit || "") : ""}`
+    ? c ? `${c.label} ${c.key === "reading" ? state.optics[c.key].toFixed(2) : state.optics[c.key]}${c.unit || ""}` : specials[raw] || UNIT_BY_ID[id].name
     : "";
+  clearTimeout(manipulationTimer);
+  manipulationTimer = setTimeout(() => { host.textContent = ""; }, 1800);
 }
 function adjust(raw, direction, event) {
   const id = UNIT_BY_ID[raw] ? raw : RAW_TO_UNIT[raw],
@@ -384,6 +395,7 @@ function syncControls() {
 }
 function paint() {
   if (!lab) return;
+  renderCurrentTask();
   if (explodedPreview) {
     drawField($("rings"), { ...state.optics, observationMode: "unavailable" }, false);
     lab.updateMonitor($("rings"));
@@ -472,7 +484,7 @@ function paint() {
     $("guideGoals").innerHTML = goals()
       .map(
         (g) =>
-          `<li class="${g.ok ? "passed" : ""}">${g.ok ? "✓" : "○"} ${g.label}${g.detail ? " · " + g.detail : ""}</li>`,
+          `<li class="${g.ok ? "passed" : ""}">${g.ok ? "✓" : "○"} ${ADJUSTMENT_STEPS[g.id]?.title || g.label}</li>`,
       )
       .join("");
   if (inChallenge() && $("challengeEdits"))
@@ -484,9 +496,9 @@ function renderProgress() {
   $("assemblyStatus").textContent =
     `安装组件 ${state.installed.length} / ${INSTALL_UNITS.length}`;
   const next = $("nextStage");
-  next.hidden = state.stage === 4;
+  next.hidden = state.stage === 4 || state.stage === 0;
   next.textContent =
-    ["进入引导调节 →", "进入预习测验 →", "进入成像挑战 →", "查看结果报告 →"][
+    ["继续练习", "进入测验 →", "进入挑战 →", "查看报告 →"][
       state.stage
     ] || "";
   next.disabled = ![
@@ -496,8 +508,8 @@ function renderProgress() {
     !!state.challenge?.result,
   ][state.stage];
   const fraction = [
-    state.installed.length / 6,
-    goals().filter((g) => g.ok).length / 7,
+    state.installed.length / 13,
+    (6 + goals().filter((g) => g.ok).length) / 13,
     state.answers.length / QUESTIONS.length,
     state.challenge?.result?.score / 60 || 0,
     passed() ? 1 : 0,
@@ -505,7 +517,7 @@ function renderProgress() {
   $("progressBar").style.width = Math.min(100, fraction * 100) + "%";
   $("progressText").textContent = [
     `已安装 ${state.installed.length}/6 个组件`,
-    state.guidePassed ? "引导装调已通过" : "调好视场后，提交装调检查",
+    state.guidePassed ? "练习已完成" : "调好视场后，完成练习",
     `预习题 ${state.answers.length}/${QUESTIONS.length} · ${quizScore()}/40 分`,
     state.challenge?.result
       ? `本轮挑战 ${state.challenge.result.score}/60 分`
@@ -524,18 +536,19 @@ function renderDock() {
     .forEach((b) => (b.onclick = () => selectUnit(b.dataset.unit)));
 }
 function renderJourney() {
-  $("journey").innerHTML = STAGES.map(
-    (s, i) =>
-      `<button data-stage="${i}" class="${state.stage === i ? "active" : completed(i) ? "completed" : ""}" ${allowed(i) ? "" : "disabled"}><span class="step-index">${completed(i) ? "✓" : i + 1}</span>${s.name}</button>`,
-  ).join("");
-  $("journey")
-    .querySelectorAll("button")
-    .forEach((b) => (b.onclick = () => setStage(Number(b.dataset.stage))));
+  $("journey").innerHTML = PRACTICE_NAV.map(({name, stage}) => {
+    const active = stage === 0 ? state.stage <= 1 : state.stage === stage;
+    const done = stage === 0 ? state.guidePassed : completed(stage);
+    return `<button data-stage="${stage}" class="${active ? "active" : done ? "completed" : ""}" ${active ? 'aria-current="step"' : ""} ${allowed(stage) ? "" : "disabled"}>${name}</button>`;
+  }).join("");
+  $("journey").querySelectorAll("button").forEach((b) => {
+    b.onclick = () => setStage(Number(b.dataset.stage) === 0 && allInstalled() ? 1 : Number(b.dataset.stage));
+  });
 }
 function render() {
   const stage = STAGES[state.stage];
   $("stageCount").textContent = `0${state.stage + 1} / 05`;
-  $("stageTitle").textContent = stage.title;
+  $("stageTitle").textContent = state.stage <= 1 ? "操作步骤" : stage.title;
   $("stageIntro").textContent = stage.intro;
   $("sceneTitle").textContent = [
     "搭建实验装置",
@@ -550,6 +563,7 @@ function render() {
   selectUnit(state.selected);
   paint();
   renderProgress();
+  renderImmersive();
   save();
 }
 // This is a temporary model view; saved installation and assessment stay intact.
@@ -565,6 +579,9 @@ function setStage(stage) {
   if (busy || !allowed(stage)) return;
   setExplodedPreview(false);
   state.stage = stage;
+  stepsOpen = stage === 2 || stage === 4;
+  toolsOpen = false;
+  observationOpen = stage === 1 || stage === 3;
   if (stage === 0 && !allInstalled()) lab.view("exploded");
   if (stage === 3 && !state.challenge) startChallenge();
   render();
@@ -596,6 +613,12 @@ async function installCurrent() {
   busy = false;
   const next = INSTALL_UNITS.find((u) => !state.installed.includes(u.id));
   if (next) state.selected = next.id;
+  else {
+    state.stage = 1;
+    state.selected = "camera";
+    observationOpen = true;
+    lab.view("home");
+  }
   render();
   toast(
     `${current.name}已就位${current.id === "lamp" ? "，黄色光路开始照明" : ""}。`,
@@ -603,59 +626,16 @@ async function installCurrent() {
 }
 function renderGuide() {
   const host = $("guideContent");
-  if (state.stage === 0) {
-    const current = INSTALL_UNITS.find((u) => !state.installed.includes(u.id));
-    host.innerHTML = `<ol class="install-list">${INSTALL_UNITS.map((u, i) => `<li class="${installed(u.id) ? "done" : current?.id === u.id ? "active" : ""}"><span class="number">${installed(u.id) ? "✓" : i + 1}</span>${u.name}</li>`).join("")}</ol>${current ? `<div class="guide-card active"><b>当前：${current.name}</b><p>${current.tip}</p></div><p class="feedback">${busy ? "组件正在就位…" : "直接点击场景中的组件模型进行安装。"}</p>` : '<div class="guide-card active"><b>六个组件安装完成</b><p>连接 CCD 电源、视频线和显示器，再进入引导调节。接线不会自动改善焦点或曝光。</p></div>'}<details class="help-toggle" open><summary>安装时观察什么？</summary><p>开启“显示光路”观察黄色入射光、绿色与紫色返回光。缺少部件时，光路会在对应位置中断。</p><p>目镜装好后先出现目视视场；CCD 安装后切换到示教视场。学生只安装完整组件，不拆镜片与螺钉。</p></details>`;
-
-    if (!current) {
-      const toggle = document.createElement("button");
-      toggle.className = "operation";
-      toggle.id = "explodedToggle";
-      toggle.textContent = explodedPreview ? "返回装配图" : "查看爆炸图";
-      toggle.setAttribute("aria-pressed", String(explodedPreview));
-      toggle.onclick = () => {
-        if (busy) return;
-        setExplodedPreview(!explodedPreview);
-        render();
-      };
-      toggle.disabled = busy;
-      host.querySelector(".guide-card").append(toggle);
-    }
-    $("modelHint").textContent = explodedPreview
-      ? "爆炸图观察 · 可旋转、缩放、点选部件，安装进度已保留"
-      : current
-      ? `下一步：点击三维${current.name}模型进行安装`
-      : "安装完成，进入引导调节";
-  }
-  if (state.stage === 1) {
-    host.innerHTML = `<div class="guide-card active"><b>按住实际部件调节，观察实时成像</b><p>拖动目镜调叉丝 → 上下拖动物镜调环纹 → 拖动半反镜与灯体调照明 → 拖动 CCD 镜头和机身调焦、曝光 → 拖动鼓轮对准中心。</p></div><ul id="guideGoals" class="goal-list"></ul><button id="checkGuide" class="operation primary">提交装调检查</button><details class="help-toggle"><summary>需要一点提示</summary><p>半反镜在约 45° 附近微调；底座反光镜反转向内。慢慢扫描焦点，找十字丝和环纹最清楚的位置。</p><p>图像很亮仍模糊时先调焦，不要继续增加曝光。鼓轮改变环纹相对固定十字丝的位置。</p></details>`;
-    $("checkGuide").onclick = () => {
-      const checks = goals();
-      if (checks.every((g) => g.ok)) {
-        state.guidePassed = true;
-        state.guideSnapshot = { ...state.optics };
-        log("引导装调通过");
-        renderJourney();
-        renderProgress();
-        toast("视场调节通过，可以进入预习测验。");
-      } else {
-        toast(
-          "还需要：" +
-            checks
-              .filter((g) => !g.ok)
-              .map((g) => g.detail ? `${g.label}（${g.detail}）` : g.label)
-              .join("、"),
-        );
-        log("引导装调未通过");
-      }
-    };
-    $("modelHint").textContent =
-      "直接按住部件拖动调节 · 滚轮微调 · 单击小步调节";
+  if (state.stage <= 1) {
+    const current = INSTALL_UNITS.find((u) => !installed(u.id));
+    const installation = `<ol class="install-list">${INSTALL_UNITS.map((u, i) => `<li class="${installed(u.id) ? "done" : current?.id === u.id ? "active" : ""}"><span class="number">${installed(u.id) ? "✓" : i + 1}</span>${u.name}</li>`).join("")}</ol>`;
+    host.innerHTML = `${allInstalled() ? `<details class="finished-installation"><summary>安装已完成 · 6 / 6</summary>${installation}</details>` : `<div class="step-section">安装</div>${installation}`}<div class="step-section">调节</div><ul id="guideGoals" class="goal-list"></ul>${state.stage === 1 ? '<button id="checkGuide" class="operation primary">完成练习</button>' : ''}`;
+    if ($("checkGuide")) $("checkGuide").onclick = finishPractice;
   }
   if (state.stage === 2) renderQuiz();
   if (state.stage === 3) {
     const c = state.challenge;
-    host.innerHTML = `<div class="challenge-box"><b>新的失调状态 · 独立完成</b><p>请修正照明、十字丝、物镜焦点、相机成像和鼓轮居中。可自行选择是否显示光路，提交前不显示最佳参数或具体纠错提示。</p></div><div class="challenge-timer" id="challengeTimer"></div><p class="feedback" id="challengeEdits">已调节 ${c.edits} 次 · 涉及 ${c.touched.length} 项控制</p><button id="submitChallenge" class="primary challenge-submit">提交当前成像</button>${c.result ? `<ul class="rubric">${c.result.rubric.map((g) => `<li class="${g.ok ? "passed" : "failed"}"><span>${g.ok ? "✓" : "○"} ${g.label}</span><b>${g.ok ? g.points : 0}/${g.points}</b></li>`).join("")}</ul><p class="feedback">${c.result.passed ? "挑战通过，可查看报告。" : "尚未通过，继续自行调整后再次提交。"}</p>` : ""}<button id="newChallenge" class="operation">重新抽取挑战状态</button>`;
+    host.innerHTML = `<div class="challenge-box"><b>独立调出清晰、居中的环纹</b></div><div class="challenge-timer" id="challengeTimer"></div><p class="feedback" id="challengeEdits">已调节 ${c.edits} 次 · 涉及 ${c.touched.length} 项控制</p><button id="submitChallenge" class="primary challenge-submit">提交当前成像</button>${c.result ? `<ul class="rubric">${c.result.rubric.map((g) => `<li class="${g.ok ? "passed" : "failed"}"><span>${g.ok ? "✓" : "○"} ${g.label}</span><b>${g.ok ? g.points : 0}/${g.points}</b></li>`).join("")}</ul><p class="feedback">${c.result.passed ? "挑战通过，可查看报告。" : "尚未通过，继续自行调整后再次提交。"}</p>` : ""}<button id="newChallenge" class="operation">重新抽取挑战状态</button>`;
     $("submitChallenge").onclick = submitChallenge;
     $("newChallenge").onclick = () => {
       startChallenge();
@@ -664,7 +644,7 @@ function renderGuide() {
     $("modelHint").textContent = "独立挑战：以视场为准调节，提交后查看反馈";
   }
   if (state.stage === 4) {
-    host.innerHTML = `<div class="quiz-type">PRE-LAB RESULT</div><div class="score">${totalScore()}<small> / 100</small></div><div class="guide-card ${passed() ? "active" : ""}"><b>${passed() ? "预习通过" : "尚未达到通过要求"}</b><p>知识测验 ${quizScore()}/40 分<br>成像挑战 ${state.challenge?.result?.score || 0}/60 分<br>要求总分 ≥80 且成像挑战通过。</p></div><label class="control-row">姓名 / 学号（可选）<input class="name-input" id="studentName" maxlength="60"></label><button id="openReport" class="operation primary">查看并下载预习报告</button><button id="retryQuiz" class="operation">重做预习题</button><button id="retryChallenge" class="operation">再次挑战成像</button><button id="enterLab" class="operation" ${passed() ? "" : "disabled"}>进入真实实验台</button>`;
+    host.innerHTML = `<div class="score">${totalScore()}<small> / 100</small></div><div class="guide-card ${passed() ? "active" : ""}"><b>${passed() ? "预习通过" : "尚未达到通过要求"}</b><p>知识测验 ${quizScore()}/40 分<br>成像挑战 ${state.challenge?.result?.score || 0}/60 分<br>要求总分 ≥80 且成像挑战通过。</p></div><label class="control-row">姓名 / 学号（可选）<input class="name-input" id="studentName" maxlength="60"></label><button id="openReport" class="operation primary">查看并下载预习报告</button><button id="retryQuiz" class="operation">重做预习题</button><button id="retryChallenge" class="operation">再次挑战成像</button><button id="enterLab" class="operation" ${passed() ? "" : "disabled"}>进入真实实验台</button>`;
     $("studentName").value = state.name;
     $("studentName").oninput = (e) => {
       state.name = e.target.value;
@@ -677,10 +657,14 @@ function renderGuide() {
       state.quizDone = false;
       state.draft = [];
       state.stage = 2;
+      stepsOpen = true;
+      observationOpen = false;
       render();
     };
     $("retryChallenge").onclick = () => {
       state.stage = 3;
+      stepsOpen = false;
+      observationOpen = true;
       startChallenge();
       render();
     };
@@ -808,6 +792,83 @@ function notifyCompletion() {
     );
   }
 }
+function finishPractice() {
+  if (busy || explodedPreview) return;
+  const pending = goals().find((g) => !g.ok);
+  if (pending) {
+    toast(ADJUSTMENT_STEPS[pending.id].instruction);
+    return;
+  }
+  state.guidePassed = true;
+  state.guideSnapshot = { ...state.optics };
+  log("引导装调通过");
+  render();
+  toast("练习完成，可以进入测验。");
+}
+function renderImmersive() {
+  document.body.dataset.stage = state.stage;
+  for (const [panel, button, open] of [
+    ["stepsPanel", "stepsToggle", stepsOpen],
+    ["toolsPanel", "toolsToggle", toolsOpen],
+    ["observationPanel", "observationToggle", observationOpen && !toolsOpen && !explodedPreview],
+  ]) {
+    $(panel).hidden = !open;
+    $(button).setAttribute("aria-expanded", String(open));
+  }
+  $("stepsToggle").textContent = state.stage === 2 ? "测验题目" : state.stage === 4 ? "预习结果" : "操作步骤";
+  $("observationToggle").hidden = !allInstalled() || state.stage === 2 || state.stage === 4;
+  $("explodedToggle").hidden = !allInstalled() || state.stage > 1;
+  $("explodedToggle").disabled = busy;
+  $("explodedToggle").textContent = explodedPreview ? "返回装配图" : "查看爆炸图";
+  $("explodedToggle").setAttribute("aria-pressed", String(explodedPreview));
+  renderCurrentTask();
+}
+function renderCurrentTask() {
+  const task = practiceTask(state);
+  $("currentTask").hidden = state.stage === 2 || state.stage === 4;
+  if ($("currentTask").hidden) return;
+  const challenge = state.stage === 3;
+  $("taskNumber").textContent = explodedPreview ? "结构观察" : challenge ? "独立挑战" : `练习 ${task.number} / ${task.total}`;
+  $("taskTitle").textContent = explodedPreview ? "观察组件的位置关系" : challenge ? "调出清晰、居中的环纹" : task.title;
+  $("taskInstruction").textContent = explodedPreview ? "拖动空白处旋转，滚轮缩放。" : challenge ? "完成后提交当前成像。" : task.instruction;
+  $("taskAction").textContent = busy ? "安装中…" : explodedPreview ? "返回装配图" : challenge ? "提交成像" : task.action;
+  $("taskAction").disabled = busy;
+  $("taskThumb").hidden = !task.unit || challenge || explodedPreview;
+  if (task.unit && lab) $("taskThumb").src = lab.thumbs[UNIT_BY_ID[task.unit].model];
+}
+function runCurrentTask() {
+  if (busy) return;
+  if (explodedPreview) {
+    setExplodedPreview(false);
+    render();
+    return;
+  }
+  if (state.stage === 3) {
+    submitChallenge();
+    stepsOpen = true;
+    renderImmersive();
+    return;
+  }
+  const task = practiceTask(state);
+  if (task.kind === "install") {
+    selectUnit(task.unit);
+    installCurrent();
+  } else if (task.kind === "ready") {
+    if (state.guidePassed) setStage(2);
+    else finishPractice();
+  } else {
+    selectUnit(task.unit);
+    lab.view(["eyepiece", "objective", "mirror"].includes(task.unit) ? "optics" : "home");
+    if (task.key === "signal") {
+      toolsOpen = true;
+      $("connectionsDetails").open = true;
+    } else {
+      toolsOpen = false;
+      observationOpen = true;
+    }
+    renderImmersive();
+  }
+}
 function reportData() {
   return {
     schema: "wxz.newton-student.prep.v3",
@@ -832,6 +893,8 @@ try {
   interaction.setAttribute("role", "status");
   $("viewport").append(interaction);
   lab.configureStudentUnits(UNITS, state.installed, true);
+  lab.labels(false);
+  if (state.stage <= 1 && practiceTask(state).unit) state.selected = practiceTask(state).unit;
   lab.optics(state.optics);
   $("loading").remove();
   lab.view(state.stage === 0 ? "exploded" : "home");
@@ -843,6 +906,47 @@ try {
     "三维场景加载失败，请刷新页面并确认浏览器支持 WebGL。";
 }
 $("nextStage").onclick = () => setStage(state.stage + 1);
+$("taskAction").onclick = runCurrentTask;
+$("explodedToggle").onclick = () => {
+  if (busy || !allInstalled() || state.stage > 1) return;
+  setExplodedPreview(!explodedPreview);
+  render();
+};
+$("stepsToggle").onclick = () => {
+  stepsOpen = !stepsOpen;
+  if (stepsOpen && window.innerWidth <= 900) toolsOpen = false;
+  renderImmersive();
+};
+$("closeSteps").onclick = () => {
+  stepsOpen = false;
+  renderImmersive();
+  $("stepsToggle").focus();
+};
+$("toolsToggle").onclick = () => {
+  toolsOpen = !toolsOpen;
+  if (toolsOpen && window.innerWidth <= 900) stepsOpen = false;
+  renderImmersive();
+};
+$("closeTools").onclick = () => {
+  toolsOpen = false;
+  renderImmersive();
+  $("toolsToggle").focus();
+};
+$("observationToggle").onclick = () => {
+  observationOpen = !observationOpen;
+  toolsOpen = false;
+  renderImmersive();
+};
+$("closeObservation").onclick = () => {
+  observationOpen = false;
+  renderImmersive();
+  $("observationToggle").focus();
+};
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || $("reportDialog").open) return;
+  if (toolsOpen) $("closeTools").click();
+  else if (stepsOpen) $("closeSteps").click();
+});
 for (const [id, key, unit] of [
   ["lampSwitch", "lightOn", "lamp"],
   ["cameraPowerSwitch", "cameraOn", "camera"],
@@ -863,7 +967,7 @@ document
       setExplodedPreview(false);
       render();
     }
-    lab.view(b.dataset.view);
+    lab.view(b.dataset.view === "home" && !allInstalled() ? "exploded" : b.dataset.view);
   }));
 $("raysToggle").onclick = () => {
   state.optics.showRays = !state.optics.showRays;
@@ -882,6 +986,11 @@ $("labelToggle").onclick = () => {
   lab.labels(labels);
   $("labelToggle").setAttribute("aria-pressed", labels);
 };
+$("backgroundToggle").onclick = () => {
+  backgroundMotion = !backgroundMotion;
+  lab.backgroundMotion(backgroundMotion);
+  $("backgroundToggle").setAttribute("aria-pressed", String(backgroundMotion));
+};
 $("fullscreen").onclick = async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -894,6 +1003,7 @@ $("reset").onclick = () => {
   if (!confirm("重新预习会清除本轮安装、测验和挑战进度。已下载报告保留。"))
     return;
   state = fresh();
+  stepsOpen = toolsOpen = observationOpen = false;
   explodedPreview = false;
   notified = false;
   lab.configureStudentUnits(UNITS, [], true);

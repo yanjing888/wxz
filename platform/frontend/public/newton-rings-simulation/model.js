@@ -2,6 +2,7 @@ import * as T from "./vendor/three.module.js";
 import { OrbitControls } from "./vendor/OrbitControls.js";
 import { DEFAULT_OPTICS, opticalMetrics } from "./optics.js";
 import { createWorkbench } from "./workbench.js";
+import { createSceneBackground } from "./scene-background.js";
 
 // Reference numbers refer to PDF page 4 (JCD3) and page 15 (JCD-CCD).
 const specs = [
@@ -300,6 +301,8 @@ export function createLab(
   renderer.toneMapping = T.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
   host.prepend(renderer.domElement);
+  renderer.domElement.style.position = "relative";
+  const atmosphere = createSceneBackground(host);
   const scene = new T.Scene(),
     camera = new T.PerspectiveCamera(35, 1, 0.05, 100),
     controls = new OrbitControls(camera, renderer.domElement);
@@ -1172,6 +1175,7 @@ export function createLab(
     document.getElementById("filmExplanation").hidden = !filmMode;
     film.visible = filmMode;
     workbench.group.visible = !filmMode;
+    atmosphere.setVisible(!filmMode);
     for (const g of Object.values(groups)) g.visible = !filmMode;
     const views = {
       home: [
@@ -1271,7 +1275,7 @@ export function createLab(
         .applyMatrix4(g.matrixWorld)
         .project(camera);
       const shown =
-        labelOn &&
+        (labelOn || (studentMode && p.id === selected)) &&
         !filmMode &&
         (important.has(p.id) || p.id === selected) &&
         a.z < 1 &&
@@ -1436,6 +1440,7 @@ export function createLab(
     }
     controls.update();
     workbench.update(now);
+    atmosphere.update(now, r.width, r.height);
     renderer.render(scene, camera);
   }
   requestAnimationFrame(animate);
@@ -1466,6 +1471,7 @@ export function createLab(
   return {
     thumbs,
     removed,
+    backgroundMotion(value) { atmosphere.setEnabled(value); },
     configureStudentUnits(units, installed = [], snap = false) {
       studentMode = true;
       important.clear();

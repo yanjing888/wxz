@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:photo-entry": "node scripts/check-photo-capture-entry.mjs",
     "test:simulation-adjustment": "node scripts/check-simulation-adjustment.mjs",
+    "test:simulation-practice": "node scripts/check-simulation-practice.mjs",
     "test:chat-image-drafts": "node scripts/check-chat-image-drafts.mjs",
     "test:bench-camera-proxy": "node scripts/check-bench-camera-proxy.mjs",
     "test:composer-copy": "node scripts/check-composer-copy.mjs",
