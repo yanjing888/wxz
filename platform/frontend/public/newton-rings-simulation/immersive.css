@@ -52,6 +52,13 @@
 .observation-panel { position:absolute; top:66px; right:22px; width:280px; padding:12px; border:1px solid #40525f; border-radius:10px; background:#111f2bf2; z-index:4; }
 .immersive .observation { margin:8px 0 0; }.immersive #fieldStatus { font-size:12px; line-height:1.5; }
 .immersive .right-panel details { border-bottom:1px solid #2d414e; padding:16px 0; }.immersive summary { cursor:pointer; font-size:13px; color:#d3e0e5; }.immersive summary:focus-visible { outline:2px solid var(--accent); outline-offset:5px; }
+.learning-intro,.learning-content p { font-size:13px; line-height:1.8; color:#bdcbd1; margin:12px 0; }
+.learning-steps { display:grid; gap:7px; margin:12px 0; }
+.learning-steps button { text-align:left; font-size:12px; line-height:1.6; }
+.learning-content h3 { font-size:15px; margin:16px 0 8px; }
+.learning-content .learning-path { padding:12px; border:1px solid #527d75; border-radius:8px; color:#c5f1df; background:#203b3a; }
+.learning-observation { border-left:2px solid #84b8aa; padding-left:12px; }
+.immersive .learning-content details { padding:10px 0; border:0; }
 .immersive .connection-panel { margin:12px 0 0; padding:0; background:transparent; border:0; grid-template-columns:1fr; }.immersive .connection-panel .switch-row { font-size:13px; margin:9px 0; }.immersive .connection-panel input { width:17px; height:17px; }.immersive .connection-panel p { font-size:12px; }
 .view-options { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }.view-options button { font-size:12px; }
 .immersive .parts-list { display:grid; grid-template-columns:1fr 1fr; gap:7px; padding:12px 0 0; overflow:visible; }.immersive .part-card { min-width:0; padding:8px; }.immersive .part-card img { width:60px; height:36px; }.immersive .part-card small { display:none; }

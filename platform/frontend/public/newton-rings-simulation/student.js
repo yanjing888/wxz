@@ -19,6 +19,7 @@ import {
 import { openReport, downloadReport, downloadData } from "./student-report.js";
 import { PRACTICE_NAV, ADJUSTMENT_STEPS, practiceTask } from "./student-practice.js";
 import { adjustmentGoals } from "./student-adjustment.js";
+import { initLightPathLearning } from "./light-path-learning.js";
 const $ = (id) => document.getElementById(id),
   storageKey = `wxz-newton-student-v3:${localStorage.getItem("wxz_userId") || "guest"}`;
 const fresh = () => ({
@@ -68,6 +69,8 @@ try {
 let lab,
   busy = false,
   explodedPreview = false,
+  reviewInstalled = [],
+  reviewSelection = null,
   toastTimer,
   manipulationTimer,
   labels = false,
@@ -100,6 +103,8 @@ function toast(text) {
 const installed = (id) =>
   !UNIT_BY_ID[id]?.install || state.installed.includes(id);
 const allInstalled = () => state.installed.length === INSTALL_UNITS.length;
+const visuallyInstalled = (id) => !UNIT_BY_ID[id]?.install ||
+  (explodedPreview ? reviewInstalled : state.installed).includes(id);
 const inChallenge = () => state.stage === 3 && !!state.challenge;
 function centered() {
   return (
@@ -157,13 +162,13 @@ function selectUnit(raw, context = {}) {
   lab?.select(unit.model);
   $("partName").textContent = unit.name;
   $("partReference").textContent = unit.install
-    ? installed(id)
+    ? visuallyInstalled(id)
       ? "已安装"
       : "待安装"
     : "已装调节机构";
   $("partDescription").textContent = unit.description;
   $("partTip").textContent = explodedPreview
-    ? "旋转或缩放观察组件位置；点击“返回装配图”继续操作。"
+    ? "按顺序点击待安装组件，逐个装配；也可点击下方安装按钮。返回练习会保留原来的调节参数。"
     : inChallenge()
     ? "请独立观察视场进行调整。本轮不提供最佳位置提示。"
     : unit.tip;
@@ -229,6 +234,12 @@ let activeGesture = null,
   activeRaw = "";
 function interact(raw, event) {
   const id = UNIT_BY_ID[raw] ? raw : RAW_TO_UNIT[raw];
+  if (explodedPreview) {
+    if (!id || busy || visuallyInstalled(id)) return false;
+    if (event.phase === "start") selectUnit(id);
+    if (event.phase === "click") installReviewUnit(id);
+    return true;
+  }
   if (!id || busy || explodedPreview || state.stage === 2 || state.stage === 4) return false;
   if (!installed(id)) {
     if (state.stage !== 0) return false;
@@ -493,6 +504,12 @@ function paint() {
   syncControls();
 }
 function renderProgress() {
+  if (explodedPreview) {
+    $("nextStage").hidden = true;
+    $("progressBar").style.width = `${reviewInstalled.length / INSTALL_UNITS.length * 100}%`;
+    $("progressText").textContent = `重新装配 ${reviewInstalled.length} / ${INSTALL_UNITS.length} · 练习进度已保留`;
+    return;
+  }
   $("assemblyStatus").textContent =
     `安装组件 ${state.installed.length} / ${INSTALL_UNITS.length}`;
   const next = $("nextStage");
@@ -526,10 +543,10 @@ function renderProgress() {
   ][state.stage];
 }
 function renderDock() {
-  const expected = INSTALL_UNITS.find((u) => !state.installed.includes(u.id));
+  const expected = INSTALL_UNITS.find((u) => !visuallyInstalled(u.id));
   $("partsList").innerHTML = UNITS.map(
     (u) =>
-      `<button class="part-card ${installed(u.id) ? "installed" : "pending"} ${u.id === state.selected ? "active" : ""} ${state.stage === 0 && u.id === expected?.id ? "current" : ""}" data-unit="${u.id}"><img src="${lab.thumbs[u.model]}" alt="${u.name}三维模型"><span>${u.name}</span><small>${!u.install ? "已装 · 可调节" : installed(u.id) ? "✓ 已安装" : "待安装"}</small></button>`,
+      `<button class="part-card ${visuallyInstalled(u.id) ? "installed" : "pending"} ${u.id === state.selected ? "active" : ""} ${(state.stage === 0 || explodedPreview) && u.id === expected?.id ? "current" : ""}" data-unit="${u.id}"><img src="${lab.thumbs[u.model]}" alt="${u.name}三维模型"><span>${u.name}</span><small>${!u.install ? "已装 · 可调节" : visuallyInstalled(u.id) ? "✓ 已安装" : "待安装"}</small></button>`,
   ).join("");
   $("partsList")
     .querySelectorAll("[data-unit]")
@@ -568,12 +585,38 @@ function render() {
 }
 // This is a temporary model view; saved installation and assessment stay intact.
 function setExplodedPreview(enabled) {
+  if (enabled) {
+    reviewSelection = state.selected;
+    reviewInstalled = [];
+    state.selected = INSTALL_UNITS[0].id;
+  } else if (explodedPreview && reviewSelection) {
+    state.selected = reviewSelection;
+  }
   explodedPreview = enabled;
   activeGesture = null;
   activeRaw = "";
-  lab.configureStudentUnits(UNITS, enabled ? [] : state.installed);
+  lab.configureStudentUnits(UNITS, enabled ? reviewInstalled : state.installed);
   lab.explode(0);
   lab.view(enabled ? "exploded" : "home");
+}
+async function installReviewUnit(id) {
+  const current = INSTALL_UNITS.find((u) => !reviewInstalled.includes(u.id));
+  if (!explodedPreview || busy || !current) return;
+  if (id !== current.id) {
+    toast(`请先安装「${current.name}」。`);
+    return;
+  }
+  busy = true;
+  reviewInstalled.push(id);
+  lab.configureStudentUnits(UNITS, reviewInstalled);
+  render();
+  await new Promise((resolve) => setTimeout(resolve, 650));
+  busy = false;
+  if (!explodedPreview) return;
+  const next = INSTALL_UNITS.find((u) => !reviewInstalled.includes(u.id));
+  state.selected = next?.id || id;
+  render();
+  toast(next ? `${current.name}已就位，请继续安装${next.name}。` : "逐个装配完成，可以返回练习。再次查看爆炸图可重新装配。");
 }
 function setStage(stage) {
   if (busy || !allowed(stage)) return;
@@ -626,6 +669,10 @@ async function installCurrent() {
 }
 function renderGuide() {
   const host = $("guideContent");
+  if (explodedPreview) {
+    host.innerHTML = `<div class="step-section">重新装配 · ${reviewInstalled.length} / ${INSTALL_UNITS.length}</div><ol class="install-list">${INSTALL_UNITS.map((u, i) => `<li class="${visuallyInstalled(u.id) ? "done" : i === reviewInstalled.length ? "active" : ""}"><span class="number">${visuallyInstalled(u.id) ? "✓" : i + 1}</span>${u.name}</li>`).join("")}</ol><p class="feedback">点击三维组件或下方按钮逐个安装。返回练习后继续原来的调节任务。</p>`;
+    return;
+  }
   if (state.stage <= 1) {
     const current = INSTALL_UNITS.find((u) => !installed(u.id));
     const installation = `<ol class="install-list">${INSTALL_UNITS.map((u, i) => `<li class="${installed(u.id) ? "done" : current?.id === u.id ? "active" : ""}"><span class="number">${installed(u.id) ? "✓" : i + 1}</span>${u.name}</li>`).join("")}</ol>`;
@@ -819,11 +866,23 @@ function renderImmersive() {
   $("observationToggle").hidden = !allInstalled() || state.stage === 2 || state.stage === 4;
   $("explodedToggle").hidden = !allInstalled() || state.stage > 1;
   $("explodedToggle").disabled = busy;
-  $("explodedToggle").textContent = explodedPreview ? "返回装配图" : "查看爆炸图";
+  $("explodedToggle").textContent = explodedPreview ? "返回练习" : "查看爆炸图";
   $("explodedToggle").setAttribute("aria-pressed", String(explodedPreview));
   renderCurrentTask();
 }
 function renderCurrentTask() {
+  if (explodedPreview) {
+    const current = INSTALL_UNITS.find((u) => !reviewInstalled.includes(u.id));
+    $("currentTask").hidden = false;
+    $("taskNumber").textContent = `重新装配 · ${reviewInstalled.length} / ${INSTALL_UNITS.length}`;
+    $("taskTitle").textContent = current ? `安装${current.name}` : "全部组件已装配完成";
+    $("taskInstruction").textContent = current ? "点击该组件或右侧按钮逐个安装；拖动空白处旋转观察。" : "返回练习，继续原来的光路调节。";
+    $("taskAction").textContent = busy ? "安装中…" : current ? "安装此组件" : "返回练习";
+    $("taskAction").disabled = busy;
+    $("taskThumb").hidden = !current;
+    if (current) $("taskThumb").src = lab.thumbs[current.model];
+    return;
+  }
   const task = practiceTask(state);
   $("currentTask").hidden = state.stage === 2 || state.stage === 4;
   if ($("currentTask").hidden) return;
@@ -839,6 +898,11 @@ function renderCurrentTask() {
 function runCurrentTask() {
   if (busy) return;
   if (explodedPreview) {
+    const current = INSTALL_UNITS.find((u) => !reviewInstalled.includes(u.id));
+    if (current) {
+      installReviewUnit(current.id);
+      return;
+    }
     setExplodedPreview(false);
     render();
     return;
@@ -960,9 +1024,11 @@ for (const [id, key, unit] of [
     }
     change(key, e.target.checked, "电源与接线");
   };
+initLightPathLearning($("lightPathLearning"));
 document
   .querySelectorAll("[data-view]")
   .forEach((b) => (b.onclick = () => {
+    if (busy) return;
     if (explodedPreview) {
       setExplodedPreview(false);
       render();
@@ -1000,6 +1066,7 @@ $("fullscreen").onclick = async () => {
   }
 };
 $("reset").onclick = () => {
+  if (busy) return;
   if (!confirm("重新预习会清除本轮安装、测验和挑战进度。已下载报告保留。"))
     return;
   state = fresh();
