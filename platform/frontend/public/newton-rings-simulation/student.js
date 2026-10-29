@@ -20,6 +20,7 @@ import { openReport, downloadReport, downloadData } from "./student-report.js";
 import { PRACTICE_NAV, ADJUSTMENT_STEPS, practiceTask } from "./student-practice.js";
 import { adjustmentGoals } from "./student-adjustment.js";
 import { initLightPathLearning } from "./light-path-learning.js";
+import { simulationSubmission } from "./student-sync.js";
 const $ = (id) => document.getElementById(id),
   storageKey = `wxz-newton-student-v3:${localStorage.getItem("wxz_userId") || "guest"}`;
 const fresh = () => ({
@@ -32,6 +33,7 @@ const fresh = () => ({
   answers: [],
   quizCursor: 0,
   quizDone: false,
+  quizConfirmed: false,
   draft: [],
   challenge: null,
   actions: [],
@@ -66,6 +68,7 @@ try {
     );
   }
 } catch {}
+if (state.stage >= 3 && !state.quizConfirmed) state.stage = 2;
 let lab,
   busy = false,
   explodedPreview = false,
@@ -131,7 +134,7 @@ function passed() {
   return (
     allInstalled() &&
     state.guidePassed &&
-    state.quizDone &&
+    state.quizConfirmed &&
     challengePassed() &&
     totalScore() >= 80
   );
@@ -141,15 +144,15 @@ function allowed(stage) {
     stage === 0 ||
     (stage === 1 && allInstalled()) ||
     (stage === 2 && state.guidePassed) ||
-    (stage === 3 && state.quizDone) ||
-    (stage === 4 && !!state.challenge?.result)
+    (stage === 3 && state.quizConfirmed) ||
+    (stage === 4 && state.quizConfirmed && !!state.challenge?.result)
   );
 }
 function completed(stage) {
   return [
     allInstalled(),
     state.guidePassed,
-    state.quizDone,
+    state.quizConfirmed,
     challengePassed(),
     passed(),
   ][stage];
@@ -521,7 +524,7 @@ function renderProgress() {
   next.disabled = ![
     allInstalled(),
     state.guidePassed,
-    state.quizDone,
+    state.quizConfirmed,
     !!state.challenge?.result,
   ][state.stage];
   const fraction = [
@@ -702,6 +705,9 @@ function renderGuide() {
       state.answers = [];
       state.quizCursor = 0;
       state.quizDone = false;
+      state.quizConfirmed = false;
+      state.lastSubmission = null;
+      state.challenge = null;
       state.draft = [];
       state.stage = 2;
       stepsOpen = true;
@@ -729,7 +735,13 @@ function renderGuide() {
 function renderQuiz() {
   const host = $("guideContent");
   if (state.quizDone) {
-    host.innerHTML = `<div class="score">${quizScore()}<small> / 40</small></div><p class="feedback">预习题已完成，接下来独立完成成像挑战。</p>`;
+    host.innerHTML = `<div class="score">${quizScore()}<small> / 40</small></div><p class="feedback">${state.quizConfirmed ? '成绩已最终确认，接下来独立完成成像挑战。' : '作答已完成。最终确认后，成绩才会同步给老师，并解锁成像挑战。'}</p>${state.quizConfirmed ? '' : '<button id="confirmQuiz" class="operation primary">最终确认并同步成绩</button>'}`;
+    if ($("confirmQuiz")) $("confirmQuiz").onclick = () => {
+      state.quizConfirmed = true;
+      log("最终确认预习题", { score: quizScore() });
+      publishResult(true);
+      render();
+    };
     return;
   }
   const i = state.quizCursor,
@@ -815,6 +827,7 @@ function submitChallenge() {
     passed: result.passed,
   });
   log("提交成像挑战", { score, passed: result.passed });
+  publishResult(true);
   render();
   notifyCompletion();
   toast(
@@ -839,6 +852,20 @@ function notifyCompletion() {
     );
   }
 }
+function publishResult(capture = false) {
+  if (!state.quizConfirmed) return;
+  if (capture || (!state.lastSubmission && state.quizDone)) {
+    const savedRevision = state.challenge?.result?.submittedAt || Math.max(0, ...state.answers.map(a => Date.parse(a.at) || 0)) || state.startedAt;
+    state.lastSubmission = simulationSubmission(state, capture ? Date.now() : savedRevision);
+    save();
+  }
+  if (state.lastSubmission) window.parent.postMessage({
+    type: "wxz-simulation-result", experiment: "newton_rings", result: state.lastSubmission,
+  }, location.origin);
+}
+window.addEventListener("message", (event) => {
+  if (event.origin === location.origin && event.source === window.parent && event.data?.type === "wxz-request-simulation-result") publishResult();
+});
 function finishPractice() {
   if (busy || explodedPreview) return;
   const pending = goals().find((g) => !g.ok);
@@ -934,6 +961,7 @@ function runCurrentTask() {
   }
 }
 function reportData() {
+  if (!state.quizConfirmed || !state.challenge?.result) throw new Error("Report is not ready");
   return {
     schema: "wxz.newton-student.prep.v3",
     student: state.name || "未填写",
@@ -1079,9 +1107,15 @@ $("reset").onclick = () => {
   render();
 };
 $("closeReport").onclick = () => $("reportDialog").close();
-$("downloadReport").onclick = () => downloadReport(reportData());
+$("downloadReport").onclick = async () => {
+  const button = $("downloadReport");
+  button.disabled = true; button.textContent = "正在生成 Word 文档…";
+  try { await downloadReport(reportData()); }
+  catch { toast("报告生成失败，请重试"); }
+  finally { button.disabled = false; button.textContent = "下载报告 DOCX"; }
+};
 $("downloadJson").onclick = () => downloadData(reportData());
-$("printReport").onclick = () => window.print();
+$("printReport").onclick = () => $("reportBody").querySelector('iframe')?.contentWindow?.print();
 document.addEventListener("keydown", (e) => {
   if (
     !["ArrowUp", "ArrowDown"].includes(e.key) ||

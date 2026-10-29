@@ -343,7 +343,8 @@
         <TeacherProcessAssessment v-if="selectedClass" :key="selectedExpCode + '|' + selectedClass" :active="activeTab === 'process' && !loading && !contextBusy" :experiment-code="selectedExpCode" :class-name="selectedClass" />
       </div>
       <!-- ========== Tab 5: 报告分析 ========== -->
-      <TeacherReportTable v-show="activeTab === 'report' && reportPage === 'list'" :key="selectedExpCode" :rows="reportsByClass.flatMap(group => group.students)" :loading="loading" :exporting="exportingEvaluation" :export-error="exportError" @review="openReportReview" @review-all="openAllReports" @export-grades="exportEvaluation('grades')" @export-reports="exportEvaluation('reports')" @process="openProcessDetail" @download="downloadReportRow" @refresh="refresh" />
+      <SimulationResultDialog v-if="simulationRow" :row="simulationRow" :experiment-code="selectedExpCode" @close="simulationRow = null" />
+      <TeacherReportTable v-show="activeTab === 'report' && reportPage === 'list'" :key="selectedExpCode" :rows="reportsByClass.flatMap(group => group.students)" :loading="loading" :exporting="exportingEvaluation" :export-error="exportError" :simulation-error="simulationError" @simulation="simulationRow = $event" @review="openReportReview" @review-all="openAllReports" @export-grades="exportEvaluation('grades')" @export-reports="exportEvaluation('reports')" @process="openProcessDetail" @download="downloadReportRow" @refresh="refresh" />
       <div v-show="activeTab === 'report' && reportPage === 'review'" class="tab-panel report-workspace" :class="{ immersive: reportImmersive, 'compact-list': reportCompactList, 'single-review': reviewStudentId != null }">
         <div class="report-workspace-toolbar">
           <button type="button" :disabled="reportBusy" @click="reportPage = 'list'">← 返回评价列表</button><span>{{ reviewStudentId != null ? '单份报告批阅' : '全部报告 · ' + submittedReportCount + ' 份已提交' }}</span>
@@ -447,6 +448,7 @@ import TeacherWorkstationMonitor from '../components/teacher/TeacherWorkstationM
 import TeacherLearningPanel from '../components/teacher/TeacherLearningPanel.vue'
 import TeacherProcessAssessment from '../components/teacher/TeacherProcessAssessment.vue'
 import TeacherReportTable from '../components/teacher/TeacherReportTable.vue'
+import SimulationResultDialog from '../components/teacher/SimulationResultDialog.vue'
 import ReportFilePreview from '../components/teacher/ReportFilePreview.vue'
 
 const CURRENT_EXP_KEY = 'wxz_teacher_current_exp'
@@ -465,6 +467,8 @@ const experiments = ref([])
 const overview = ref(null)
 const classroom = ref(null)
 const reports = ref([])
+const simulationResults = ref([]), simulationRow = ref(null)
+const simulationError = ref('')
 const feedbackList = ref([])
 const selectedFeedbackId = ref(null)
 const students = ref([])
@@ -712,6 +716,7 @@ const reportsByClass = computed(() => {
     group.students.push({
       ...s,
       report: report || null,
+      simulation: simulationResults.value.find(item => item.userId === s.userId && item.studentClass === cls) || null,
       submitted
     })
     group.total++
@@ -835,6 +840,9 @@ async function loadExperimentData() {
   const code = selectedExpCode.value
   if (!code) return
   const scope = { experimentCode: code }
+  simulationError.value = ''
+  // Supplemental results must never block the existing overview or report roster.
+  loadSimulationResults(code, sequence)
   const [overviewRes, classroomRes, reportRes, feedbackRes, contextRes] = await Promise.all([
     teacherApi.overview(),
     teacherApi.classroom(scope),
@@ -855,9 +863,23 @@ async function loadExperimentData() {
   await loadPreviewReport(selectedReportId.value)
 }
 
+async function loadSimulationResults(code, sequence) {
+  try {
+    const { data } = await teacherApi.simulationResults({ experimentCode: code })
+    if (sequence !== teachingLoadSequence || code !== selectedExpCode.value) return
+    simulationResults.value = data || []
+    simulationError.value = ''
+  } catch (e) {
+    if (sequence !== teachingLoadSequence || code !== selectedExpCode.value) return
+    simulationResults.value = []
+    simulationError.value = '仿真预习结果暂时无法读取，学情及实验报告仍可正常查看。请确认后端已更新，或点击刷新重试。'
+  }
+}
+
 function clearTeachingData() {
   rememberGradeDraft(selectedReportId.value)
   previewSequence++
+  simulationResults.value = []; simulationRow.value = null; simulationError.value = ''
   classroom.value = null; reports.value = []; feedbackList.value = []; overview.value = null
   selectedUserId.value = null; selectedStudentClass.value = ''; selectedFeedbackId.value = null
   selectedReportId.value = null; selectedReportPreview.value = null; reportClassFilter.value = ''
@@ -897,6 +919,8 @@ async function refresh() {
     const { data } = await teacherApi.students()
     students.value = data || []
     await loadExperimentData()
+  } catch (e) {
+    loadError.value = e.response?.data?.message || '教学数据加载失败，请重试'
   } finally {
     loading.value = false
   }
@@ -1164,7 +1188,7 @@ function logout() {
 
 <style scoped>
 .report-workspace.single-review .report-layout{grid-template-columns:minmax(0,2fr) minmax(310px,1fr);max-width:1440px;width:100%;margin:0 auto}.single-review :deep(.grade-panel){grid-column:auto}@media(max-width:768px){.report-workspace.single-review .report-layout{display:flex}}
-.teaching-class-label{display:flex;align-items:center;gap:10px;font-size:12px;color:#64748b;margin-left:16px}.teaching-class-label select{min-width:180px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:7px 10px;color:#334155;font-size:12px}.teaching-class-label select:disabled{opacity:.6}@media(max-width:700px){.experiment-context{flex-wrap:wrap}.teaching-class-label{margin-left:0}}
+.teaching-class-label{display:flex;align-items:center;gap:10px;font-size: 12px;color: #64748b;margin-left:16px}.teaching-class-label select{min-width:180px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:7px 10px;color: #334155;font-size: 12px}.teaching-class-label select:disabled{opacity:.6}@media(max-width:700px){.experiment-context{flex-wrap:wrap}.teaching-class-label{margin-left:0}}
 .teacher-terminal {
   height: 100vh;
   overflow: hidden;
@@ -1227,19 +1251,19 @@ function logout() {
 .nav-tab {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   position: relative; padding: 4px 18px; border: none; background: transparent;
-  color: #94a3b8; transition: all 0.2s; white-space: nowrap;
+  color: #64748b; transition: all 0.2s; white-space: nowrap;
   border-radius: 8px 8px 0 0;
 }
 .nav-tab:hover { color: #64748b; background: rgba(0, 0, 0, 0.03); }
-.nav-tab:hover .tab-icon { color: #94a3b8; }
+.nav-tab:hover .tab-icon { color: #64748b; }
 .nav-tab.active .tab-icon { color: var(--icon-color, #4f46e5); }
 .nav-tab.active .tab-label { color: #0f172a; }
 .nav-tab.active::after {
   content: ''; position: absolute; bottom: 0; left: 18px; right: 18px;
   height: 2px; background: var(--icon-color, #4f46e5); border-radius: 999px;
 }
-.tab-icon { width: 26px; height: 26px; color: #cbd5e1; transition: color 0.2s; }
-.tab-label { font-size: 10px; font-weight: 500; letter-spacing: 0.02em; }
+.tab-icon { width: 26px; height: 26px; color: #64748b; transition: color 0.2s; }
+.tab-label { font-size: 12px; font-weight: 500; letter-spacing: 0.02em; }
 .nav-tab.active .tab-label { font-weight: 700; }
 .tab-badge {
   position: absolute; top: 4px; right: 10px;
@@ -1251,7 +1275,7 @@ function logout() {
 /* ====== 状态/加载 ====== */
 .terminal-state {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  color: #94a3b8; font-size: 15px;
+  color: #64748b; font-size: 15px;
 }
 .terminal-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 .tab-panel { height: 100%; overflow: hidden; display: flex; flex-direction: column; padding: 14px 24px 20px; }
@@ -1260,10 +1284,10 @@ function logout() {
 .tab-panel.learning-tab{padding:0}
 .analysis-shell{flex:1;min-height:0;display:grid;grid-template-columns:156px minmax(0,1fr);overflow:hidden;background:#f8fafc}
 .analysis-menu{display:flex;flex-direction:column;gap:7px;padding:18px 12px;border-right:1px solid #e4e9f3;background:#fff}
-.analysis-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:12px 13px;background:transparent;border:1px solid transparent;border-radius:7px;font-size:13px;color:#64748b;cursor:pointer;text-align:left;white-space:nowrap}
-.analysis-menu button svg{width:18px;height:18px;flex-shrink:0}.analysis-menu button:hover{background:#f8fafc;color:#4f46e5}.analysis-menu button.active{border-color:#e0e7ff;background:#eef2ff;color:#4f46e5;font-weight:600}.analysis-menu button:focus-visible{outline:2px solid #a5b4fc;outline-offset:2px}
+.analysis-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:12px 13px;background:transparent;border:1px solid transparent;border-radius:7px;font-size: 13px;color: #64748b;cursor:pointer;text-align:left;white-space:nowrap}
+.analysis-menu button svg{width:18px;height:18px;flex-shrink:0}.analysis-menu button:hover{background:#f8fafc;color: #4f46e5}.analysis-menu button.active{border-color:#e0e7ff;background:#eef2ff;color: #4f46e5;font-weight:600}.analysis-menu button:focus-visible{outline:2px solid #a5b4fc;outline-offset:2px}
 .analysis-content{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}.analysis-content>.tab-panel{flex:1;min-height:0}
-@media(max-width:600px){.analysis-shell{grid-template-columns:112px minmax(0,1fr)}.analysis-menu{padding:12px 7px;gap:6px}.analysis-menu button{padding:11px 8px;gap:6px;font-size:12px}.analysis-menu button svg{width:15px;height:15px}.overview-toolbar{flex-wrap:wrap;gap:10px}.analysis-content .class-search{max-width:100%}.analysis-content .overview-summary{flex-wrap:wrap}}
+@media(max-width:600px){.analysis-shell{grid-template-columns:112px minmax(0,1fr)}.analysis-menu{padding:12px 7px;gap:6px}.analysis-menu button{padding:11px 8px;gap:6px;font-size: 12px}.analysis-menu button svg{width:15px;height:15px}.overview-toolbar{flex-wrap:wrap;gap:10px}.analysis-content .class-search{max-width:100%}.analysis-content .overview-summary{flex-wrap:wrap}}
 .student-manage-panel { padding: 0; }
 
 /* ====== 统计栏 ====== */
@@ -1275,9 +1299,9 @@ function logout() {
 }
 .stat-item { display: inline-flex; align-items: center; gap: 4px; }
 .stat-item strong { color: #0f172a; font-size: 16px; font-weight: 700; margin: 0 2px; }
-.stat-item strong.c-green { color: #059669; }
+.stat-item strong.c-green { color: #047857; }
 .stat-item strong.c-red { color: #ef4444; }
-.stat-item em { font-size: 11px; color: #94a3b8; font-style: normal; }
+.stat-item em { font-size: 11px; color: #64748b; font-style: normal; }
 .stat-sep { width: 1px; height: 16px; background: #e4e9f3; margin: 0 18px; flex-shrink: 0; }
 
 /* ====== 学情总览 ====== */
@@ -1288,7 +1312,7 @@ function logout() {
   background: #fff;
 }
 .overview-summary { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; }
-.overview-summary .sep { color: #cbd5e1; }
+.overview-summary .sep { color: #64748b; }
 
 .overview-body { display: grid; grid-template-columns: 1fr 300px; gap: 0; flex: 1; min-height: 0; }
 .student-grid-section { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid #e4e9f3; }
@@ -1314,12 +1338,12 @@ function logout() {
   font-size: 13px; font-weight: 600; color: #1e293b; transition: background 0.12s;
 }
 .class-group-header:hover { background: #f0f4ff; }
-.class-group-header .chevron { width: 14px; height: 14px; color: #94a3b8; transition: transform 0.2s; flex-shrink: 0; }
+.class-group-header .chevron { width: 14px; height: 14px; color: #64748b; transition: transform 0.2s; flex-shrink: 0; }
 .class-group.expanded .class-group-header .chevron { transform: rotate(90deg); }
 .class-group-header .class-name { flex: 1; text-align: left; }
 .class-group-header .class-stats { display: flex; gap: 4px; flex-shrink: 0; }
 .stat-chip { padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #f1f5f9; color: #64748b; }
-.stat-chip.active-chip { background: #ecfdf5; color: #059669; }
+.stat-chip.active-chip { background: #ecfdf5; color: #047857; }
 .stat-chip.done-chip { background: #f0fdf4; color: #10b981; border: 1px solid #d1fae5; }
 .class-group-body { display: flex; flex-direction: column; }
 
@@ -1342,9 +1366,9 @@ function logout() {
 .learn-card--warn.learn-card--active { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.12); }
 .learn-card--done { border-color: #d1fae5; background: #f0fdf4; }
 .learn-card--done.learn-card--active { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.12); }
-.learn-card--done .learn-name { color: #059669; }
-.learn-card--done .learn-card-step { background: #ecfdf5; color: #059669; }
-.learn-report{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#94a3b8}.report-badge{display:inline-block;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:500;white-space:nowrap}.report-badge.missing{color:#64748b;background:#f1f5f9}.report-badge.submitted{color:#b45309;background:#fffbeb}.report-badge.graded{color:#059669;background:#ecfdf5}.stat-chip.report-chip{color:#6366f1;background:#eef2ff}
+.learn-card--done .learn-name { color: #047857; }
+.learn-card--done .learn-card-step { background: #ecfdf5; color: #047857; }
+.learn-report{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size: 11px;color: #64748b}.report-badge{display:inline-block;border-radius:5px;padding:3px 7px;font-size: 11px;font-weight:500;white-space:nowrap}.report-badge.missing{color: #64748b;background:#f1f5f9}.report-badge.submitted{color: #b45309;background:#fffbeb}.report-badge.graded{color: #047857;background:#ecfdf5}.stat-chip.report-chip{color: #6366f1;background:#eef2ff}
 
 .learn-card-top {
   display: flex; align-items: center; justify-content: space-between;
@@ -1373,16 +1397,16 @@ function logout() {
 .learn-stat {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
-.learn-stat-label { font-size: 10px; color: #94a3b8; font-weight: 600; }
+.learn-stat-label { font-size: 10px; color: #64748b; font-weight: 600; }
 .learn-stat-val { font-size: 13px; font-weight: 700; color: #334155; font-variant-numeric: tabular-nums; }
-.learn-stat.warn .learn-stat-val { color: #f59e0b; }
+.learn-stat.warn .learn-stat-val { color: #92400e; }
 
 /* 状态标签 */
 .state-pill {
   display: inline-flex; height: 22px; align-items: center; padding: 0 10px;
   border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap;
 }
-.state-pill.active { background: #ecfdf5; color: #059669; }
+.state-pill.active { background: #ecfdf5; color: #047857; }
 .state-pill.done { background: #f0fdf4; color: #10b981; border: 1px solid #d1fae5; }
 .state-pill.idle { background: #f1f5f9; color: #64748b; }
 
@@ -1393,7 +1417,7 @@ function logout() {
 }
 .priority-high { background: #fef2f2; color: #ef4444; }
 .priority-medium { background: #fffbeb; color: #d97706; }
-.priority-normal { background: #f1f5f9; color: #94a3b8; }
+.priority-normal { background: #f1f5f9; color: #64748b; }
 
 /* 详情面板 */
 .detail-panel {
@@ -1406,7 +1430,7 @@ function logout() {
   padding: 14px 16px; border-bottom: 1px solid #e4e9f3; flex-shrink: 0;
 }
 .detail-header h2 { color: #0f172a; font-size: 16px; font-weight: 700; }
-.detail-class { color: #94a3b8; font-size: 12px; margin-top: 2px; }
+.detail-class { color: #64748b; font-size: 12px; margin-top: 2px; }
 .detail-stats {
   display: grid; grid-template-columns: repeat(2, 1fr);
   border-bottom: 1px solid #e4e9f3; flex-shrink: 0;
@@ -1414,9 +1438,9 @@ function logout() {
 .detail-stats div { padding: 10px 14px; border-right: 1px solid #e4e9f3; border-bottom: 1px solid #e4e9f3; }
 .detail-stats div:nth-child(2n) { border-right: 0; }
 .detail-stats div:nth-last-child(-n+2) { border-bottom: 0; }
-.detail-stats span { display: block; color: #94a3b8; font-size: 11px; font-weight: 600; }
+.detail-stats span { display: block; color: #64748b; font-size: 11px; font-weight: 600; }
 .detail-stats strong { display: block; margin-top: 3px; color: #0f172a; font-size: 13px; font-weight: 700; }
-.detail-stats .detail-report-status.missing{color:#64748b}.detail-stats .detail-report-status.submitted{color:#b45309}.detail-stats .detail-report-status.graded{color:#059669}
+.detail-stats .detail-report-status.missing{color: #64748b}.detail-stats .detail-report-status.submitted{color: #b45309}.detail-stats .detail-report-status.graded{color: #047857}
 
 .detail-alert {
   display: flex; align-items: flex-start; gap: 8px;
@@ -1446,7 +1470,7 @@ function logout() {
 .fb-tabs { display: flex; border-bottom: 1px solid #e4e9f3; flex-shrink: 0; }
 .fb-tab {
   flex: 1; padding: 10px 0; font-size: 13px; font-weight: 600;
-  color: #94a3b8; transition: color 0.15s; position: relative;
+  color: #64748b; transition: color 0.15s; position: relative;
 }
 .fb-tab.active { color: #4f46e5; }
 .fb-tab.active::after {
@@ -1488,7 +1512,7 @@ function logout() {
   overflow: hidden; text-overflow: ellipsis; padding-right: 12px;
 }
 .fb-col-reply { color: #475569; }
-.fb-col-time { font-size: 12px; color: #94a3b8; }
+.fb-col-time { font-size: 12px; color: #64748b; }
 .fb-col-status { text-align: left; }
 
 .fb-badge {
@@ -1496,7 +1520,7 @@ function logout() {
   padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: 4px;
 }
 .fb-badge--pending { background: #fef3c7; color: #d97706; }
-.fb-badge--done { background: #f1f5f9; color: #94a3b8; }
+.fb-badge--done { background: #f1f5f9; color: #64748b; }
 .fb-badge--ok { background: #d1fae5; color: #047857; }
 .fb-badge--bad { background: #fee2e2; color: #b91c1c; }
 
@@ -1510,19 +1534,19 @@ function logout() {
 }
 .back-btn:hover { color: #4f46e5; }
 .back-icon { width: 16px; height: 16px; }
-.fb-detail-time { color: #94a3b8; font-size: 11px; }
+.fb-detail-time { color: #64748b; font-size: 11px; }
 .fb-detail-body { flex: 1; overflow-y: auto; padding: 16px; }
 .fb-detail-student {
   display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
 }
 .fb-detail-student strong { color: #0f172a; font-size: 15px; }
-.fb-detail-student span { color: #94a3b8; font-size: 12px; }
+.fb-detail-student span { color: #64748b; font-size: 12px; }
 .fb-detail-block { border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
 .fb-detail-q { background: #f5f7fc; border: 1px solid #e4e9f3; }
 .fb-detail-a { background: #eef2ff; border: 1px solid #c7d2fe; }
 .fb-detail-role {
   display: block; font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 6px;
+  letter-spacing: 0.05em; color: #64748b; margin-bottom: 6px;
 }
 .fb-detail-block p { font-size: 13px; line-height: 1.6; color: #334155; }
 .fb-detail-q p { color: #0f172a; }
@@ -1543,7 +1567,7 @@ function logout() {
 .fb-process-btn--bad { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
 .fb-process-btn--bad:hover:not(:disabled) { background: #fee2e2; }
 .fb-process-btn--bad.current { background: #dc2626; color: #fff; border-color: #dc2626; }
-.processed-tag { color: #94a3b8; font-size: 12px; }
+.processed-tag { color: #64748b; font-size: 12px; }
 
 /* ====== 摄像头监控 ====== */
 .camera-tab {
@@ -1585,7 +1609,7 @@ function logout() {
   font-size: 13px; font-weight: 600; color: #1e293b; transition: background 0.12s;
 }
 .class-group-header:hover { background: #f0f4ff; }
-.class-group-header .chevron { width: 14px; height: 14px; color: #94a3b8; transition: transform 0.2s; flex-shrink: 0; }
+.class-group-header .chevron { width: 14px; height: 14px; color: #64748b; transition: transform 0.2s; flex-shrink: 0; }
 .class-group.expanded .class-group-header .chevron { transform: rotate(90deg); }
 .class-group-header .class-name { flex: 1; text-align: left; }
 .class-group-header .class-stats { display: flex; gap: 4px; flex-shrink: 0; }
@@ -1605,7 +1629,7 @@ function logout() {
 .student-report-row.active { background: #eef2ff; }
 .stu-info { flex: 1; min-width: 0; }
 .stu-info strong { display: block; font-size: 13px; font-weight: 600; color: #1e293b; }
-.stu-info span { display: block; font-size: 11px; color: #94a3b8; margin-top: 1px; }
+.stu-info span { display: block; font-size: 11px; color: #64748b; margin-top: 1px; }
 .stu-badges { display: flex; gap: 4px; flex-shrink: 0; }
 .badge-help, .badge-err, .badge-ok {
   padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; white-space: nowrap;
@@ -1613,14 +1637,14 @@ function logout() {
 .badge-help { background: #fef3c7; color: #d97706; }
 .badge-err { background: #fee2e2; color: #dc2626; }
 .badge-ok { background: #dcfce7; color: #16a34a; }
-.stu-status.pending { font-size: 11px; color: #94a3b8; font-weight: 500; flex-shrink: 0; }
+.stu-status.pending { font-size: 11px; color: #64748b; font-weight: 500; flex-shrink: 0; }
 
 .rd-head {
   display: flex; align-items: center; justify-content: space-between;
   flex-shrink: 0; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #e4e9f3;
 }
 .rd-head h2 { color: #0f172a; font-size: 17px; font-weight: 700; }
-.rd-head p { color: #94a3b8; font-size: 12px; font-weight: 600; margin-top: 2px; }
+.rd-head p { color: #64748b; font-size: 12px; font-weight: 600; margin-top: 2px; }
 .rd-actions { display: flex; gap: 8px; }
 .rd-actions button {
   height: 32px; border-radius: 8px; border: 1px solid #e4e9f3;
@@ -1682,11 +1706,11 @@ function logout() {
 /* ====== 通用 ====== */
 .empty-state {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  color: #94a3b8; font-size: 14px; text-align: center;
+  color: #64748b; font-size: 14px; text-align: center;
 }
 .empty-state.small { min-height: 80px; }
 .bad-text { color: #ef4444 !important; font-weight: 700; }
-.ok-text { color: #059669 !important; font-weight: 700; }
+.ok-text { color: #047857 !important; font-weight: 700; }
 
 .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -1714,25 +1738,25 @@ function logout() {
   .rd-summary { flex-wrap: wrap; }
 }
 /* Each list owns its filters; keep the original header and Tab icons. */
-.experiment-context { display:flex; align-items:center; gap:10px; padding:8px 16px; flex-shrink:0; background:#fff; border-bottom:1px solid #e4e9f3; font-size:12px; color:#64748b; }
+.experiment-context { display:flex; align-items:center; gap:10px; padding:8px 16px; flex-shrink:0; background:#fff; border-bottom:1px solid #e4e9f3; font-size: 12px; color: #64748b; }
 .experiment-context :deep(.exp-select-name) { max-width:min(600px, calc(100vw - 130px)); }
-.learn-identity { font-size:11px; color:#94a3b8; margin:5px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.class-search { min-width:0; width:240px; height:32px; border:1px solid #e4e9f3; background:#fff; border-radius:6px; padding:6px 10px; font-size:12px; color:#334155; }
+.learn-identity { font-size: 11px; color: #64748b; margin:5px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.class-search { min-width:0; width:240px; height:32px; border:1px solid #e4e9f3; background:#fff; border-radius:6px; padding:6px 10px; font-size: 12px; color: #334155; }
 .class-search:focus { outline:2px solid #c7d2fe; border-color:#818cf8; }
 .overview-toolbar { gap:12px; flex-wrap:wrap; }
 .report-search { width:100%; margin-bottom:8px; flex-shrink:0; }
-.report-state-filter { border:1px solid #e4e9f3; background:#fff; border-radius:6px; padding:6px 10px; font-size:12px; color:#334155; }
+.report-state-filter { border:1px solid #e4e9f3; background:#fff; border-radius:6px; padding:6px 10px; font-size: 12px; color: #334155; }
 .report-state-filter { margin-bottom:10px; flex-shrink:0; }
-.class-empty { padding:14px 16px; color:#94a3b8; font-size:12px; }
-.teacher-load-error { padding:10px 16px; background:#fef2f2; color:#dc2626; font-size:12px; }
+.class-empty { padding:14px 16px; color: #64748b; font-size: 12px; }
+.teacher-load-error { padding:10px 16px; background:#fef2f2; color: #dc2626; font-size: 12px; }
 .teacher-load-error button { margin-left:12px; text-decoration:underline; }
 
 /* Report review: roster, document and grading remain independently scrollable. */
 .report-workspace { background: #f8fafc; min-height: 0; }
 .report-workspace.immersive { position: fixed; inset: 0; z-index: 60; height: 100dvh; }
-.report-pagination{display:flex;align-items:center;gap:8px;margin-right:8px}.report-pagination span{font-variant-numeric:tabular-nums;color:#64748b;white-space:nowrap}
+.report-pagination{display:flex;align-items:center;gap:8px;margin-right:8px}.report-pagination span{font-variant-numeric:tabular-nums;color: #64748b;white-space:nowrap}
 .report-workspace-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 18px; color: #475569; font-size: 12px; flex-shrink: 0; background: #fff; border-bottom: 1px solid #e4e9f3; }
-.toolbar-muted { color: #94a3b8; }
+.toolbar-muted { color: #64748b; }
 .workspace-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .workspace-actions button { height: 30px; border: 1px solid #e4e9f3; border-radius: 6px; background: #fff; padding: 0 12px; color: #64748b; font-size: 12px; }
 .workspace-actions button[aria-pressed="true"] { color: #4f46e5; border-color: #c7d2fe; background: #eef2ff; }
@@ -1750,7 +1774,7 @@ function logout() {
 .report-workspace .report-class-list { gap: 14px; }
 .report-workspace .class-group { border: 0; border-radius: 0; overflow: visible; flex-shrink: 0; }
 .report-workspace .class-group-header { padding: 0 2px 8px; background: #fff; color: #475569; font-size: 12px; }
-.report-workspace .class-stats { font-size: 11px; color: #94a3b8; font-weight: 400; }
+.report-workspace .class-stats { font-size: 11px; color: #64748b; font-weight: 400; }
 .report-workspace .class-group-body { gap: 10px; }
 .report-workspace .student-report-row { display: flex; flex-direction: column; align-items: stretch; gap: 0; border: 1px solid #e4e9f3; border-radius: 8px; padding: 13px; background: #fff; }
 .report-workspace .student-report-row:hover:not(:disabled) { border-color: #c7d2fe; background: #fafaff; }
@@ -1763,10 +1787,10 @@ function logout() {
 .report-status-badge.graded { color: #047857; background: #ecfdf5; }
 .report-status-badge.unsubmitted { color: #64748b; background: #f1f5f9; }
 .report-student-id { color: #64748b; font-size: 11px; margin-top: 5px; }
-.report-submission-time { font-size: 11px; color: #94a3b8; margin: 10px 0; line-height: 1.5; }
+.report-submission-time { font-size: 11px; color: #64748b; margin: 10px 0; line-height: 1.5; }
 .report-student-scores { display: flex; justify-content: space-between; gap: 8px; color: #64748b; font-size: 11px; }
 .report-student-scores b { margin-left: 4px; color: #334155; font-weight: 600; }
-.report-student-scores small { color: #94a3b8; font-size: 10px; }
+.report-student-scores small { color: #64748b; font-size: 10px; }
 .compact-list .student-report-row { padding: 10px 12px; }
 .compact-list .report-submission-time, .compact-list .report-student-scores { display: none; }
 .report-workspace .report-detail-section { padding: 0; }

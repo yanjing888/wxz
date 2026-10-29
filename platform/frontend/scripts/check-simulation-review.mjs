@@ -26,6 +26,7 @@ const source = (await readFile(new URL("../public/newton-rings-simulation/studen
 const controller = source.slice(0, source.indexOf('try {\n  lab = createLab')).replace(/import\s+[\s\S]*?from\s+"[^"]+";/g, "");
 const context = vm.createContext({
   ...course, ...optics, ...practice, adjustmentGoals,
+  window: { addEventListener() {} },
   document: { body: node("body"), getElementById: node, createElement: () => node("canvas"), querySelector: node },
   localStorage: { getItem: () => null, setItem() {} },
   setTimeout: (callback) => { queueMicrotask(callback); return 1; }, clearTimeout() {},

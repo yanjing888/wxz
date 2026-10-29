@@ -51,8 +51,8 @@ const description = computed(() => props.dimensions.map(d => `${d.label}：${d.v
 .learning-radar svg{display:block;width:100%;max-width:340px;margin:auto}
 .radar-ring{fill:#f7f8fb;stroke:#c8cedb;stroke-width:1;stroke-dasharray:5 5}.radar-ring:nth-child(even){fill:#edf0f6}.radar-axis{stroke:#bdc5d4;stroke-width:1;stroke-dasharray:5 5}
 .radar-sector{fill:rgba(99,102,180,.38);stroke:none}.radar-outline{fill:none;stroke:#6265ad;stroke-width:2;stroke-linejoin:round}.radar-dot{fill:#fff;stroke:#6265ad;stroke-width:2}
-.radar-label{fill:#64748b;font-size:12px}.radar-empty{fill:#94a3b8;font-size:12px}
-.dimension-values{display:flex;flex-direction:column;gap:11px;padding:0 18px 18px}.dimension-value-head{display:flex;justify-content:space-between;font-size:12px;color:#64748b}.dimension-values strong{font-size:13px;color:#334155;font-variant-numeric:tabular-nums}
-.with-bars svg{max-width:370px;margin:6px auto 0}.with-bars .radar-label{fill:#475569;font-size:12px;font-weight:500}.with-bars .dimension-values{padding:0 24px 24px;gap:15px}.with-bars .dimension-value-head{color:#475569}.with-bars .dimension-value-head strong{color:#4f46e5;font-size:13px;font-weight:600}
+.radar-label{fill:#64748b;font-size: 12px}.radar-empty{fill:#94a3b8;font-size: 12px}
+.dimension-values{display:flex;flex-direction:column;gap:11px;padding:0 18px 18px}.dimension-value-head{display:flex;justify-content:space-between;font-size: 12px;color: #64748b}.dimension-values strong{font-size: 13px;color: #334155;font-variant-numeric:tabular-nums}
+.with-bars svg{max-width:370px;margin:6px auto 0}.with-bars .radar-label{fill:#475569;font-size: 12px;font-weight:500}.with-bars .dimension-values{padding:0 24px 24px;gap:15px}.with-bars .dimension-value-head{color: #475569}.with-bars .dimension-value-head strong{color: #4f46e5;font-size: 13px;font-weight:600}
 .dimension-track{height:5px;border-radius:5px;background:#eef1f8;margin-top:8px;overflow:hidden}.dimension-track>span{display:block;height:100%;border-radius:5px;background:#818cf8}.dimension-track.unmeasured{background:repeating-linear-gradient(90deg,#edf0f6 0,#edf0f6 4px,transparent 4px,transparent 7px)}
 </style>

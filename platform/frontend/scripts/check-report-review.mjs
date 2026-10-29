@@ -38,6 +38,7 @@ const classOptions = {}
 const scopedRequests = []
 const detail = id => ({ ...reports.find(r => r.sessionId === id), studentReportSections: { results: '测得曲率半径 1.02 m' } })
 const teacherApi = {
+  simulationResults: async () => ({ data: [{ userId: 3, studentClass: '物理一班', hasResult: true, knowledgeScore: 35, totalScore: null }, { userId: 1, studentClass: '物理二班', hasResult: true, knowledgeScore: 40, totalScore: 100, passed: true }] }),
   teachingContext: async code => ({ data: { experimentCode: code, className: classSelections[code] || '', classes: classOptions[code] || ['物理一班', '物理二班'] } }),
   selectTeachingClass: async (code, name) => { classSelections[code] = name; return { data: {} } },
   students: async () => ({ data: students }), overview: async () => ({ data: {} }),
@@ -62,6 +63,8 @@ assert.equal(state.studentsByClass.length, 0, 'An experiment with no participati
 state.classroom = initialClassroom
 assert.equal(state.navTabs.find(tab => tab.key === 'overview').label, '学情分析')
 assert.equal(state.reportPage, 'list', 'Report analysis must start with the summary table')
+assert.equal(state.reportsByClass.flatMap(g => g.students).find(s => s.userId === 3).simulation.knowledgeScore, 35, 'Prep results are visible before a formal report is submitted')
+assert.equal(state.reportsByClass.flatMap(g => g.students).find(s => s.userId === 1 && s.studentClass === '物理一班').simulation, null, 'Prep results must not leak across classes')
 assert(!state.navTabs.some(tab => tab.key === 'learning'), 'statistics belongs to the shared analysis tab')
 assert.equal(state.analysisPage, 'overview')
 assert.equal(state.experimentContextVisible, true)
@@ -206,6 +209,29 @@ state.activeTab = 'process'
 await settle()
 assert.deepEqual(state.teachingClasses, ['物理一班'], 'Re-entering process assessment must refresh the assigned class options')
 assert.equal(state.selectedClass, '', 'A removed assignment must not leave a stale selected class')
+// Optional prep failures (including an older running backend returning 404)
+// must not erase the overview or the existing experiment evaluation roster.
+const originalSimulationApi = teacherApi.simulationResults
+teacherApi.simulationResults = async () => { throw Object.assign(new Error('Not Found'), { response: { status: 404 } }) }
+state.clearTeachingData()
+await state.loadExperimentData()
+await settle()
+assert.equal(state.classroom.students.length, students.length)
+assert.equal(state.reports.length, reports.length)
+assert.ok(state.reportsByClass.flatMap(g => g.students).length > 0)
+assert.ok(state.simulationError)
+assert.equal(state.loadError, '')
+const slowSimulation = deferred()
+teacherApi.simulationResults = () => slowSimulation.promise
+state.clearTeachingData()
+await state.loadExperimentData()
+assert.equal(state.reports.length, reports.length, 'A hanging optional request must not delay reports')
+teacherApi.simulationResults = originalSimulationApi
+await state.loadExperimentData()
+slowSimulation.resolve({ data: [{ userId: 999, hasResult: true }] })
+await settle()
+assert.ok(!state.simulationResults.some(row => row.userId === 999), 'Late supplemental responses must not replace newer data')
+assert.equal(state.simulationError, '')
 teacher.app.unmount()
 
 const emitted = []

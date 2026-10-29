@@ -379,16 +379,16 @@ async function removeFromCurrent(stu) {
 
 <style scoped>
 .task-publishing { border:1px solid #e4e9f3; background:#fafbff; border-radius:8px; padding:10px 14px; margin:0 0 12px; flex-shrink:0; }
-.task-publishing h3 { font-size:13px; font-weight:600; color:#334155; margin-right:auto; }
-.task-publishing details { font-size:12px; margin-top:8px; color:#64748b; }
+.task-publishing h3 { font-size: 13px; font-weight:600; color: #334155; margin-right:auto; }
+.task-publishing details { font-size: 12px; margin-top:8px; color: #64748b; }
 .task-publishing summary { cursor:pointer; }
-.task-publishing textarea { display:block; width:100%; border:1px solid #e4e9f3; border-radius:6px; padding:8px; margin:6px 0 10px; background:white; font-size:13px; }
+.task-publishing textarea { display:block; width:100%; border:1px solid #e4e9f3; border-radius:6px; padding:8px; margin:6px 0 10px; background:white; font-size: 13px; }
 .task-publishing input[type=datetime-local] { display:block; border:1px solid #e4e9f3; background:#fff; padding:6px; margin-top:6px; border-radius:6px; }
 .task-publishing ol { list-style:decimal; padding:10px 0 10px 20px; line-height:1.8; max-height:160px; overflow:auto; }
-.publish-actions { display:flex; gap:12px; align-items:center; flex-wrap:wrap; font-size:12px; color:#64748b; }
-.student-class-row td { background:#f8f9fc; font-weight:600; color:#475569; }
+.publish-actions { display:flex; gap:12px; align-items:center; flex-wrap:wrap; font-size: 12px; color: #64748b; }
+.student-class-row td { background:#f8f9fc; font-weight:600; color: #475569; }
 .sm-table input[type=checkbox] { accent-color:#4f46e5; }
-.sm-select { border:1px solid #e2e8f0; background:#fff; border-radius:8px; height:34px; padding:0 10px; font-size:12px; color:#475569; }
+.sm-select { border:1px solid #e2e8f0; background:#fff; border-radius:8px; height:34px; padding:0 10px; font-size: 12px; color: #475569; }
 
 .student-manage {
   display: flex;
@@ -497,7 +497,7 @@ async function removeFromCurrent(stu) {
   font-weight: 600;
 }
 .sm-tag.current { background: #dcfce7; color: #15803d; }
-.sm-tag.muted { background: #f1f5f9; color: #94a3b8; }
+.sm-tag.muted { background: #f1f5f9; color: #64748b; }
 .sm-link {
   background: none;
   border: none;
@@ -514,7 +514,7 @@ async function removeFromCurrent(stu) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 14px;
 }
 .sm-message {
@@ -545,7 +545,7 @@ async function removeFromCurrent(stu) {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
 }
 .sm-modal h3 { font-size: 16px; font-weight: 700; color: #0f172a; }
-.sm-modal-hint { margin-top: 6px; font-size: 12px; color: #94a3b8; line-height: 1.6; }
+.sm-modal-hint { margin-top: 6px; font-size: 12px; color: #64748b; line-height: 1.6; }
 .sm-field { display: block; margin-top: 12px; }
 .sm-field span { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: #64748b; }
 .sm-field input {
@@ -579,4 +579,9 @@ async function removeFromCurrent(stu) {
   color: #b91c1c;
   line-height: 1.6;
 }
+
+/* Table hierarchy: labels remain distinct from the data rows. */
+thead th { font-size:13px; font-weight:700; color:#334155; line-height:1.5; }
+thead th button { font:inherit; color:inherit; }
+tbody td { font-size:13px; line-height:1.6; }
 </style>

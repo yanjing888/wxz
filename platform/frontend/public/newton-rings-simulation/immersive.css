@@ -1,70 +1,81 @@
-.immersive { height:100dvh; overflow:hidden; --accent:#8bc9bb; }
+.immersive { height:100dvh; overflow:hidden; --bg:#060e1c; --panel:#0c192c; --line:#2b4261; --text:#edf3ff; --muted:#b8cce7; --accent:#86a9d8; }
 .immersive [hidden] { display:none !important; }
-.practice-header { height:56px; padding:0 22px; display:flex; align-items:center; justify-content:space-between; gap:20px; background:#0c1822; border-bottom:1px solid #273540; }
+.practice-header { height:56px; padding:0 22px; display:flex; align-items:center; justify-content:space-between; gap:20px; background:#081222; border-bottom:0; }
 .experiment-title { font-size:15px; font-weight:500; white-space:nowrap; }
 .immersive .journey { height:100%; border:0; background:transparent; gap:8px; }
 .immersive .journey button {
   position:relative; isolation:isolate; height:100%; min-width:116px;
   font-size:14px; letter-spacing:1px; padding:0 20px; border-radius:0;
-  background:transparent; transition:color .2s;
+  background:transparent; border-color:transparent;
+  transition:color .22s ease,text-shadow .22s ease;
 }
 .immersive .journey button::before {
   content:""; position:absolute; inset:8px 0 0; z-index:-1;
+  pointer-events:none;
   clip-path:polygon(12px 0,calc(100% - 12px) 0,100% 100%,0 100%);
-  background:linear-gradient(180deg,#80dbc000,#80dbc01f); opacity:0;
-  transition:opacity .2s;
+  background:linear-gradient(180deg,#739ad500,#739ad533); opacity:0;
+  transition:opacity .22s ease;
 }
 .immersive .journey button::after {
-  content:""; position:absolute; bottom:0; left:20%; right:20%; height:3px;
-  border-radius:3px 3px 0 0; background:linear-gradient(90deg,#6bb9a4,#c8ffea,#6bb9a4);
-  box-shadow:0 -3px 14px #9de8cc40; opacity:0; transform:scaleX(.5);
-  transition:opacity .2s,transform .2s;
+  content:""; position:absolute; bottom:0; left:16%; right:16%; height:3px;
+  pointer-events:none; border-radius:3px 3px 0 0;
+  background:linear-gradient(90deg,#537fb8,#c1dcff,#537fb8);
+  box-shadow:0 -2px 12px #80b7ff66; opacity:0; transform:scaleX(.55);
+  transition:opacity .22s ease,transform .22s ease;
 }
-.immersive .journey button:not(:disabled):hover { background:transparent; color:#d7f3e9; }
-.immersive .journey button:not(:disabled):hover::before { opacity:.5; }
-.immersive .journey button.active { background:transparent; color:#bdf3df; font-weight:600; }
+.immersive .journey button:not(:disabled):hover { background:transparent; border-color:transparent; color:#eef6ff; text-shadow:0 0 14px #91bdff40; }
+.immersive .journey button:not(:disabled):hover::before { opacity:.7; }
+.immersive .journey button:not(:disabled):hover::after { opacity:.55; transform:scaleX(.8); }
+.immersive .journey button.active { background:transparent; color:#e0edff; font-weight:600; text-shadow:0 0 16px #91bdff33; }
 .immersive .journey button.active::before,.immersive .journey button.active::after { opacity:1; transform:scaleX(1); }
-.immersive .journey button.completed { color:#abc7c2; }
-.quiet-button { background:transparent; border-color:transparent; color:#b8c7ce; }
+.immersive .journey button.active:not(:disabled):hover::before { opacity:1; background:linear-gradient(180deg,#739ad508,#739ad54a); }
+.immersive .journey button.active:not(:disabled):hover::after { opacity:1; transform:scaleX(1.08); }
+.immersive .journey button:focus-visible { outline:2px solid #91baff; outline-offset:-5px; border-radius:8px; }
+.immersive .journey button:focus-visible::before { opacity:1; }
+.immersive .journey button.completed { color:#a8bddb; }
+@media(prefers-reduced-motion:reduce) {
+  .immersive .journey button,.immersive .journey button::before,.immersive .journey button::after { transition:none; }
+}
+.quiet-button { background:transparent; border-color:transparent; color:#bfcee4; }
 .immersive .workspace { display:block; position:relative; height:calc(100dvh - 56px); min-height:0; }
-.immersive .scene-panel { position:absolute; inset:0; height:100%; background:radial-gradient(ellipse at 50% 40%,#223743,#101c27 80%); }
+.immersive .scene-panel { position:absolute; inset:0; height:100%; background:radial-gradient(ellipse at 48% 35%,#0d1b30 0%,#091426 45%,#060e1c 100%); }
 .immersive #viewport > .scene-atmosphere { position:absolute; inset:0; pointer-events:none; }
 .immersive #viewport > canvas:not(.scene-atmosphere) { position:relative; }
 .scene-actions,.scene-utilities { position:absolute; z-index:5; top:18px; display:flex; gap:8px; }
 .scene-actions { left:22px; }.scene-utilities { right:22px; }
-.scene-actions button,.scene-utilities button { background:#14232cdd; border-color:#3b4b56; font-size:12px; padding:10px 15px; }
-.immersive button[aria-expanded="true"],.immersive button[aria-pressed="true"] { background:#2b4247; border-color:#76978f; color:#eef7f5; }
-.immersive .primary { background:#a6d9c8; border-color:#a6d9c8; color:#132a25; font-weight:600; }.immersive .primary:hover { background:#c0eadc; }
-.current-task { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); width:min(660px,calc(100% - 44px)); min-height:90px; display:flex; align-items:center; gap:18px; padding:16px 20px; border:1px solid #4b5c65; border-radius:12px; background:#13222ded; box-shadow:0 10px 32px #0003; z-index:5; }
+.scene-actions button,.scene-utilities button { background:#102039ed; border-color:#3e5879; font-size:12px; padding:10px 15px; }
+.immersive button[aria-expanded="true"],.immersive button[aria-pressed="true"] { background:#1b3456; border-color:#7297c8; color:#f0f6ff; }
+.immersive .primary { background:#294f80; border-color:#294f80; color:#edf3ff; font-weight:600; }.immersive .primary:hover { background:#365f91; }
+.current-task { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); width:min(660px,calc(100% - 44px)); min-height:90px; display:flex; align-items:center; gap:18px; padding:16px 20px; border:1px solid #2d4564; border-radius:12px; background:#0d1b2ef5; box-shadow:0 10px 32px #0003; z-index:5; }
 #taskThumb { width:66px; height:54px; object-fit:contain; flex:0 0 auto; }.task-copy { flex:1; min-width:0; }
-#taskNumber { font-size:12px; color:#b6c4ca; font-variant-numeric:tabular-nums; }
+#taskNumber { font-size:12px; color:#b8cce8; font-variant-numeric:tabular-nums; }
 .immersive #taskTitle { font-size:17px; font-weight:500; margin:4px 0; letter-spacing:0; }
-#taskInstruction { font-size:13px; color:#bdcbd1; margin:4px 0 0; line-height:1.5; }#taskInstruction:empty { display:none; }
+#taskInstruction { font-size:13px; color:#c2d2e8; margin:4px 0 0; line-height:1.5; }#taskInstruction:empty { display:none; }
 #taskAction { white-space:nowrap; padding:12px 18px; font-size:13px; }
-.immersive .panel { position:absolute; top:66px; bottom:138px; z-index:6; width:300px; border:1px solid #40525f; border-radius:10px; padding:18px; background:#111f2bf5; box-shadow:0 12px 36px #0004; }
+.immersive .panel { position:absolute; top:66px; bottom:138px; z-index:6; width:300px; border:1px solid #2b4261; border-radius:10px; padding:18px; background:#0c192cf7; box-shadow:0 12px 36px #0004; }
 .immersive .left-panel { left:22px; display:flex; height:auto; min-height:0; }.immersive .right-panel { right:22px; display:block; height:auto; }
-.drawer-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0; }.drawer-heading b { font-size:14px; font-weight:500; }.drawer-heading button { font-size:12px; border:0; padding:6px 8px; background:transparent; color:#b0c0c8; }
+.drawer-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0; }.drawer-heading b { font-size:14px; font-weight:500; }.drawer-heading button { font-size:12px; border:0; padding:6px 8px; background:transparent; color:#b9cce7; }
 .immersive .guide-footer { padding-top:12px; margin-top:auto; }.immersive .guide-footer span { font-size:12px; }
 .immersive .progress-track { flex-shrink:0; }
 .finished-installation { margin:4px 0 18px; }
-.immersive .install-list { margin:6px 0 16px; }.immersive .install-list li { font-size:13px; padding:9px 0; }.immersive .install-list li.done { color:#a4bcb8; }.immersive .install-list li.active { color:#e7ede9; }.immersive .install-list .number { font-size:11px; }
-.step-section { font-size:12px; color:#90a8b3; margin:16px 0 6px; }.immersive .goal-list li { font-size:13px; }
-.observation-panel { position:absolute; top:66px; right:22px; width:280px; padding:12px; border:1px solid #40525f; border-radius:10px; background:#111f2bf2; z-index:4; }
+.immersive .install-list { margin:6px 0 16px; }.immersive .install-list li { font-size:13px; padding:9px 0; }.immersive .install-list li.done { color:#aec5e6; }.immersive .install-list li.active { color:#edf4ff; }.immersive .install-list .number { font-size:11px; }
+.step-section { font-size:12px; color:#abc1df; margin:16px 0 6px; }.immersive .goal-list li { font-size:13px; }
+.observation-panel { position:absolute; top:66px; right:22px; width:280px; padding:12px; border:1px solid #2b4261; border-radius:10px; background:#0c192cf5; z-index:4; }
 .immersive .observation { margin:8px 0 0; }.immersive #fieldStatus { font-size:12px; line-height:1.5; }
-.immersive .right-panel details { border-bottom:1px solid #2d414e; padding:16px 0; }.immersive summary { cursor:pointer; font-size:13px; color:#d3e0e5; }.immersive summary:focus-visible { outline:2px solid var(--accent); outline-offset:5px; }
-.learning-intro,.learning-content p { font-size:13px; line-height:1.8; color:#bdcbd1; margin:12px 0; }
+.immersive .right-panel details { border-bottom:1px solid #304968; padding:16px 0; }.immersive summary { cursor:pointer; font-size:13px; color:#dce8f9; }.immersive summary:focus-visible { outline:2px solid var(--accent); outline-offset:5px; }
+.learning-intro,.learning-content p { font-size:13px; line-height:1.8; color:#c2d2e8; margin:12px 0; }
 .learning-steps { display:grid; gap:7px; margin:12px 0; }
 .learning-steps button { text-align:left; font-size:12px; line-height:1.6; }
 .learning-content h3 { font-size:15px; margin:16px 0 8px; }
-.learning-content .learning-path { padding:12px; border:1px solid #527d75; border-radius:8px; color:#c5f1df; background:#203b3a; }
-.learning-observation { border-left:2px solid #84b8aa; padding-left:12px; }
+.learning-content .learning-path { padding:12px; border:1px solid #496c97; border-radius:8px; color:#d5e5ff; background:#142b48; }
+.learning-observation { border-left:2px solid #86a9d8; padding-left:12px; }
 .immersive .learning-content details { padding:10px 0; border:0; }
 .immersive .connection-panel { margin:12px 0 0; padding:0; background:transparent; border:0; grid-template-columns:1fr; }.immersive .connection-panel .switch-row { font-size:13px; margin:9px 0; }.immersive .connection-panel input { width:17px; height:17px; }.immersive .connection-panel p { font-size:12px; }
 .view-options { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }.view-options button { font-size:12px; }
 .immersive .parts-list { display:grid; grid-template-columns:1fr 1fr; gap:7px; padding:12px 0 0; overflow:visible; }.immersive .part-card { min-width:0; padding:8px; }.immersive .part-card img { width:60px; height:36px; }.immersive .part-card small { display:none; }
-.immersive .part-summary h2 { font-size:15px; }.immersive .part-summary p,.immersive .component-editor p { font-size:12px; }.immersive #reset { margin-top:18px; color:#a9bcc5; }
+.immersive .part-summary h2 { font-size:15px; }.immersive .part-summary p,.immersive .component-editor p { font-size:12px; }.immersive #reset { margin-top:18px; color:#b8cce7; }
 .immersive #modelInteraction { bottom:136px; font-size:12px; padding:8px 12px; max-width:min(650px,90%); }.immersive .toast { bottom:145px; z-index:12; font-size:13px; }
-.immersive .part-label { font-size:12px; padding:6px 10px; background:#142833ee; }.immersive .part-label.selected { border-color:#b6dfcc; color:#e3f4ed; box-shadow:0 0 0 3px #a6d9c81a; }
+.immersive .part-label { font-size:12px; padding:6px 10px; background:#11223bf2; }.immersive .part-label.selected { border-color:#afceff; color:#ebf3ff; box-shadow:0 0 0 3px #294f801a; }
 .immersive[data-stage="2"] .left-panel,.immersive[data-stage="4"] .left-panel { width:380px; bottom:22px; }
 .immersive .quiz-question { font-size:17px; line-height:1.6; }.immersive .answer { font-size:14px; }.immersive .quiz-result,.immersive .feedback { font-size:13px; }.immersive .challenge-box { font-size:13px; background:transparent; border:0; padding:0; }.immersive .challenge-timer { font-size:20px; }
 @media(max-width:900px) {
@@ -82,3 +93,14 @@
   .scene-utilities > [data-view="home"] { display:none; }
   .practice-header > button { padding:8px; }
 }
+
+/* Shared controls inherit the same restrained blue palette as the scene. */
+.immersive .view-options button,.immersive .learning-steps button,.immersive .answer,.immersive .operation,.immersive .part-card { background-color:#11223b; border-color:#2b4261; }
+.immersive .view-options button:hover,.immersive .learning-steps button:hover,.immersive .answer:hover,.immersive .operation:hover,.immersive .part-card:hover { background-color:#1b3456; border-color:#7297c8; }
+.immersive .learning-steps button[aria-pressed="true"],.immersive .answer.selected,.immersive .part-card.active { background:#1b3456; border-color:#7297c8; }
+.immersive .operation.primary { background:#294f80; border-color:#294f80; color:#edf3ff; }
+.immersive .operation.primary:hover { background:#365f91; }
+.immersive .progress-track { background:#152b49; }
+.immersive #progressBar { background:linear-gradient(90deg,#557caf,#95b5de); }
+.immersive #modelInteraction,.immersive .toast { background:#102039f5; color:#e0ecff; border-color:#6b90bf; }
+.immersive input { accent-color:#86a9d8; }

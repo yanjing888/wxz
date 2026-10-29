@@ -26,16 +26,16 @@ export function createSceneBackground(host) {
   function draw() {
     ctx.clearRect(0, 0, width, height);
     glow(width * (0.22 + Math.sin(time * 0.13) * 0.05), height * 0.32,
-      width * 0.4, "rgba(52, 128, 147, .16)");
+      width * 0.4, "rgba(59, 91, 145, .025)");
     glow(width * (0.8 + Math.cos(time * 0.11) * 0.04), height * 0.42,
-      width * 0.35, "rgba(59, 101, 157, .15)");
+      width * 0.35, "rgba(49, 78, 133, .025)");
 
     // Perspective lines give the empty space a laboratory-floor reference.
     const horizon = height * 0.53, center = width * 0.5;
     ctx.save();
     const floorFade = ctx.createLinearGradient(0, horizon, 0, height);
-    floorFade.addColorStop(0, "rgba(115, 167, 180, .025)");
-    floorFade.addColorStop(1, "rgba(115, 167, 180, .12)");
+    floorFade.addColorStop(0, "rgba(145, 178, 224, .025)");
+    floorFade.addColorStop(1, "rgba(145, 178, 224, .06)");
     ctx.strokeStyle = floorFade;
     ctx.lineWidth = 0.65;
     ctx.beginPath();
@@ -51,7 +51,7 @@ export function createSceneBackground(host) {
     ctx.stroke();
     const sweep = (time * 0.035 + 0.2) % 1;
     const y = horizon + sweep * sweep * (height - horizon);
-    ctx.strokeStyle = `rgba(132, 210, 203, ${Math.sin(sweep * Math.PI) * 0.14})`;
+    ctx.strokeStyle = `rgba(159, 195, 246, ${Math.sin(sweep * Math.PI) * 0.14})`;
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
     ctx.restore();
@@ -60,7 +60,7 @@ export function createSceneBackground(host) {
     const points = nodes.map((n) => ({
       x: n.x * width + Math.sin(time * 0.12 + n.phase) * 18,
       y: (0.06 + n.y * 0.69) * height + Math.cos(time * 0.09 + n.phase) * 14,
-      alpha: 0.22 + Math.sin(time * 0.45 + n.phase) * 0.1,
+      alpha: 0.14 + Math.sin(time * 0.45 + n.phase) * 0.05,
       radius: n.radius,
     }));
     const distanceLimit = Math.min(150, width * 0.13);
@@ -69,13 +69,13 @@ export function createSceneBackground(host) {
       for (let j = i + 1; j < points.length; j++) {
         const q = points[j], distance = Math.hypot(p.x - q.x, p.y - q.y);
         if (distance >= distanceLimit) continue;
-        ctx.strokeStyle = `rgba(129, 188, 197, ${(1 - distance / distanceLimit) * 0.12})`;
+        ctx.strokeStyle = `rgba(151, 185, 232, ${(1 - distance / distanceLimit) * 0.12})`;
         ctx.lineWidth = 0.7;
         ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
       }
-      ctx.fillStyle = `rgba(159, 220, 221, ${p.alpha})`;
+      ctx.fillStyle = `rgba(188, 214, 250, ${p.alpha})`;
       ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = `rgba(119, 198, 209, ${p.alpha * 0.08})`;
+      ctx.fillStyle = `rgba(143, 185, 241, ${p.alpha * 0.08})`;
       ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 4, 0, Math.PI * 2); ctx.fill();
     }
   }

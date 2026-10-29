@@ -1,5 +1,9 @@
 <template>
   <div class="sim-page flex flex-col flex-1 min-h-0 bg-[#0a0e17]">
+    <div v-if="syncMessage" class="sync-status" :class="{ failed: syncError }" role="status">
+      {{ syncMessage }}
+      <button v-if="syncError" type="button" :disabled="saving" @click="syncResult">重试同步</button>
+    </div>
     <div v-if="loadError" class="sim-placeholder flex-1 flex items-center justify-center px-6">
       <div class="placeholder-box">
         <p class="placeholder-title">加载失败</p>
@@ -25,6 +29,7 @@
       :src="simulationUrl"
       title="牛顿环虚拟仿真"
       allow="fullscreen"
+      @load="requestResult"
     />
   </div>
 </template>
@@ -45,19 +50,58 @@ const viewMode = ref('loading')
 const saving = ref(false)
 const loadError = ref('')
 const frameRef = ref(null)
+const syncMessage = ref(''), syncError = ref(false)
+let pendingResult = null
+let retryTimer = null, disposed = false
+
+function requestResult() {
+  frameRef.value?.contentWindow?.postMessage({ type: 'wxz-request-simulation-result' }, window.location.origin)
+}
+
+async function syncResult() {
+  clearTimeout(retryTimer)
+  if (disposed) return
+  if (saving.value || !pendingResult) return
+  const submission = pendingResult, experiment = code.value
+  saving.value = true; syncError.value = false; syncMessage.value = '正在同步预习结果…'
+  try {
+    const { data } = await studentExperimentApi.saveSimulationResult(experiment, submission)
+    if (disposed || experiment !== code.value) return
+    if (data.passed) simulationCompleted.value = true
+    if (pendingResult === submission) pendingResult = null
+    syncMessage.value = ''
+    window.dispatchEvent(new CustomEvent('wxz-simulation-updated', { detail: { code: experiment } }))
+  } catch (e) {
+    if (disposed || experiment !== code.value) return
+    syncError.value = true
+    syncMessage.value = `预习结果尚未同步：${e.response?.data?.message || '网络异常，请重试'}。本机记录已保留。`
+    if (!e.response || e.response.status >= 500 || [404, 408, 429].includes(e.response.status)) {
+      syncMessage.value += ' 将自动重试。'
+      retryTimer = setTimeout(syncResult, 10000)
+    }
+  } finally {
+    saving.value = false
+    if (pendingResult && pendingResult !== submission) syncResult()
+  }
+}
 
 onMounted(() => {
   window.addEventListener('message', onFrameMessage)
+  window.addEventListener('online', syncResult)
   load()
 })
 onUnmounted(() => {
+  disposed = true
+  clearTimeout(retryTimer)
   window.removeEventListener('message', onFrameMessage)
+  window.removeEventListener('online', syncResult)
 })
 watch(code, load)
 
 async function load() {
   if (!code.value) return
   loadError.value = ''
+  pendingResult = null; syncMessage.value = ''; syncError.value = false
   viewMode.value = 'loading'
   rememberVisit(code.value, 'task')
   try {
@@ -85,13 +129,19 @@ async function load() {
 function onFrameMessage(event) {
   if (event.origin !== window.location.origin || event.source !== frameRef.value?.contentWindow) return
   const data = event.data
+  if (data?.type === 'wxz-simulation-result' && data.experiment === code.value && data.result?.version === 3) {
+    pendingResult = data.result
+    syncResult()
+    return
+  }
   if (data?.type === 'wxz-enter-lab' && data.experiment === code.value) {
-    if (simulationCompleted.value && !saving.value) enterLab()
+    if (simulationCompleted.value && !saving.value && !pendingResult) enterLab()
+    else if (pendingResult) { syncResult() }
     return
   }
   if (!data || data.type !== 'wxz-simulation-complete') return
   if (data.experiment !== code.value) return
-  if (code.value === 'newton_rings' && (data.version !== 3 || !Number.isFinite(data.score) || data.score < 80 || data.score > 100 || data.completedStages !== 4 || data.challengePassed !== true)) return
+  if (code.value === 'newton_rings') { requestResult(); return }
   markSimulationComplete()
 }
 
@@ -115,6 +165,9 @@ function enterLab() {
 </script>
 
 <style scoped>
+.sync-status { padding: 7px 16px; background: #14243d; color: #c2d2e8; font-size: 12px; }
+.sync-status.failed { background: #422b1a; color: #ffe0b5; }
+.sync-status button { margin-left: 14px; text-decoration: underline; }
 .sim-head {
   background: linear-gradient(180deg, #1a2332, #111827);
   border-bottom: 1px solid #2d3a4f;

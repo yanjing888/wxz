@@ -66,7 +66,7 @@ function adoptReview() {
 .ai-score { display: flex; align-items: baseline; gap: 8px; margin: 0 auto 0 4px; color: #4f46e5; }
 .ai-score strong { font-size: 24px; line-height: 1.15; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ai-score span { color: #64748b; font-size: 12px; }
-.ai-score.is-empty { color: #94a3b8; }
+.ai-score.is-empty { color: #64748b; }
 .field-label { font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px; }
 .ai-comment { max-height: clamp(80px, 14vh, 140px); min-height: 56px; margin-top: 8px; overflow-y: auto; padding: 8px 10px; background: #f8fafc; border-radius: 6px; color: #475569; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .teacher-score-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; flex-shrink: 0; font-size: 13px; color: #64748b; }
@@ -74,7 +74,7 @@ function adoptReview() {
 .teacher-score-row input { width: 96px; min-width: 0; height: 34px; padding: 4px 10px; border: 1px solid #dbe2ec; border-radius: 6px; font-size: 18px; font-weight: 600; color: #1e293b; }
 .comment-input { flex: 1; width: 100%; min-height: 180px; flex-shrink: 0; resize: none; padding: 12px; border: 1px solid #dbe2ec; border-radius: 6px; color: #334155; background: #fff; font-size: 13px; line-height: 1.7; }
 .grade-status { flex: 1; margin: 0; color: #64748b; font-size: 11px; line-height: 1.5; }
-.grade-status.completed { color: #059669; }
+.grade-status.completed { color: #047857; }
 .grade-footer { display: flex; align-items: center; gap: 12px; flex-shrink: 0; padding-top: 8px; margin-top: 8px; border-top: 1px solid #e4e9f3; background: #fff; }
 .btn-submit { min-width: 140px; padding: 0 18px; height: 36px; border: 0; border-radius: 7px; background: #6366f1; color: #fff; font-weight: 600; font-size: 13px; }
 .btn-submit:hover:not(:disabled) { background: #4f46e5; }

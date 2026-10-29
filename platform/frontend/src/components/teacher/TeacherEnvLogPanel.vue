@@ -93,7 +93,7 @@ function resolveSnapshot(url) {
   flex-shrink: 0;
 }
 .env-log-title { font-size: 13px; font-weight: 700; color: #0f172a; }
-.env-log-count { margin-left: auto; font-size: 11px; color: #94a3b8; font-weight: 600; }
+.env-log-count { margin-left: auto; font-size: 11px; color: #64748b; font-weight: 600; }
 .env-level-badge {
   padding: 2px 8px;
   border-radius: 999px;
@@ -119,7 +119,7 @@ function resolveSnapshot(url) {
   text-align: center;
   font-size: 12px;
   line-height: 1.7;
-  color: #94a3b8;
+  color: #64748b;
 }
 .env-log-list {
   flex: 1;

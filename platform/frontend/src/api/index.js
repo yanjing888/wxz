@@ -146,6 +146,7 @@ export const studentExperimentApi = {
   getProgress: (code) => http.get(`/api/student/experiments/${code}/progress`),
   completePreLab: (code) => http.post(`/api/student/experiments/${code}/progress/pre-lab`),
   completeSimulation: (code) => http.post(`/api/student/experiments/${code}/progress/simulation`),
+  saveSimulationResult: (code, result) => http.put(`/api/student/experiments/${code}/simulation-result`, result),
   completeReport: (code, data) => http.post(`/api/student/experiments/${code}/progress/report`, data || {}),
   uploadReport: (code, sessionId, file) => {
     const data = new FormData(); data.append('file', file)
@@ -221,6 +222,8 @@ export const teacherApi = {
   classes: () => http.get('/api/teacher/classes'),
   overview: () => http.get('/api/teacher/overview'),
   reports: (params = {}) => http.get('/api/teacher/reports', { params }),
+  simulationResults: (params) => http.get('/api/teacher/simulation-results', { params }),
+  simulationResult: (userId, experimentCode) => http.get(`/api/teacher/simulation-results/${userId}`, { params: { experimentCode } }),
   report: (sessionId) => http.get(`/api/teacher/reports/${sessionId}`),
   reportDocx: (sessionId) => http.get(`/api/teacher/reports/${sessionId}/docx`, { responseType: 'blob' }),
   reviewReport: (sessionId) => http.post(`/api/teacher/reports/${sessionId}/ai-review`, null, { timeout: 180000 }),

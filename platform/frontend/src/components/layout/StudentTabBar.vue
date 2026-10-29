@@ -142,7 +142,7 @@ function isActive(tab) {
   gap: 2px;
   padding: 4px 18px;
   position: relative;
-  color: #94a3b8;
+  color: #64748b;
   white-space: nowrap;
   transition: all 0.2s;
   border-radius: 8px 8px 0 0;
@@ -152,7 +152,7 @@ function isActive(tab) {
   background: rgba(0, 0, 0, 0.03);
 }
 .tab-item:hover .tab-icon {
-  color: #94a3b8;
+  color: #64748b;
 }
 .tab-item--active .tab-icon {
   color: var(--icon-color, #4f46e5);
@@ -174,11 +174,11 @@ function isActive(tab) {
 .tab-icon {
   width: 26px;
   height: 26px;
-  color: #cbd5e1;
+  color: #64748b;
   transition: color 0.2s;
 }
 .tab-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
 }

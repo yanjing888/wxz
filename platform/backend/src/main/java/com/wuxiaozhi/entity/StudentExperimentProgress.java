@@ -30,6 +30,10 @@ public class StudentExperimentProgress {
     @Column(nullable = false)
     private boolean simulationCompleted;
 
+    /** 最新一次已提交的仿真预习结果；旧记录为空，不据完成标记推算成绩。 */
+    @Column(columnDefinition = "LONGTEXT")
+    private String simulationResultJson;
+
     @Column(nullable = false)
     private boolean reportCompleted;
 

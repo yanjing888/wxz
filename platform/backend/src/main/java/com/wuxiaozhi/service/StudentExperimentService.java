@@ -104,6 +104,9 @@ public class StudentExperimentService {
 
     @Transactional
     public ExperimentProgressDto completeSimulation(Long userId, String experimentCode) {
+        if ("newton_rings".equals(experimentCode)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请最终确认预习题并提交成像挑战，由预习报告结果确认完成");
+        }
         requireAssigned(userId, experimentCode);
         accessService.requireCurrentIfStudent(userId,experimentCode);
         StudentExperimentProgress progress = progressRepository.findByUserIdAndExperimentCode(userId, experimentCode)
