@@ -26,7 +26,8 @@
     "build:prep-report": "node scripts/build-prep-report.mjs",
     "prebuild": "npm run build:prep-report",
     "predev": "npm run build:prep-report",
-    "test:prep-report": "npm run build:prep-report && node scripts/check-prep-report-docx.mjs"
+    "test:prep-report": "npm run build:prep-report && node scripts/check-prep-report-docx.mjs",
+    "test:pagination": "node scripts/check-pagination.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",

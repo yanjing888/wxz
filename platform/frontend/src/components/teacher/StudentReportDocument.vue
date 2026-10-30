@@ -28,11 +28,13 @@
         <p v-else class="doc-empty">（未填写）</p>
       </section>
     </div>
+    <ProcessCheckAppendix :records="report?.processCheckRecords || []" />
   </article>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
+import ProcessCheckAppendix from '../experiment/ProcessCheckAppendix.vue'
 import { REPORT_SECTION_DEFS } from '../../utils/sessionReport'
 import { renderMathInMarkdown } from '../../utils/markdown'
 

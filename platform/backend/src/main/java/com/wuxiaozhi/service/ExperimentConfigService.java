@@ -25,6 +25,8 @@ public class ExperimentConfigService {
 
     private final ObjectMapper objectMapper;
     private final Map<String, ExperimentConfig> byCode = new LinkedHashMap<>();
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.wuxiaozhi.repository.ExperimentDefinitionRepository definitions;
 
     public ExperimentConfigService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -119,7 +121,9 @@ public class ExperimentConfigService {
     }
 
     public List<ExperimentConfig> listAll() {
-        return byCode.values().stream()
+        Set<String> codes = new LinkedHashSet<>(byCode.keySet());
+        if (definitions != null) definitions.findAll().forEach(item -> codes.add(item.getCode()));
+        return codes.stream().map(this::getByCode)
                 .filter(cfg -> cfg.getEnabled() == null || cfg.getEnabled())
                 .sorted(Comparator.comparingInt(cfg -> {
                     int index = DISPLAY_ORDER.indexOf(cfg.getCode());
@@ -129,11 +133,93 @@ public class ExperimentConfigService {
     }
 
     public ExperimentConfig getByCode(String code) {
-        ExperimentConfig cfg = byCode.get(code);
-        if (cfg == null) {
-            throw new NoSuchElementException("实验不存在: " + code);
+        if (definitions != null) {
+            var stored = definitions.findById(code);
+            if (stored.isPresent()) {
+                try { return objectMapper.readValue(stored.get().getContentJson(), ExperimentConfig.class); }
+                catch (IOException e) { throw new IllegalStateException("实验配置读取失败", e); }
+            }
         }
-        return cfg;
+        ExperimentConfig cfg = byCode.get(code);
+        if (cfg == null) throw new NoSuchElementException("实验不存在: " + code);
+        return objectMapper.convertValue(cfg, ExperimentConfig.class);
+    }
+
+    public Map<String, Object> managementDetail(String code) {
+        var stored = definitions.findById(code);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("config", getByCode(code));
+        result.put("teachingGuide", readTeachingKnowledge(code));
+        result.put("version", stored.map(com.wuxiaozhi.entity.ExperimentDefinition::getVersion).orElse(-1L));
+        result.put("updatedAt", stored.map(com.wuxiaozhi.entity.ExperimentDefinition::getUpdatedAt).orElse(null));
+        return result;
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> saveTeachingConfig(String code, ExperimentConfig input, Long version, Long userId) {
+        return persistTeachingConfig(code, input, version, userId, false);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> createTeachingConfig(ExperimentConfig input, Long userId) {
+        return persistTeachingConfig("exp_" + UUID.randomUUID().toString().replace("-", ""), input, -1L, userId, true);
+    }
+
+    private Map<String, Object> persistTeachingConfig(String code, ExperimentConfig input, Long version, Long userId, boolean creating) {
+        var current = creating ? new ExperimentConfig() : getByCode(code);
+        if (creating) {
+            current.setCode(code); current.setSteps(new LinkedHashMap<>());
+            current.setCommonDataFields(List.of()); current.setReportKnowledge(List.of()); current.setReportPath(List.of());
+            current.setDataCollection(new com.wuxiaozhi.dto.experiment.DataCollectionConfig());
+        }
+        var entity = definitions.findById(code).orElse(null);
+        if (!Objects.equals(version, entity == null ? -1L : entity.getVersion()))
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "配置已被其他教师修改，请重新打开后编辑");
+        require(input != null && input.getName() != null && !input.getName().isBlank() && input.getName().length() <= 128, "请填写实验名称（最多128字）");
+        require(input.getSteps() != null && !input.getSteps().isEmpty() && input.getSteps().size() <= 30, "请配置1～30个实验步骤");
+        require(input.getSteps().keySet().containsAll(current.getSteps().keySet()), "不可更改已有步骤编号或删除步骤");
+        for (int id = 1; id <= input.getSteps().size(); id++) require(input.getSteps().containsKey(String.valueOf(id)), "实验步骤必须连续排列");
+        require(input.getDescription() == null || input.getDescription().length() <= 20000, "实验内容过长");
+        require(input.getTeachingContent() == null || input.getTeachingContent().length() <= 100000, "实验内容正文最多10万字");
+        require(input.getCategory() == null || input.getCategory().length() <= 64, "实验分类过长");
+        current.setName(input.getName().trim()); current.setCategory(input.getCategory()); current.setDescription(input.getDescription());
+        if (input.getTeachingContent() != null) current.setTeachingContent(input.getTeachingContent());
+        for (var entry : input.getSteps().entrySet()) {
+            var in = entry.getValue(); var step = current.getSteps().computeIfAbsent(entry.getKey(), key -> {
+                var added = new StepConfig(); added.setCorrectionMode("vision"); return added;
+            });
+            require(in != null && in.getTitle() != null && !in.getTitle().isBlank() && in.getTitle().length() <= 128, "每个步骤都需要名称（最多128字）");
+            require(in.getDesc() == null || in.getDesc().length() <= 10000, "步骤说明过长");
+            require(!Boolean.TRUE.equals(in.getAssessmentBlocking()) || !Boolean.FALSE.equals(in.getAssessmentRequired()), "关键检查点必须开启教师检查");
+            step.setTitle(in.getTitle().trim()); step.setDesc(in.getDesc());
+            step.setImageRequired(!Boolean.FALSE.equals(in.getImageRequired())); step.setTableRequired(Boolean.TRUE.equals(in.getTableRequired()));
+            step.setAssessmentRequired(in.getAssessmentRequired()); step.setAssessmentBlocking(in.getAssessmentBlocking());
+            if (in.getTut() != null) {
+                require(in.getTut().getImages() == null || in.getTut().getImages().size() <= 20, "每步最多20张示教图片");
+                if (in.getTut().getImages() != null) in.getTut().getImages().forEach(this::validateMediaUrl);
+                validateMediaUrl(in.getTut().getVideoUrl());
+                validateTextLines(in.getTut().getSteps()); validateTextLines(in.getTut().getWarnings());
+            }
+            step.setTut(in.getTut());
+        }
+        current.setMenuLabels(current.getSteps().entrySet().stream().sorted(Comparator.comparingInt(e -> Integer.parseInt(e.getKey()))).map(e -> e.getValue().getTitle()).toList());
+        if (entity == null) { entity = new com.wuxiaozhi.entity.ExperimentDefinition(); entity.setCode(code); }
+        try { entity.setContentJson(objectMapper.writeValueAsString(current)); }
+        catch (IOException e) { throw new IllegalStateException(e); }
+        entity.setUpdatedAt(java.time.LocalDateTime.now()); entity.setUpdatedBy(userId);
+        definitions.saveAndFlush(entity);
+        return managementDetail(code);
+    }
+
+    private void validateTextLines(List<String> lines) {
+        require(lines == null || (lines.size() <= 100 && lines.stream().allMatch(s -> s != null && s.length() <= 2000)), "教程条目过多或单条超过2000字");
+    }
+    private void validateMediaUrl(String url) {
+        if (url == null || url.isBlank()) return;
+        require(url.length() <= 2000 && (url.matches("https?://[^\\s]+") || url.matches("/(?!/)[^\\s]+")), "媒体地址须为站内路径或 http/https 地址");
+    }
+    private void require(boolean condition, String message) {
+        if (!condition) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, message);
     }
 
     /** 读取 teaching-knowledge.md 全文，供报告助手对照实验目的、步骤与数据处理要求 */
@@ -141,6 +227,8 @@ public class ExperimentConfigService {
         if (code == null || code.isBlank()) {
             return "";
         }
+        ExperimentConfig config = getByCode(code);
+        if (config.getTeachingContent() != null) return config.getTeachingContent();
         try {
             Resource resource = new PathMatchingResourcePatternResolver()
                     .getResource("classpath:experiments/" + code.trim() + "/teaching-knowledge.md");

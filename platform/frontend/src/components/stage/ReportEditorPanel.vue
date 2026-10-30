@@ -22,6 +22,7 @@
             <h2>{{ experimentName || '实验报告' }}</h2>
           </div>
           <div class="header-actions">
+            <ProcessRecordDownload :session-id="gradeProgress?.finishedSessionId || sessionId" :disabled="!gradeProgress?.finishedSessionId && sourceReport?.sessionStatus !== 'FINISHED'" />
             <button v-if="!gradeProgress?.reportFileName" type="button" class="btn-plain" :disabled="fileUploading || reportCompleting || gradeProgress?.gradingCompleted" title="上传 PDF 或 Word（.docx）报告，最大 20MB" @click="reportUpload?.chooseFile()">上传报告</button>
             <button type="button" class="btn-plain" :disabled="!sessionId || exporting" @click="downloadDocx">
               {{ exporting ? '导出中…' : '导出 Word' }}
@@ -201,6 +202,7 @@
                 />
                 <p v-else class="doc-empty">（未填写）</p>
               </section>
+              <ProcessCheckAppendix :records="sourceReport?.processCheckRecords || []" :loading="checksLoading" :error="checksError" />
             </div>
           </div>
         </div>
@@ -212,9 +214,11 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import ProcessCheckAppendix from '../experiment/ProcessCheckAppendix.vue'
 import AskPanel from './AskPanel.vue'
 import ProcessScoreSummary from '../experiment/ProcessScoreSummary.vue'
 import ReportUploadPanel from './ReportUploadPanel.vue'
+import ProcessRecordDownload from '../experiment/ProcessRecordDownload.vue'
 import { useReportProgress } from '../../composables/useReportProgress'
 import { useAuthStore } from '../../stores/auth'
 import { sessionApi, studentExperimentApi } from '../../api'
@@ -536,8 +540,9 @@ function syncEditorsFromForm() {
 
 async function loadSourceReport() {
   if (!props.sessionId) return
-  const { data: report } = await sessionApi.report(props.sessionId)
-  sourceReport.value = report || null
+  const session = props.sessionId
+  const { data: report } = await sessionApi.report(session)
+  if (session === props.sessionId) sourceReport.value = report || null
 }
 
 async function generateFromSession() {
@@ -613,10 +618,15 @@ function sectionWordCount(key) {
   return stripHtml(form[key] || '').trim().length
 }
 
-function openPreview() {
+const checksLoading = ref(false), checksError = ref('')
+async function openPreview() {
   saveDraft()
   completionMessage.value = ''
   previewOpen.value = true
+  checksLoading.value = true; checksError.value = ''
+  try { await loadSourceReport() }
+  catch { checksError.value = '过程检查记录读取失败，请关闭预览后重试；下载时将从服务器读取最新记录。' }
+  finally { checksLoading.value = false }
 }
 
 async function confirmSubmit() {
@@ -632,6 +642,7 @@ async function confirmSubmit() {
 </script>
 
 <style scoped>
+
 .report-editor { @apply overflow-hidden bg-white; }
 
 .report-frame-resizable {
@@ -660,6 +671,50 @@ async function confirmSubmit() {
   @apply rounded-xl bg-brand-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm
     transition-colors hover:bg-brand-700
     disabled:opacity-40 disabled:cursor-not-allowed;
+}
+
+/* 报告工具栏沿用原有紧凑尺寸，包含独立下载组件。 */
+.header-actions > button,
+.header-actions :deep(.record-actions > button) {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 6px 12px;
+  border: 1px solid #dce2f5;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  background: #eef2ff;
+  color: #4f46a5;
+  box-shadow: none;
+}
+.header-actions > button:hover:not(:disabled),
+.header-actions :deep(.record-actions > button:hover:not(:disabled)) {
+  background: #e0e7ff;
+  border-color: #c7d2fe;
+  color: #4338a0;
+}
+.header-actions > .btn-primary {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: #fff;
+}
+.header-actions > .btn-primary:hover:not(:disabled) {
+  background: var(--brand-700);
+  border-color: var(--brand-700);
+  color: #fff;
+}
+.header-actions > button:disabled,
+.header-actions :deep(.record-actions > button:disabled) {
+  background: #f1f3f7;
+  border-color: #e2e6ee;
+  color: #97a0b1;
+  opacity: 1;
+  cursor: not-allowed;
 }
 
 /* ===== 工具栏 ===== */

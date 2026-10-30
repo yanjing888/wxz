@@ -96,7 +96,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in rows" :key="item.experimentCode">
+              <tr v-for="item in taskItems" :key="item.experimentCode">
                 <td>
                   <strong>{{ item.experimentName }}</strong
                   ><span v-if="item.gradingCompleted" class="grade-line"
@@ -122,13 +122,14 @@
                   }}</span>
                 </td>
                 <td>
+                  <ProcessRecordDownload v-if="item.finishedSessionId" :session-id="item.finishedSessionId" />
                   <router-link
                     :to="{
                       name: 'after-center',
                       params: { code: item.experimentCode },
                     }"
                     >{{
-                      item.reportCompleted ? "查看报告" : "继续写报告"
+                      item.reportCompleted ? "查看报告" : "上传 / 撰写报告"
                     }}</router-link
                   >
                 </td>
@@ -136,6 +137,7 @@
             </tbody>
           </table>
         </div>
+        <ListPagination v-model:page="taskPage" v-model:page-size="taskSize" :total="taskTotal" />
       </section>
       <section v-if="!reportsOnly && queued.length" class="task-section">
         <div class="section-heading">
@@ -145,16 +147,20 @@
           <span>完成当前实操后依次开放</span>
         </div>
         <ol class="queued-list">
-          <li v-for="item in queued" :key="item.experimentCode">
+          <li v-for="item in queueItems" :key="item.experimentCode">
             <span>{{ item.experimentName }}</span
             ><span>{{ item.className || "未分班" }} · 等待当前实验完成</span>
           </li>
         </ol>
+        <ListPagination v-model:page="queuePage" v-model:page-size="queueSize" :total="queueTotal" />
       </section>
     </template>
   </div>
 </template>
 <script setup>
+import ProcessRecordDownload from '../components/experiment/ProcessRecordDownload.vue'
+import ListPagination from '../components/common/ListPagination.vue'
+import { usePagination } from '../composables/usePagination'
 import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { ref } from "vue";
@@ -212,6 +218,8 @@ async function load() {
   } catch {}
 }
 onMounted(load);
+const { page: taskPage, pageSize: taskSize, total: taskTotal, items: taskItems } = usePagination(rows, [reportsOnly])
+const { page: queuePage, pageSize: queueSize, total: queueTotal, items: queueItems } = usePagination(queued, [])
 </script>
 <style scoped>
 .task-center {

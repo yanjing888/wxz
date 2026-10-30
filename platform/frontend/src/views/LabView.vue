@@ -14,11 +14,13 @@
     <div v-else class="lab-page flex flex-col flex-1 min-h-0 w-full overflow-hidden">
     <!-- 顶栏 -->
     <LabHeader
+      :session-id="lab.finishedSessionId || (lab.session?.status === 'FINISHED' ? lab.session.id : null)"
       :env-level="lab.envLevel"
       :dify-status="lab.difyStatus"
       :dify-status-loading="lab.difyStatusLoading"
       :session-finished="labQaLocked"
       :can-finish="processState != null && processState.completedCount === processState.totalCount"
+      :finish-hint="finishHint"
       @quick-stats="showQuickStats = true"
       @report="openReport"
     />
@@ -215,6 +217,11 @@ import { labEntryBlockedRoute } from '../utils/prepSimulation'
 import { studentFileApi, studentExperimentApi } from '../api'
 
 const processState = ref(null)
+const finishHint = computed(() => {
+  if (!processState.value) return '正在读取实验步骤状态'
+  const pending = processState.value.steps.filter(step => !step.submitted || (step.blocking && !['PASSED', 'COMPLETED'].includes(step.status)))
+  return pending.map(step => `步骤 ${step.stepId}：${!step.submitted ? '未提交检查材料' : '等待教师确认关键检查点'}`).join('；') || '可以结束实验'
+})
 const canAdvanceStep = computed(() => labQaLocked.value || !!processState.value?.steps?.find(s => s.stepId === lab.activeStep + 1)?.accessible)
 function onProcessState(state) {
   processState.value = state

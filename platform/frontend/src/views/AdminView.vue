@@ -14,13 +14,13 @@
       <p v-if="error" class="admin-error" role="alert">{{error}}</p>
       <section v-if="tab==='users'" class="users-section">
         <div class="admin-toolbar"><div class="user-filters"><input v-model.trim="query" type="search" placeholder="搜索账号或姓名" aria-label="搜索用户" /><select v-model="role" aria-label="用户身份"><option value="">全部身份</option><option value="STUDENT">学生</option><option value="TEACHER">教师</option><option value="ADMIN">管理员</option></select><select v-model="className" aria-label="用户班级"><option value="">全部教学班</option><option v-for="cls in classes" :key="cls">{{cls}}</option></select></div><div class="toolbar-actions"><span>{{users.length}} 个账号</span><button :disabled="busy" @click="loadUsers">刷新</button><button class="primary" :disabled="busy" @click="editUser()">新增用户</button></div></div>
-        <div class="user-table-scroll"><table class="user-table"><thead><tr><th>账号 / 学号</th><th>姓名</th><th>身份</th><th>班级</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="user in users" :key="user.id"><td>{{user.username}}</td><td>{{user.displayName}}</td><td>{{roleName(user.role)}}</td><td>{{user.role==='STUDENT' ? (user.classes.join('、') || '待分配') : user.role==='TEACHER' ? (user.studentClass || '全部教学班') : '—'}}</td><td><span class="account-state" :class="{disabled:!user.enabled}">{{user.enabled?'启用':'停用'}}</span></td><td class="row-actions"><button :disabled="busy" @click="editUser(user)">编辑</button><button :disabled="busy" @click="openPassword(user)">重置密码</button><button :disabled="busy || user.id===Number(auth.userId)" @click="toggleUser(user)">{{user.enabled?'停用':'启用'}}</button></td></tr><tr v-if="!users.length"><td colspan="6" class="empty-state">{{loading?'加载中…':'暂无符合条件的账号'}}</td></tr></tbody></table></div>
+        <div class="user-table-scroll"><table class="user-table"><thead><tr><th>账号 / 学号</th><th>姓名</th><th>身份</th><th>班级</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="user in userItems" :key="user.id"><td>{{user.username}}</td><td>{{user.displayName}}</td><td>{{roleName(user.role)}}</td><td>{{user.role==='STUDENT' ? (user.classes.join('、') || '待分配') : user.role==='TEACHER' ? (user.studentClass || '全部教学班') : '—'}}</td><td><span class="account-state" :class="{disabled:!user.enabled}">{{user.enabled?'启用':'停用'}}</span></td><td class="row-actions"><button :disabled="busy" @click="editUser(user)">编辑</button><button :disabled="busy" @click="openPassword(user)">重置密码</button><button :disabled="busy || user.id===Number(auth.userId)" @click="toggleUser(user)">{{user.enabled?'停用':'启用'}}</button></td></tr><tr v-if="!users.length"><td colspan="6" class="empty-state">{{loading?'加载中…':'暂无符合条件的账号'}}</td></tr></tbody></table></div><ListPagination v-model:page="userPage" v-model:page-size="userSize" :total="userTotal" />
       </section>
       <section v-else-if="tab==='devices'" class="devices-section">
         <div class="admin-toolbar"><strong>实验室设备配置</strong></div>
         <TeacherWorkstationMonitor :active="tab==='devices'" management />
       </section>
-      <section v-else class="audit-section"><div class="admin-toolbar"><strong>最近操作</strong><button @click="loadAudit">刷新</button></div><div class="user-table-scroll"><table class="user-table"><thead><tr><th>时间</th><th>管理员 ID</th><th>操作</th></tr></thead><tbody><tr v-for="log in auditLogs" :key="log.id"><td>{{time(log.createdAt)}}</td><td>{{log.actorId}}</td><td>{{log.summary}}</td></tr><tr v-if="!auditLogs.length"><td colspan="3" class="empty-state">暂无操作记录</td></tr></tbody></table></div></section>
+      <section v-else class="audit-section"><div class="admin-toolbar"><strong>最近操作</strong><button @click="loadAudit">刷新</button></div><div class="user-table-scroll"><table class="user-table"><thead><tr><th>时间</th><th>管理员 ID</th><th>操作</th></tr></thead><tbody><tr v-for="log in auditItems" :key="log.id"><td>{{time(log.createdAt)}}</td><td>{{log.actorId}}</td><td>{{log.summary}}</td></tr><tr v-if="!auditLogs.length"><td colspan="3" class="empty-state">暂无操作记录</td></tr></tbody></table></div><ListPagination v-model:page="auditPage" v-model:page-size="auditSize" :total="auditTotal" /></section>
     </main>
     </div>
     <div v-if="dialog" class="admin-overlay" @click.self="dialog=''">
@@ -32,6 +32,8 @@
   </div>
 </template>
 <script setup>
+import ListPagination from '../components/common/ListPagination.vue'
+import { usePagination } from '../composables/usePagination'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
@@ -63,6 +65,8 @@ watch([query,role,className],()=>{clearTimeout(filterTimer);filterTimer=setTimeo
 watch(tab,value=>{error.value='';if(value==='audit')loadAudit()})
 onMounted(loadUsers)
 onBeforeUnmount(()=>{clearTimeout(filterTimer);sequence++})
+const { page: userPage, pageSize: userSize, total: userTotal, items: userItems } = usePagination(users, [query, role, className])
+const { page: auditPage, pageSize: auditSize, total: auditTotal, items: auditItems } = usePagination(auditLogs, [])
 </script>
 <style scoped>
 

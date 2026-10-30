@@ -1,3 +1,4 @@
+import { usePagination } from '../src/composables/usePagination.js'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { parse, compileScript } from '@vue/compiler-sfc'
@@ -8,7 +9,7 @@ function mount(path, deps, props) {
   const { descriptor } = parse(readFileSync(new URL(path, import.meta.url), 'utf8'))
   let code = compileScript(descriptor, { id: 'workstation-check' }).content
   code = code.replace(/^import (.+?) from ['"](.+?)['"];?$/gm, (_, names, source) => `const ${names} = __deps[${JSON.stringify(source)}]`).replace('export default', 'return')
-  const component = new Function('__deps', code)(new Proxy({ vue: Vue, ...deps }, { get: (obj, key) => obj[key] || empty }))
+  const component = new Function('__deps', code)(new Proxy({ vue: Vue, '../composables/usePagination': { usePagination }, '../../composables/usePagination': { usePagination }, ...deps }, { get: (obj, key) => obj[key] || empty }))
   component.render = () => null
   const app = renderer.createApp(component, props); app.mount({ children: [] })
   return { app, state: app._instance.setupState, props: app._instance.props }

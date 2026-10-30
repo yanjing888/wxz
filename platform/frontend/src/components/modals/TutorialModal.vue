@@ -88,6 +88,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { mediaUrl } from '../../api/runtime'
 import TutorialImageGallery from '../tutorial/TutorialImageGallery.vue'
 
 const props = defineProps({
@@ -103,6 +104,6 @@ const tutorialImages = computed(() => props.step?.tut?.images || [])
 
 const videoUrl = computed(() => {
   const raw = props.step?.tut?.videoUrl || ''
-  return String(raw).trim()
+  return mediaUrl(String(raw).trim())
 })
 </script>

@@ -12,7 +12,7 @@
       暂无巡检记录<br />学生开启监控后，可手动或自动巡检
     </div>
     <div v-else class="env-log-list custom-scroll">
-      <article v-for="log in logs" :key="log.id || log.createdAt" class="env-log-item">
+      <article v-for="log in logItems" :key="log.id || log.createdAt" class="env-log-item">
         <div class="env-log-meta">
           <span class="env-log-time">{{ formatTime(log.createdAt) }}</span>
           <span class="env-level-chip" :class="levelClass(log.level)">
@@ -30,10 +30,13 @@
         />
       </article>
     </div>
+<ListPagination v-model:page="logPage" v-model:page-size="logSize" :total="logTotal" />
   </aside>
 </template>
 
 <script setup>
+import ListPagination from '../common/ListPagination.vue'
+import { usePagination } from '../../composables/usePagination'
 import { computed } from 'vue'
 
 const props = defineProps({
@@ -73,6 +76,7 @@ function resolveSnapshot(url) {
   if (url.startsWith('http') || url.startsWith('blob:')) return url
   return url.startsWith('/') ? url : `/${url}`
 }
+const { page: logPage, pageSize: logSize, total: logTotal, items: logItems } = usePagination(() => props.logs, [])
 </script>
 
 <style scoped>

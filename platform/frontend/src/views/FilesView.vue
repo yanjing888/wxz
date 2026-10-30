@@ -74,6 +74,7 @@
           </li>
         </ul>
       </section>
+      <ListPagination v-model:page="filePage" v-model:page-size="fileSize" :total="fileTotal" />
     </div>
 
     <div v-if="pendingFile" class="modal-mask" @click.self="cancelUpload">
@@ -103,6 +104,8 @@
 </template>
 
 <script setup>
+import ListPagination from '../components/common/ListPagination.vue'
+import { usePagination } from '../composables/usePagination'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { experimentApi, studentFileApi } from '../api'
@@ -136,7 +139,7 @@ const filtered = computed(() =>
 
 const groups = computed(() => {
   const map = new Map()
-  filtered.value.forEach((file) => {
+  fileItems.value.forEach((file) => {
     const key = file.experimentCode || ''
     if (!map.has(key)) map.set(key, { code: key, name: file.experimentName || '未归类', items: [] })
     map.get(key).items.push(file)
@@ -232,6 +235,7 @@ function notify(text, error = false) {
     if (message.value === text) message.value = ''
   }, 4000)
 }
+const { page: filePage, pageSize: fileSize, total: fileTotal, items: fileItems } = usePagination(filtered, [expFilter, categoryFilter])
 </script>
 
 <style scoped>

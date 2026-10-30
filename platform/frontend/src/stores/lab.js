@@ -138,6 +138,7 @@ export const useLabStore = defineStore('lab', {
     sessionHistory: [],
     sessionHistoryLoading: false,
     labCompleted: false,
+    finishedSessionId: null,
     activeStep: 1,
     composerImageUrl: '',
     composerImagePreview: '',
@@ -336,6 +337,7 @@ export const useLabStore = defineStore('lab', {
       }
     },
     async loadLabProgress(experimentCode = '') {
+      this.finishedSessionId = null
       const code = (experimentCode || this.experiment?.code || '').trim()
       if (!code) {
         this.labCompleted = this.session?.status === 'FINISHED'
@@ -344,6 +346,7 @@ export const useLabStore = defineStore('lab', {
       try {
         const { data } = await studentExperimentApi.getProgress(code)
         this.labCompleted = !!(data?.labCompleted || data?.finishedSessionId)
+        this.finishedSessionId = data?.finishedSessionId || null
       } catch {
         this.labCompleted = this.session?.status === 'FINISHED'
           || this.sessionHistory.some((item) => item?.status === 'FINISHED')
@@ -1648,6 +1651,7 @@ export const useLabStore = defineStore('lab', {
       const { data } = await sessionApi.finish(this.session.id)
       this.session = data
       this.labCompleted = true
+      this.finishedSessionId = data.id
       this.stopEnvTimer()
       const { data: report } = await sessionApi.report(this.session.id)
       this.loadSessionHistory(this.experiment?.code || '').catch(() => {})

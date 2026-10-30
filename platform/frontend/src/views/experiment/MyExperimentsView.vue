@@ -20,7 +20,7 @@
       </div>
 
       <ul v-else class="exp-list">
-        <li v-for="item in items" :key="item.experimentCode" class="exp-card">
+        <li v-for="item in experimentItems" :key="item.experimentCode" class="exp-card">
           <div class="card-head">
             <div class="min-w-0">
               <h2 class="exp-name">{{ item.experimentName }}</h2>
@@ -35,6 +35,10 @@
             </router-link>
           </div>
 
+          <div v-if="item.finishedSessionId" class="mb-4 flex flex-wrap items-center gap-3">
+            <ProcessRecordDownload :session-id="item.finishedSessionId" />
+            <router-link :to="{ name: 'after-center', params: { code: item.experimentCode } }" class="text-[13px] text-brand-600">实验资料与报告</router-link>
+          </div>
           <ol class="stage-rail">
             <li v-for="(stage, index) in STAGES" :key="stage.key" class="rail-item">
               <router-link :to="stage.route(item.experimentCode)" class="rail-link" :class="`rail-link--${statusOf(item, stage.key)}`">
@@ -52,11 +56,15 @@
           </ol>
         </li>
       </ul>
+      <ListPagination v-model:page="experimentPage" v-model:page-size="experimentSize" :total="experimentTotal" />
     </div>
   </div>
 </template>
 
 <script setup>
+import ListPagination from '../../components/common/ListPagination.vue'
+import ProcessRecordDownload from '../../components/experiment/ProcessRecordDownload.vue'
+import { usePagination } from '../../composables/usePagination'
 import { onMounted, ref } from 'vue'
 import { studentExperimentApi, studentFileApi } from '../../api'
 import { STAGES, stageStatus } from '../../utils/experimentFlow'
@@ -111,6 +119,7 @@ function primaryLabel(item) {
   const started = STAGES.some((s) => statusOf(item, s.key) === 'done')
   return started ? `继续：${stage.label}` : '开始预习'
 }
+const { page: experimentPage, pageSize: experimentSize, total: experimentTotal, items: experimentItems } = usePagination(items)
 </script>
 
 <style scoped>

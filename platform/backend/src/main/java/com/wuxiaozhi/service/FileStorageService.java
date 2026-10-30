@@ -99,6 +99,18 @@ public class FileStorageService {
         return persist(filename, bytes);
     }
 
+    public String storeTeachingMedia(MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty() || file.getSize() > MAX_ATTACHMENT_BYTES)
+            throw new IllegalArgumentException("请选择不超过20MB的图片或视频");
+        byte[] bytes = file.getBytes();
+        String ext = extensionFromMagic(bytes);
+        if (!ext.isEmpty() && ALLOWED_EXT.contains(ext)) return persist(UUID.randomUUID() + ext, bytes);
+        boolean mp4 = bytes.length > 12 && new String(bytes, 4, 4, java.nio.charset.StandardCharsets.US_ASCII).equals("ftyp");
+        boolean webm = bytes.length > 4 && bytes[0] == 0x1a && bytes[1] == 0x45 && (bytes[2] & 255) == 0xdf && (bytes[3] & 255) == 0xa3;
+        if (!mp4 && !webm) throw new IllegalArgumentException("仅支持图片、MP4 或 WebM 视频");
+        return persist(UUID.randomUUID() + (mp4 ? ".mp4" : ".webm"), bytes);
+    }
+
     public String storeImageBytes(byte[] bytes, String preferredExt) throws IOException {
         if (bytes == null || bytes.length == 0) {
             throw new IllegalArgumentException("图片文件为空");
@@ -178,6 +190,8 @@ public class FileStorageService {
     }
 
     private static String contentType(String filename, byte[] bytes) {
+        if (filename.endsWith(".mp4")) return "video/mp4";
+        if (filename.endsWith(".webm")) return "video/webm";
         String ext = extensionFromMagic(bytes);
         if (ext.isEmpty()) ext = attachmentExtensionFromFilename(filename);
         return switch (ext) {

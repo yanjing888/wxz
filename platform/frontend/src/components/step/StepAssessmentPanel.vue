@@ -3,17 +3,17 @@
     <header><h3>步骤检查</h3><button type="button" :disabled="loading || busy" @click="refresh">刷新</button></header>
     <p v-if="error || loadingError" ref="errorBox" class="error" role="alert" tabindex="-1">{{ error || loadingError }}</p>
     <template v-if="current">
-      <div class="step-status"><strong :class="current.status">{{ current.record && !current.submitted && editable ? '待补充材料' : processStatus[current.status] }}</strong><span>{{ summary.completedCount }}/{{ summary.totalCount }} 步 · 本步 {{ current.maxScore }} 分</span></div>
+      <div class="step-status"><strong :class="current.status">{{ current.record && !current.submitted && editable ? '待补充材料' : processStatus[current.status] }}</strong><span>{{ summary.completedCount }}/{{ summary.totalCount }} 步 · {{ current.required ? `本步 ${current.maxScore} 分` : '本步无需评分' }}</span></div>
       <ul><li v-for="item in current.criteria" :key="item">{{ item }}</li></ul>
       <div v-if="current.record?.reviewedAt" class="feedback"><strong>{{ current.record.teacherName || '教师' }} · {{ current.record.score }}/{{ current.maxScore }} 分{{ !current.submitted && editable ? '（上次评价）' : '' }}</strong><p>{{ current.record.comment || '操作符合要求' }}</p></div>
       <section v-if="submittedImages.length" class="submitted-images"><div class="field-heading"><span>已提交图片</span><span>{{ submittedImages.length }} 张</span></div><ProcessEvidenceGallery :images="submittedImages" compact /></section>
       <template v-if="!editable && submittedTable.length"><div class="field-heading"><span>实验数据</span></div><ProcessEvidenceTable :model-value="submittedTable" /></template>
       <template v-if="editable">
-        <div class="field-heading"><span>{{ current.status === 'PENDING' && current.submitted ? '补充图片' : '检查图片' }}</span><span>{{ pendingImages.length ? `已选择 ${pendingImages.length} 张` : (current.status === 'PENDING' && submittedImages.length ? '' : '必填') }}</span></div>
+        <div class="field-heading"><span>{{ current.status === 'PENDING' && current.submitted ? '补充图片' : '检查图片' }}</span><span>{{ pendingImages.length ? `已选择 ${pendingImages.length} 张` : (current.status === 'PENDING' && submittedImages.length ? '' : current.imageRequired === false ? '选填' : '必填') }}</span></div>
         <ProcessEvidenceGallery v-if="pendingImages.length" :images="pendingImages" compact removable :disabled="busy || preparing" @remove="removeImage" />
         <div class="upload-actions"><button type="button" :disabled="busy || preparing" @click="fileInput?.click()">{{ preparing ? '读取中…' : '上传图片' }}</button><button type="button" :disabled="busy || preparing" @click="cameraOpen = true">拍照</button></div>
         <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp" multiple class="file-input" aria-label="选择检查图片" @change="onFilesSelected" />
-        <div class="field-heading"><span>实验数据</span><span>选填</span></div>
+        <div class="field-heading"><span>实验数据</span><span>{{ current.tableRequired ? '必填' : '选填' }}</span></div>
         <ProcessEvidenceTable :key="`${sessionId}:${stepId}`" v-model="table" editable :disabled="busy" />
         <label :for="`step-note-${stepId}`">{{ current.status === 'REVISION' ? '整改说明' : current.status === 'PENDING' ? '补充说明' : '完成说明' }}</label>
         <textarea :id="`step-note-${stepId}`" v-model="note" maxlength="2000" :disabled="busy" placeholder="选填" />
@@ -90,8 +90,8 @@ async function refresh() {
 }
 async function complete() {
   if (busy.value || preparing.value || !editable.value) return
-  if (!pendingImages.value.length && !(current.value?.status === 'PENDING' && submittedImages.value.length)) { error.value = '请完成必填项：检查图片（至少上传或拍摄一张）'; await nextTick(); errorBox.value?.focus(); return }
-  if (table.value.length && !validProcessTable(table.value)) { error.value = '实验数据表格填写不完整，请补全或删除表格后提交'; await nextTick(); errorBox.value?.focus(); return }
+  if (current.value?.imageRequired !== false && !pendingImages.value.length && !(current.value?.status === 'PENDING' && submittedImages.value.length)) { error.value = '请完成必填项：检查图片（至少上传或拍摄一张）'; await nextTick(); errorBox.value?.focus(); return }
+  if ((current.value?.tableRequired || table.value.length) && !validProcessTable(table.value)) { error.value = '实验数据表格填写不完整，请补全或删除表格后提交'; await nextTick(); errorBox.value?.focus(); return }
   const id = props.sessionId, step = props.stepId, token = generation, key = activeDraftKey
   busy.value = true; error.value = ''
   try {

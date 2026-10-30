@@ -1182,7 +1182,12 @@ public class LabSessionService {
 
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("sessionId", sessionId);
-        report.put("processAssessment", processAssessment.summary(session));
+        report.put("sessionStatus", session.getStatus());
+        report.put("startTime", session.getStartTime());
+        report.put("endTime", session.getEndTime());
+        var assessmentSummary = processAssessment.summary(session);
+        report.put("processAssessment", assessmentSummary);
+        report.put("processCheckRecords", ProcessReportHistory.from(assessmentSummary));
         report.put("experimentCode", session.getExperimentCode());
         report.put("experimentName", session.getExperimentName());
         report.put("studentName", session.getStudentName());

@@ -16,7 +16,7 @@
     <p v-if="error" class="station-error" role="alert">{{ error }}</p>
     <div v-if="!stations.length" class="station-empty">{{ loading ? '加载工位…' : management ? '尚未配置工位，点击“新增工位”添加摄像头。' : '尚未配置工位，请联系管理员添加摄像头。' }}</div>
     <div class="station-grid">
-      <article v-for="station in stations" :key="station.id" class="station-card">
+      <article v-for="station in stationItems" :key="station.id" class="station-card">
         <header><div class="station-title"><span class="station-number">{{ station.code }}</span><div><strong>{{ station.name }}</strong><p>{{ station.roomName }}</p></div></div><span class="status-tag" :class="{ configured: station.enabled && (station.streamConfigured || station.cameraType === 'USB') }">{{ !station.enabled ? '已停用' : station.streamConfigured || station.cameraType === 'USB' ? '已配置' : '待配置' }}</span></header>
         <WorkstationPreview v-if="!management" :station="station" :live="active && !pageHidden && !dialog" />
         <p v-else class="muted">{{ station.streamConfigured || station.cameraType === 'USB' ? '摄像头已配置，可测试画面。' : '尚未填写摄像头地址。' }}</p>
@@ -28,6 +28,7 @@
         </div>
       </article>
     </div>
+    <ListPagination v-model:page="stationPage" v-model:page-size="stationSize" :total="stationTotal" />
     <div v-if="dialog" class="station-overlay" @click.self="dialog = ''" @keydown.esc="dialog = ''">
       <section class="station-dialog" :class="{ 'video-dialog': dialog === 'live' }" role="dialog" aria-modal="true" :aria-label="dialogTitle">
         <header><h2>{{ dialogTitle }}</h2><button aria-label="关闭" @click="dialog = ''">关闭</button></header>
@@ -37,7 +38,8 @@
           <p class="muted">选择当前在该工位实验的学生，可多人同组。换班时请清空或调整；无需学生扫码。</p>
           <label>教学班<select v-model="bindingClass" :disabled="busy" @change="bindingIds = []"><option value="" disabled>请选择教学班</option><option v-for="name in bindingRoster.classes" :key="name" :value="name">{{ name }}</option></select></label>
           <input v-model.trim="bindingSearch" type="search" placeholder="搜索姓名或学号" aria-label="搜索绑定学生" />
-          <div class="binding-list"><label v-for="student in bindingCandidates" :key="student.id" :class="{ unavailable: student.stationId && student.stationId !== selectedId }"><input v-model="bindingIds" type="checkbox" :value="student.id" :disabled="busy || !!(student.stationId && student.stationId !== selectedId)" /><span><strong>{{ student.name }}</strong><small>{{ student.username }}</small></span><em v-if="student.stationId && student.stationId !== selectedId">已绑定其他工位</em></label><p v-if="!bindingCandidates.length" class="muted">{{ bindingClass ? '没有符合条件的学生，请先在学生管理中维护名单。' : '请先选择教学班' }}</p></div>
+          <div class="binding-list"><label v-for="student in bindingItems" :key="student.id" :class="{ unavailable: student.stationId && student.stationId !== selectedId }"><input v-model="bindingIds" type="checkbox" :value="student.id" :disabled="busy || !!(student.stationId && student.stationId !== selectedId)" /><span><strong>{{ student.name }}</strong><small>{{ student.username }}</small></span><em v-if="student.stationId && student.stationId !== selectedId">已绑定其他工位</em></label><p v-if="!bindingCandidates.length" class="muted">{{ bindingClass ? '没有符合条件的学生，请先在学生管理中维护名单。' : '请先选择教学班' }}</p></div>
+          <ListPagination v-model:page="bindingPage" v-model:page-size="bindingSize" :total="bindingTotal" :disabled="busy" />
           <div class="binding-footer"><span>已选 {{ bindingIds.length }} 人 / 最多 8 人</span><button type="button" :disabled="busy" @click="bindingIds = []">取消全选</button><button class="primary" :disabled="busy || bindingIds.length > 8">{{ busy ? '保存中…' : '保存绑定' }}</button></div>
         </form>
         <form v-if="dialog === 'edit'" class="device-form" @submit.prevent="save">
@@ -53,6 +55,8 @@
   </section>
 </template>
 <script setup>
+import ListPagination from '../common/ListPagination.vue'
+import { usePagination } from '../../composables/usePagination'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WorkstationPreview from '../monitor/WorkstationPreview.vue'
 import { workstationApi, workstationError } from '../../api/workstations'
@@ -136,6 +140,8 @@ watch(() => props.active, active => {
 }, { immediate: true })
 onMounted(() => document.addEventListener('visibilitychange', updateVisibility))
 onBeforeUnmount(() => { clearInterval(timer); sequence++; document.removeEventListener('visibilitychange', updateVisibility) })
+const { page: stationPage, pageSize: stationSize, total: stationTotal, items: stationItems } = usePagination(stations, [roomId])
+const { page: bindingPage, pageSize: bindingSize, total: bindingTotal, items: bindingItems } = usePagination(bindingCandidates, [bindingClass, bindingSearch, selectedId])
 </script>
 <style scoped>
 .workstation-monitor{height:100%;overflow:auto;padding:18px;background:#f5f7fb;color:#253047;font-size:13px}.station-toolbar,.room-picker,.toolbar-actions,.card-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.station-toolbar{justify-content:space-between;margin-bottom:12px}.room-picker label{display:flex;align-items:center;gap:10px}.intro,.muted{font-size:12px;color:#748196;line-height:1.7}.intro{margin:0 0 18px}.station-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px}.station-card{background:white;border:1px solid #e2e7f0;border-radius:12px;padding:14px}.station-card header,.station-dialog>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.station-card header p{font-size:11px;color:#8390a2;margin:5px 0 0}.status-tag{font-size:11px;color:#758196;background:#f1f4f8;border-radius:5px;padding:4px 8px}.card-actions{justify-content:flex-end;margin-top:12px}button,input,select{font:inherit}button{border:1px solid #dbe1ec;background:white;color:#475569;border-radius:7px;padding:7px 12px;cursor:pointer}button:disabled{opacity:.45;cursor:default}button:hover:not(:disabled){border-color:#9384ee;color:#6453ce}.primary{background:#6c5bda;color:white;border-color:#6c5bda}.primary:hover:not(:disabled){color:white}input:not([type=checkbox]),select{min-width:0;border:1px solid #dbe1ec;border-radius:7px;padding:8px 10px;color:#253047;background:white}.station-empty{padding:48px;text-align:center;color:#8490a2;background:white;border-radius:12px}.station-error{padding:10px 12px;color:#b54c43;background:#fff0ee;border-radius:7px}.station-overlay{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:22px;background:#15203966}.station-dialog{width:100%;max-width:580px;max-height:90vh;overflow:auto;padding:24px;background:white;border-radius:14px;box-shadow:0 15px 70px #15203933}.station-dialog.video-dialog{max-width:1000px}.station-dialog h2{font-size:17px;margin:0}.device-form{display:grid;grid-template-columns:1fr 1fr;gap:16px}.device-form label{display:flex;flex-direction:column;gap:8px}.device-form .wide{grid-column:1/-1}.device-form .check-label{flex-direction:row;align-items:center}.device-form p{margin:0}@media(max-width:600px){.station-grid,.device-form{grid-template-columns:1fr}.station-dialog{padding:18px}}

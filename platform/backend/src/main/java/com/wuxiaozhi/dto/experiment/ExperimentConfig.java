@@ -12,6 +12,9 @@ public class ExperimentConfig {
     private String code;
     private String name;
     private String category;
+    private String description;
+    /** Editable experiment guide. Null retains the bundled teaching guide. */
+    private String teachingContent;
     private Boolean enabled = true;
     private List<String> menuLabels;
     private List<DataFieldConfig> commonDataFields;

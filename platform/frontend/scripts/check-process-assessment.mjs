@@ -1,3 +1,4 @@
+import { usePagination } from '../src/composables/usePagination.js'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { parse, compileScript } from '@vue/compiler-sfc'
@@ -15,7 +16,7 @@ function mount(path, dependencies, props) {
   const code = compileScript(descriptor, { id: 'process-check' }).content
     .replace(/^import (.+?) from ['"](.+?)['"];?$/gm, (_, names, source) => `const ${names} = __deps[${JSON.stringify(source)}]`)
     .replace('export default', 'return')
-  const deps = new Proxy({ vue: Vue, '../../utils/processAssessment': { parseProcessJson, processImages, processStatus, validProcessTable }, ...dependencies }, { get: (target, key) => target[key] || emptyComponent })
+  const deps = new Proxy({ vue: Vue, '../composables/usePagination': { usePagination }, '../../composables/usePagination': { usePagination }, '../../utils/processAssessment': { parseProcessJson, processImages, processStatus, validProcessTable }, ...dependencies }, { get: (target, key) => target[key] || emptyComponent })
   const component = new Function('__deps', code)(deps)
   component.render = () => null
   const app = renderer.createApp(component, props)
@@ -118,6 +119,17 @@ await student.state.addImages(Array.from({ length: 7 }, () => image))
 assert.equal(student.state.pendingImages.length, 7, 'Image selection must have no fixed count limit, including supplements')
 await student.state.complete()
 assert.equal(request.images.length, 7, 'All selected images must be submitted')
+state = assessment()
+Object.assign(state.steps[0], { imageRequired: false, tableRequired: true, status: 'NOT_STARTED', submitted: false, record: null })
+await student.state.refresh()
+request = undefined
+student.state.table = []
+await student.state.complete()
+assert.equal(request, undefined, 'A teacher-required table must block an empty submission')
+student.state.table = clone(dataTable)
+await student.state.complete()
+assert.equal(request.images.length, 0, 'Optional images must not block a valid table submission')
+assert.deepEqual(request.body.table, dataTable)
 student.app.unmount()
 
 let insertedTable

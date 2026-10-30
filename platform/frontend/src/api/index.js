@@ -57,6 +57,7 @@ export const sessionApi = {
   finish: (id) => http.post(`/api/sessions/${id}/finish`),
   archive: (id) => http.post(`/api/sessions/${id}/archive`),
   report: (id) => http.get(`/api/sessions/${id}/report`),
+  processRecordDocx: (id) => http.get(`/api/sessions/${id}/process-record/docx`, { responseType: 'blob' }),
   reportDocx: (id) => http.get(`/api/sessions/${id}/report/docx`, { responseType: 'blob' }),
   studentReportDocx: (id, data) =>
     http.post(`/api/sessions/${id}/report/student-docx`, data, { responseType: 'blob' })
@@ -225,6 +226,7 @@ export const teacherApi = {
   simulationResults: (params) => http.get('/api/teacher/simulation-results', { params }),
   simulationResult: (userId, experimentCode) => http.get(`/api/teacher/simulation-results/${userId}`, { params: { experimentCode } }),
   report: (sessionId) => http.get(`/api/teacher/reports/${sessionId}`),
+  processRecordDocx: (id) => http.get(`/api/teacher/reports/${id}/process-record/docx`, { responseType: 'blob' }),
   reportDocx: (sessionId) => http.get(`/api/teacher/reports/${sessionId}/docx`, { responseType: 'blob' }),
   reviewReport: (sessionId) => http.post(`/api/teacher/reports/${sessionId}/ai-review`, null, { timeout: 180000 }),
   completeGrade: (sessionId, data) => http.patch(`/api/teacher/reports/${sessionId}/grade`, data),
@@ -240,4 +242,12 @@ export const teacherApi = {
   sessionEnvLogs: (sessionId) => http.get(`/api/teacher/sessions/${sessionId}/env-logs`),
   setEnvCheckEnabled: (sessionId, data) => http.patch(`/api/teacher/sessions/${sessionId}/env-check-enabled`, data),
   triggerEnvCheck: (sessionId, data = {}) => http.post(`/api/teacher/sessions/${sessionId}/env-check`, data)
+}
+
+export const experimentManagementApi = {
+  list: () => http.get('/api/teacher/experiment-management'),
+  create: data => http.post('/api/teacher/experiment-management', data),
+  get: code => http.get(`/api/teacher/experiment-management/${code}`),
+  save: (code, data) => http.put(`/api/teacher/experiment-management/${code}`, data),
+  upload: file => { const body = new FormData(); body.append('file', file); return http.post('/api/teacher/experiment-management/media', body, { timeout: 120000 }) }
 }

@@ -12,6 +12,25 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class ProcessAssessmentServiceTest {
+    @Test void optionalImagesAndRequiredTableControlSubmissionAndFinish() {
+        var repository = mock(StepAssessmentRepository.class);
+        var configs = mock(ExperimentConfigService.class);
+        var step = new StepConfig(); step.setImageRequired(false); step.setTableRequired(true); step.setAssessmentRequired(false);
+        var experiment = new ExperimentConfig(); experiment.setSteps(Map.of("1", step));
+        when(configs.getByCode("test")).thenReturn(experiment);
+        var rows = new ArrayList<StepAssessment>();
+        when(repository.findByUserIdAndExperimentCodeOrderByStepIdAsc(1L, "test")).thenAnswer(i -> rows);
+        when(repository.findByUserIdAndExperimentCodeAndStepId(1L, "test", 1)).thenAnswer(i -> rows.stream().findFirst());
+        when(repository.saveAndFlush(any())).thenAnswer(i -> { StepAssessment row = i.getArgument(0); row.setId(1L); rows.add(row); return row; });
+        var service = new ProcessAssessmentService(repository, configs, mock(SessionDataLogRepository.class), new ObjectMapper().findAndRegisterModules(), mock(UserRepository.class), mock(LabSessionRepository.class), mock(FileStorageService.class));
+        var session = new LabSession(); session.setId(1L); session.setUserId(1L); session.setExperimentCode("test");
+        assertThatThrownBy(() -> service.complete(session, 1, "", List.of(), List.of())).hasMessageContaining("必填的实验数据表格");
+        service.complete(session, 1, "", List.of(), List.of(List.of("读数/mm"), List.of("12.3")));
+        assertThat(service.summary(session).get("completedCount")).isEqualTo(1);
+        service.requireFinished(session);
+        assertThat(rows.get(0).getStatus()).isEqualTo("COMPLETED");
+        assertThat(rows.get(0).getScore()).isNull();
+    }
     @Test void onlyExplicitCheckpointsBlockProgressUntilReview() throws Exception {
         var repository = mock(StepAssessmentRepository.class);
         var config = mock(ExperimentConfigService.class);

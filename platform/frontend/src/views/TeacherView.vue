@@ -47,13 +47,14 @@
     <p v-if="loadError && experimentContextVisible" class="teacher-load-error" role="alert">{{ loadError }} <button @click="refresh">重试</button></p>
     <p v-if="teachingTab && contextError" class="teacher-load-error" role="alert">{{ contextError }} <button @click="loadTeachingContext">重试</button></p>
     <!-- ====== 加载/空 ====== -->
-    <div v-if="loading && !loadedOnce && !['camera', 'overview'].includes(activeTab)" class="terminal-state">加载中…</div>
-    <div v-else-if="!selectedExpCode && !['camera', 'overview'].includes(activeTab)" class="terminal-state">暂无可查看的实验。</div>
+    <div v-if="loading && !loadedOnce && !['camera', 'overview', 'experiments'].includes(activeTab)" class="terminal-state">加载中…</div>
+    <div v-else-if="!selectedExpCode && !['camera', 'overview', 'experiments'].includes(activeTab)" class="terminal-state">暂无可查看的实验。</div>
     <div v-else-if="teachingTab && (contextLoading || contextBusy)" class="terminal-state">加载中…</div>
     <div v-else-if="teachingTab && !selectedClass" class="terminal-state">当前实验未选择教学班</div>
 
     <!-- ====== 内容区 ====== -->
     <div v-else class="terminal-content">
+      <TeacherExperimentManagement v-show="activeTab === 'experiments'" @saved="onExperimentConfigSaved" />
 
       <!-- ========== Tab 1: 学情总览 ========== -->
       <div v-show="activeTab === 'overview'" class="analysis-shell">
@@ -79,10 +80,10 @@
         <div class="overview-body">
           <!-- 按班级分组的学情列表 -->
           <section class="student-grid-section">
-            <div v-if="!studentsByClass.length" class="empty-state">{{ overviewSearch ? '无匹配班级或学生。' : '暂无班级。' }}</div>
+            <div v-if="!overviewStudents.length" class="empty-state">{{ overviewSearch ? '无匹配班级或学生。' : '暂无学生记录。' }}</div>
             <div v-else class="class-list custom-scroll">
               <div
-                v-for="grp in studentsByClass"
+                v-for="grp in overviewGroups"
                 :key="grp.name"
                 class="class-group"
                 :class="{ expanded: expandedClasses[grp.name] !== false }"
@@ -93,7 +94,7 @@
                   </svg>
                   <span class="class-name">{{ grp.name }}</span>
                   <span class="class-stats">
-                    <span class="stat-chip">{{ grp.students.length }} 人</span>
+                    <span class="stat-chip">{{ grp.totalStudents }} 人</span>
                     <span v-if="grp.activeCount" class="stat-chip active-chip">{{ grp.activeCount }} 进行中</span>
                     <span v-if="grp.finishedCount" class="stat-chip done-chip">{{ grp.finishedCount }} 已完成</span>
                     <span v-if="grp.reportCount" class="stat-chip report-chip">{{ grp.reportCount }} 已交报告</span>
@@ -108,10 +109,7 @@
                       type="button"
                       class="learn-card"
                       :class="{
-                        'learn-card--active': selectedUserId === row.userId && selectedStudentClass === row.studentClass,
-                        'learn-card--online': row.status === 'ACTIVE',
-                        'learn-card--done': row.status === 'FINISHED',
-                        'learn-card--warn': (row.helpCount > 0 || row.errorPointCount > 0) && row.status === 'ACTIVE'
+                        'learn-card--active': selectedUserId === row.userId && selectedStudentClass === row.studentClass
                       }"
                       @click="selectClassStudent(row)"
                     >
@@ -142,6 +140,7 @@
                 </div>
               </div>
             </div>
+            <ListPagination v-model:page="overviewPage" v-model:page-size="overviewSize" :total="overviewTotal" />
           </section>
 
           <!-- 学生详情面板 -->
@@ -232,7 +231,7 @@
               <span class="fb-col-status">状态</span>
             </div>
             <div
-              v-for="item in filteredFeedback"
+              v-for="item in feedbackItems"
               :key="item.id"
               class="fb-list-row"
               :class="{ unprocessed: !isFeedbackProcessed(item) }"
@@ -256,6 +255,7 @@
               </span>
             </div>
           </div>
+          <ListPagination v-model:page="feedbackPage" v-model:page-size="feedbackSize" :total="feedbackTotal" />
         </template>
 
         <!-- 详情视图 -->
@@ -372,9 +372,9 @@
             </div>
             <div v-if="!filteredReportsByClass.length" class="empty-state">暂无符合条件的学生。</div>
             <div v-else class="report-class-list custom-scroll">
-              <div v-for="grp in filteredReportsByClass" :key="grp.className" class="class-group" :class="{ expanded: expandedClasses[grp.className] !== false }">
+              <div v-for="grp in reviewGroups" :key="grp.className" class="class-group" :class="{ expanded: expandedClasses[grp.className] !== false }">
                 <button type="button" class="class-group-header" :aria-expanded="expandedClasses[grp.className] !== false" @click="toggleClassExpand(grp.className)">
-                  <span class="class-name">{{ grp.className }}</span><span class="class-stats">{{ grp.students.length }} 人</span>
+                  <span class="class-name">{{ grp.className }}</span><span class="class-stats">{{ grp.totalStudents }} 人</span>
                 </button>
                 <div v-if="expandedClasses[grp.className] !== false" class="class-group-body">
                   <button v-for="stu in grp.students" :key="stu.studentClass + '|' + stu.userId" type="button" class="student-report-row"
@@ -388,19 +388,20 @@
                 </div>
               </div>
             </div>
+            <ListPagination v-model:page="reviewPage" v-model:page-size="reviewSize" :total="reviewTotal" :disabled="reportBusy" />
           </section>
           <section class="report-detail-section" aria-label="报告正文">
             <div v-if="!selectedReportItem" class="empty-state">{{ reportStateFilter === 'pending' ? '学生提交后可查看报告。' : '请选择左侧学生查看报告。' }}</div>
             <template v-else>
               <header class="rd-head">
                 <div><h2>{{ selectedReportItem.studentName }}</h2><p>{{ selectedReportItem.studentClass }} · {{ selectedReportItem.username || '报告 #' + selectedReportItem.sessionId }}</p></div>
-                <div class="rd-actions"><button type="button" @click="downloadReport(selectedReportItem.sessionId, selectedReportItem.experimentName)">下载报告</button></div>
+                <div class="rd-actions"><ProcessRecordDownload :key="selectedReportItem.sessionId" :session-id="selectedReportItem.sessionId" teacher /><button type="button" @click="downloadReport(selectedReportItem.sessionId, selectedReportItem.experimentName)">下载报告</button></div>
               </header>
               <nav v-if="!selectedReportPreview?.reportFileName" class="report-section-nav custom-scroll" aria-label="报告章节">
                 <button v-for="(section, index) in reportSections" :key="section.key" type="button" :class="{ active: reportActiveSection === section.key }" :aria-current="reportActiveSection === section.key ? 'location' : undefined" :disabled="previewLoading || !selectedReportPreview" @click="goToReportSection(section.key)"><span>{{ index + 1 }}</span>{{ section.label.replace(/^\d+\.\s*/, '') }}</button>
               </nav>
               <div v-if="previewLoading" class="empty-state" role="status">正在读取报告…</div>
-              <div v-else-if="selectedReportPreview" class="rd-body custom-scroll"><ReportFilePreview v-if="selectedReportPreview.reportFileName && reportPage === 'review' && activeTab === 'report'" :session-id="selectedReportId" :file-name="selectedReportPreview.reportFileName" :file-type="selectedReportPreview.reportFileType" /><StudentReportDocument v-else-if="!selectedReportPreview.reportFileName" ref="reportDocument" :report="selectedReportPreview" compact /></div>
+              <div v-else-if="selectedReportPreview" class="rd-body custom-scroll"><ReportFilePreview v-if="selectedReportPreview.reportFileName && reportPage === 'review' && activeTab === 'report'" :session-id="selectedReportId" :file-name="selectedReportPreview.reportFileName" :file-type="selectedReportPreview.reportFileType" /><StudentReportDocument v-else-if="!selectedReportPreview.reportFileName" ref="reportDocument" :report="selectedReportPreview" compact /><ProcessCheckAppendix v-if="selectedReportPreview.reportFileName" :records="selectedReportPreview.processCheckRecords || []" /></div>
               <div v-else class="empty-state">报告读取失败，请<button type="button" @click="loadPreviewReport(selectedReportId)">重试</button>。</div>
             </template>
           </section>
@@ -434,6 +435,11 @@
 </template>
 
 <script setup>
+import ListPagination from '../components/common/ListPagination.vue'
+import TeacherExperimentManagement from '../components/teacher/TeacherExperimentManagement.vue'
+import ProcessCheckAppendix from '../components/experiment/ProcessCheckAppendix.vue'
+import ProcessRecordDownload from '../components/experiment/ProcessRecordDownload.vue'
+import { usePagination } from '../composables/usePagination'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { experimentApi, teacherApi } from '../api'
@@ -476,7 +482,7 @@ const selectedExpCode = ref('')
 const selectedClass = ref(''), teachingClasses = ref([]), contextBusy = ref(false)
 const contextLoading = ref(false), contextError = ref('')
 let contextSequence = 0
-const activeTab = ref(route.query.tab === 'report' ? 'report' : 'overview')
+const activeTab = ref(['report', 'experiments'].includes(route.query.tab) ? route.query.tab : 'overview')
 const reportPage = ref('list')
 const reviewStudentId = ref(null), evaluationClasses = ref([])
 const exportingEvaluation = ref(''), exportError = ref('')
@@ -520,7 +526,7 @@ function openProcessDetail(row) {
 function downloadReportRow(row) { return downloadReport(row.report?.sessionId || row.sessionId, row.report?.experimentName) }
 const teachingTab = computed(() => activeTab.value === 'process')
 const analysisPage = ref('overview')
-const experimentContextVisible = computed(() => activeTab.value !== 'camera')
+const experimentContextVisible = computed(() => !['camera', 'experiments'].includes(activeTab.value))
 const loadError=ref('')
 let teachingLoadSequence=0,previewSequence=0
 const selectedStudentClass = ref(''), reportStateFilter = ref('all')
@@ -769,7 +775,13 @@ watch(filteredReportsByClass, (groups) => {
   }
 })
 
+function onExperimentConfigSaved(config) {
+  if (experiments.value.some(item => item.code === config.code)) experiments.value = experiments.value.map(item => item.code === config.code ? config : item)
+  else experiments.value = [...experiments.value, config]
+}
+
 const navTabs = computed(() => [
+  { key: 'experiments', label: '实验管理', color: '#6366f1', icon: 'M4 3h16v18H4zM8 7h8M8 12h8M8 17h5', badge: '' },
   {
     key: 'overview', label: '学情分析', color: '#6366f1',
     icon: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
@@ -1184,6 +1196,22 @@ function logout() {
   auth.logout()
   router.replace('/login')
 }
+const { page: overviewPage, pageSize: overviewSize, total: overviewTotal, items: overviewItems } = usePagination(overviewStudents, [overviewSearch, selectedExpCode, selectedClass])
+const { page: feedbackPage, pageSize: feedbackSize, total: feedbackTotal, items: feedbackItems } = usePagination(filteredFeedback, [feedbackFilter, selectedExpCode, selectedClass])
+const overviewGroups = computed(() => {
+  const keys = new Set(overviewItems.value.map(s => `${s.studentClass}|${s.userId}`))
+  return studentsByClass.value.map(group => ({ ...group, totalStudents: group.students.length, students: group.students.filter(s => keys.has(`${s.studentClass}|${s.userId}`)) })).filter(group => group.students.length)
+})
+const reviewRows = computed(() => filteredReportsByClass.value.flatMap(group => group.students))
+const { page: reviewPage, pageSize: reviewSize, total: reviewTotal, items: reviewItems } = usePagination(reviewRows, [reportSearch, reportClassFilter, reportStateFilter, selectedExpCode])
+const reviewGroups = computed(() => {
+  const keys = new Set(reviewItems.value.map(s => `${s.studentClass}|${s.userId}`))
+  return filteredReportsByClass.value.map(group => ({ ...group, totalStudents: group.students.length, students: group.students.filter(s => keys.has(`${s.studentClass}|${s.userId}`)) })).filter(group => group.students.length)
+})
+watch(selectedReportId, id => {
+  const index = reviewRows.value.findIndex(row => row.report?.sessionId === id)
+  if (index >= 0) reviewPage.value = Math.floor(index / reviewSize.value) + 1
+})
 </script>
 
 <style scoped>
@@ -1361,13 +1389,7 @@ function logout() {
   cursor: pointer; transition: all 0.18s; text-align: left;
 }
 .learn-card:hover { border-color: #c7d2fe; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08); }
-.learn-card--active { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12); }
-.learn-card--warn { border-color: #fcd34d; background: #fffbeb; }
-.learn-card--warn.learn-card--active { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.12); }
-.learn-card--done { border-color: #d1fae5; background: #f0fdf4; }
-.learn-card--done.learn-card--active { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.12); }
-.learn-card--done .learn-name { color: #047857; }
-.learn-card--done .learn-card-step { background: #ecfdf5; color: #047857; }
+.learn-card--active { background: #eef2ff; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12); }
 .learn-report{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size: 11px;color: #64748b}.report-badge{display:inline-block;border-radius:5px;padding:3px 7px;font-size: 11px;font-weight:500;white-space:nowrap}.report-badge.missing{color: #64748b;background:#f1f5f9}.report-badge.submitted{color: #b45309;background:#fffbeb}.report-badge.graded{color: #047857;background:#ecfdf5}.stat-chip.report-chip{color: #6366f1;background:#eef2ff}
 
 .learn-card-top {

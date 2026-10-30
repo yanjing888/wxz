@@ -59,16 +59,17 @@ public class ProcessAssessmentService {
     private boolean done(StepAssessment row) {
         return row != null && row.getSubmittedAt() != null && Set.of("PASSED", "COMPLETED").contains(row.getStatus());
     }
-    private boolean submitted(StepAssessment row) {
+    private boolean submitted(StepAssessment row, StepConfig config) {
         if (row == null || row.getSubmittedAt() == null) return false;
-        try { return !evidenceImages(row.getEvidenceJson()).isEmpty(); }
+        try { return (Boolean.FALSE.equals(config.getImageRequired()) || !evidenceImages(row.getEvidenceJson()).isEmpty())
+            && (!Boolean.TRUE.equals(config.getTableRequired()) || validTable(evidenceTable(row.getEvidenceJson()))); }
         catch (RuntimeException e) { return false; }
     }
     private boolean advances(StepAssessment row, StepConfig config) {
-        return submitted(row) && (!Boolean.TRUE.equals(config.getAssessmentBlocking()) || !requiresReview(config) || done(row));
+        return submitted(row, config) && (!Boolean.TRUE.equals(config.getAssessmentBlocking()) || !requiresReview(config) || done(row));
     }
-    private boolean canSubmit(LabSession session, StepAssessment row, boolean finished) {
-        if (!Set.of("ACTIVE", "FINISHED").contains(session.getStatus()) || (done(row) && submitted(row))) return false;
+    private boolean canSubmit(LabSession session, StepAssessment row, boolean finished, StepConfig config) {
+        if (!Set.of("ACTIVE", "FINISHED").contains(session.getStatus()) || (done(row) && submitted(row, config))) return false;
         return !finished || (row != null && row.getSubmittedAt() != null && Set.of("PENDING", "REVISION").contains(row.getStatus()));
     }
     public int resumeStep(LabSession session) {
@@ -81,14 +82,14 @@ public class ProcessAssessmentService {
         step(session, stepId);
         Map<Integer, StepAssessment> rows = records(session);
         for (int id : steps(session).keySet().stream().mapToInt(Integer::parseInt).filter(id -> id < stepId).toArray()) {
-            if (!advances(rows.get(id), step(session, id))) throw error("请先提交步骤 " + id + " 的检查图片；关键检查点需教师确认后继续");
+            if (!advances(rows.get(id), step(session, id))) throw error("请先提交步骤 " + id + " 的必填检查材料；关键检查点需教师确认后继续");
         }
     }
     public void requireFinished(LabSession session) {
         users.lockById(session.getUserId());
         Map<Integer, StepAssessment> rows = records(session);
         if (steps(session).keySet().stream().map(Integer::parseInt).anyMatch(id -> !advances(rows.get(id), step(session, id))))
-            throw error("请先提交全部步骤的检查图片，并通过关键检查点");
+            throw error("请先提交全部步骤的必填检查材料，并通过关键检查点");
     }
     public Map<String, Object> summary(LabSession session) {
         Map<Integer, StepAssessment> rows = records(session);
@@ -106,9 +107,11 @@ public class ProcessAssessmentService {
             item.put("dataFields", config.getDataFields());
             item.put("criteria", criteria(config)); item.put("accessible", unlocked);
             item.put("blocking", requiresReview(config) && Boolean.TRUE.equals(config.getAssessmentBlocking()));
-            item.put("submitted", submitted(row));
-            item.put("canSubmit", unlocked && canSubmit(session, row, finished));
-            item.put("canReview", unlocked && requiresReview(config) && submitted(row) && "PENDING".equals(row.getStatus()));
+            item.put("imageRequired", !Boolean.FALSE.equals(config.getImageRequired()));
+            item.put("tableRequired", Boolean.TRUE.equals(config.getTableRequired()));
+            item.put("submitted", submitted(row, config));
+            item.put("canSubmit", unlocked && canSubmit(session, row, finished, config));
+            item.put("canReview", unlocked && requiresReview(config) && submitted(row, config) && "PENDING".equals(row.getStatus()));
             item.put("status", row == null ? "NOT_STARTED" : row.getStatus());
             item.put("record", row);
             if (advances(row, config)) completed++;
@@ -139,13 +142,14 @@ public class ProcessAssessmentService {
         StepConfig config = step(session, stepId);
         StepAssessment row = assessments.findByUserIdAndExperimentCodeAndStepId(session.getUserId(), session.getExperimentCode(), stepId)
                 .orElseGet(StepAssessment::new);
-        if (done(row) && submitted(row)) return summary(session);
+        if (done(row) && submitted(row, config)) return summary(session);
         boolean finished = "FINISHED".equals(session.getStatus()) || sessions.existsByUserIdAndExperimentCodeAndStatus(session.getUserId(), session.getExperimentCode(), "FINISHED");
-        if (!canSubmit(session, row, finished)) throw error("当前步骤不可提交");
+        if (!canSubmit(session, row, finished, config)) throw error("当前步骤不可提交");
         boolean supplement = row.getId() != null && "PENDING".equals(row.getStatus());
         List<String> imageUrls = supplement ? evidenceImages(row.getEvidenceJson()) : new ArrayList<>();
         List<List<String>> submittedTable = table == null && supplement ? evidenceTable(row.getEvidenceJson()) : table;
-        if (images.isEmpty() && imageUrls.isEmpty()) throw error("请完成必填项：检查图片（至少上传或拍摄一张）");
+        if (!Boolean.FALSE.equals(config.getImageRequired()) && images.isEmpty() && imageUrls.isEmpty()) throw error("请完成必填项：检查图片（至少上传或拍摄一张）");
+        if (Boolean.TRUE.equals(config.getTableRequired()) && !validTable(submittedTable)) throw error("请填写本步骤必填的实验数据表格");
         if (submittedTable != null && !submittedTable.isEmpty() && !validTable(submittedTable)) throw error("实验数据表格填写不完整，请补全或删除表格后提交");
         if (supplement && images.isEmpty() && Objects.equals(submittedTable, evidenceTable(row.getEvidenceJson()))
                 && (note == null || note.isBlank() || Objects.equals(note, row.getStudentNote()))) return summary(session);
@@ -194,7 +198,7 @@ public class ProcessAssessmentService {
                 .orElseGet(StepAssessment::new);
         if (!Objects.equals(request.getVersion(), row.getVersion())) throw error("检查记录已更新，请刷新后重试");
         if (Set.of("PASSED", "COMPLETED").contains(row.getStatus())) throw error("本步骤已通过，不能重复评分");
-        if (!submitted(row) || !"PENDING".equals(row.getStatus())) throw error("请等待学生提交完整的检查材料");
+        if (!submitted(row, config) || !"PENDING".equals(row.getStatus())) throw error("请等待学生提交完整的检查材料");
         row.setUserId(session.getUserId()); row.setExperimentCode(session.getExperimentCode());
         row.setStepId(stepId); row.setSessionId(session.getId());
         row.setScore(request.getScore()); row.setComment(request.getComment());

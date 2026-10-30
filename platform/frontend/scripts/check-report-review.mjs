@@ -1,3 +1,4 @@
+import { usePagination } from '../src/composables/usePagination.js'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { parse, compileScript } from '@vue/compiler-sfc'
@@ -16,7 +17,7 @@ function mountSfc(path, dependencies = {}, props = {}) {
   code = code.replace(/^import (.+?) from ['"](.+?)['"];?$/gm, (_, names, source) => {
     return `const ${names} = __deps[${JSON.stringify(source)}]`
   }).replace('export default', 'return')
-  const deps = new Proxy({ vue: Vue, ...dependencies }, { get: (target, key) => target[key] || emptyComponent })
+  const deps = new Proxy({ vue: Vue, '../composables/usePagination': { usePagination }, '../../composables/usePagination': { usePagination }, ...dependencies }, { get: (target, key) => target[key] || emptyComponent })
   const component = new Function('__deps', code)(deps)
   component.render = () => null
   const app = renderer.createApp(component, props)

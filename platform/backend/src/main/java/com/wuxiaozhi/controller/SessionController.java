@@ -252,7 +252,7 @@ public class SessionController {
                 "studentName", String.valueOf(data.getOrDefault("studentName", "")),
                 "studentClass", String.valueOf(data.getOrDefault("studentClass", ""))
         );
-        byte[] bytes = reportService.generateStudentReportDocx(meta, request.getSections());
+        byte[] bytes = reportService.generateStudentReportDocx(data, request.getSections());
         String filename = URLEncoder.encode(meta.get("experimentName") + "-实验报告.docx", StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)

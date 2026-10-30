@@ -12,6 +12,8 @@
     </div>
 
     <div class="toolbar-right">
+      <ProcessRecordDownload :session-id="sessionId" :disabled="!sessionFinished" toolbar />
+      <button v-if="sessionFinished" type="button" class="btn-ghost px-3 py-1.5 rounded-lg text-xs font-semibold" @click="$emit('report')">实验报告</button>
       <span v-if="sessionFinished" class="finished-badge">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
@@ -36,7 +38,7 @@
           type="button"
           class="btn-brand flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold"
           :disabled="!canFinish"
-          :title="canFinish ? '结束本次实验并生成当堂小结' : '请先提交全部步骤的检查材料，并通过关键检查点'"
+          :title="canFinish ? '结束本次实验并保存过程记录' : finishHint"
           @click="$emit('report')"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -51,12 +53,15 @@
 
 <script setup>
 import { computed } from 'vue'
+import ProcessRecordDownload from '../experiment/ProcessRecordDownload.vue'
 
 const props = defineProps({
+  sessionId: { type: [Number, String], default: null },
   envLevel: { type: String, default: 'L0' },
   difyStatus: { type: Object, default: null },
   difyStatusLoading: { type: Boolean, default: false },
   canFinish: { type: Boolean, default: false },
+  finishHint: { type: String, default: '请先提交全部步骤的检查材料，并通过关键检查点' },
   sessionFinished: { type: Boolean, default: false }
 })
 

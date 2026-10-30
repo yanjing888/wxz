@@ -38,7 +38,7 @@
       <table class="sm-table">
         <thead>
           <tr>
-            <th><input type="checkbox" :checked="displayStudents.length > 0 && selectedRows.length === displayStudents.length" :indeterminate="selectedRows.length > 0 && selectedRows.length < displayStudents.length" aria-label="选择当前列表全部学生" @change="checkedStudents = $event.target.checked ? displayStudents.map(studentKey) : []" /></th>
+            <th><input type="checkbox" :checked="studentItems.length > 0 && pageSelectedCount === studentItems.length" :indeterminate="pageSelectedCount > 0 && pageSelectedCount < studentItems.length" aria-label="选择本页全部学生" @change="togglePageSelection($event.target.checked)" /></th>
             <th>学号</th>
             <th>姓名</th>
             <th>班级</th>
@@ -86,6 +86,7 @@
       </table>
     </div>
 
+    <ListPagination v-model:page="studentPage" v-model:page-size="studentSize" :total="studentTotal" />
     <p v-if="message" class="sm-message" :class="messageType">{{ message }}</p>
 
     <!-- 添加学生 -->
@@ -142,6 +143,8 @@
 </template>
 
 <script setup>
+import ListPagination from '../common/ListPagination.vue'
+import { usePagination } from '../../composables/usePagination'
 import { computed, reactive, ref, watch } from 'vue'
 import { teacherApi } from '../../api'
 
@@ -200,7 +203,7 @@ watch(() => props.experimentCode, () => {
 
 const studentGroups = computed(() => {
   const groups = new Map()
-  for (const student of displayStudents.value) {
+  for (const student of studentItems.value) {
     const name = student.studentClass || '未分班'
     if (!groups.has(name)) groups.set(name, [])
     groups.get(name).push(student)
@@ -374,6 +377,12 @@ async function removeFromCurrent(stu) {
   } finally {
     busy.value = false
   }
+}
+const { page: studentPage, pageSize: studentSize, total: studentTotal, items: studentItems } = usePagination(displayStudents, [searchQuery, assignmentFilter, () => props.experimentCode])
+const pageSelectedCount = computed(() => studentItems.value.filter(s => checkedStudents.value.includes(studentKey(s))).length)
+function togglePageSelection(checked) {
+  const keys = studentItems.value.map(studentKey)
+  checkedStudents.value = checked ? [...new Set([...checkedStudents.value, ...keys])] : checkedStudents.value.filter(key => !keys.includes(key))
 }
 </script>
 

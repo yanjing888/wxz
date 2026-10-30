@@ -8,6 +8,9 @@ import java.util.List;
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class StepConfig {
+    /** Defaults preserve existing experiments: images required, table optional. */
+    private Boolean imageRequired = true;
+    private Boolean tableRequired = false;
     /** Whether the step contributes a teacher-assessed score. */
     private Boolean assessmentRequired;
     /** Only explicitly configured checkpoints wait for a teacher before advancing. */

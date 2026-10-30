@@ -13,6 +13,10 @@ import java.util.NoSuchElementException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, String>> handleConcurrentUpdate(Exception ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "内容已被其他用户修改，请重新加载后编辑"));
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException ex) {

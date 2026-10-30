@@ -17,6 +17,15 @@ CREATE TABLE IF NOT EXISTS workstation_bindings (
 );
 
 -- 学生反馈订正：不覆盖已提交报告及教师批阅记录。
+-- 实验教学内容覆盖配置；未配置时继续读取内置实验。
+CREATE TABLE IF NOT EXISTS experiment_definitions (
+    code VARCHAR(64) NOT NULL PRIMARY KEY,
+    version BIGINT,
+    content_json LONGTEXT NOT NULL,
+    updated_at DATETIME(6),
+    updated_by BIGINT
+);
+
 CREATE TABLE IF NOT EXISTS learning_reflections (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
