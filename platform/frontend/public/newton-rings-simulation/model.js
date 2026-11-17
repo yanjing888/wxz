@@ -3,6 +3,7 @@ import { OrbitControls } from "./vendor/OrbitControls.js";
 import { DEFAULT_OPTICS, opticalMetrics } from "./optics.js";
 import { createWorkbench } from "./workbench.js";
 import { createSceneBackground } from "./scene-background.js";
+import { createPrismHousingGeometry, createPrismCheekGeometry } from "./reference-head.js";
 
 // Reference numbers refer to PDF page 4 (JCD3) and page 15 (JCD-CCD).
 const specs = [
@@ -557,19 +558,18 @@ export function createLab(
   knob(g, 0.22);
   cyl(g, 0.055, 0.45, [0, 0, -0.2], chrome, [Math.PI / 2, 0, 0]);
   g = group("prism", [0.52, 2.98, 0.25], [-0.4, 2.15, 0]);
-  cyl(g, 0.42, 0.23, [0, 0, 0], aluminum);
-  mesh(
-    g,
-    new T.SphereGeometry(0.4, 40, 24, 0, Math.PI * 2, 0, Math.PI / 2),
-    aluminum,
-    [0, 0.09, 0],
-  );
-  ring(g, 0.385, 0.42, 0.02, [0, 0.02, 0], black);
-  g = group("prismLock", [0.52, 3.02, 0.69], [-0.4, 2.1, 0.6]);
-  screw(g, [0, 0, 0], 0.055, blue);
-  g = angled("eyeTube", 0.46, [-1.0, 2.55, 0]);
-  cyl(g, 0.22, 0.64, [0, 0, 0], aluminum);
-  ring(g, 0.22, 0.25, 0.09, [0, 0.29, 0], black);
+  g.name = "photo-reference-oblique-prism-housing";
+  // Two low horizontal metal bands with a fine dark joint, matching the photo.
+  cyl(g, 0.395, 0.115, [0, -0.155, 0], aluminum);
+  cyl(g, 0.394, 0.006, [0, -0.094, 0], black);
+  cyl(g, 0.395, 0.156, [0, -0.013, 0], aluminum);
+  mesh(g, createPrismHousingGeometry(), aluminum);
+  for (const side of [-1, 1]) mesh(g, createPrismCheekGeometry(side), silver);
+  g = group("prismLock", [0.79, 2.91, 0.49], [-0.4, 2.1, 0.6]);
+  screw(g, [0, 0, 0], 0.035, chrome);
+  g = angled("eyeTube", 0.42, [-1.0, 2.55, 0]);
+  cyl(g, 0.205, 0.5, [0, 0, 0], aluminum);
+  ring(g, 0.205, 0.222, 0.045, [0, 0.23, 0], black);
   g = angled("eyepiece", 0.82, [-1.4, 2.7, 0]);
   const eyepieceDial = new T.Group();
   g.add(eyepieceDial);
@@ -588,11 +588,13 @@ export function createLab(
   text(g, "JCD3", 0.22, 0.07, [0, 0, 0.225]);
   g = angled("eyeLock", 0.67, [-1.3, 2.2, 0.6]);
   screw(g, [0, 0, 0.24], 0.045, blue);
-  g = angled("adapter", 0.91, [-1.6, 2.8, 0]);
-  box(g, 0.56, 0.34, 0.5, [0, 0, 0], black);
-  ring(g, 0.22, 0.27, 0.12, [0, -0.17, 0], silver);
-  g = angled("adapterLock", 0.92, [-1.9, 2.8, 0.45]);
-  cyl(g, 0.075, 0.11, [0.25, 0, 0.31], blue, [Math.PI / 2, 0, 0]);
+  g = angled("adapter", 0.73, [-1.6, 2.8, 0]);
+  box(g, 0.53, 0.32, 0.48, [0, 0, 0], black);
+  // Exposed silver sleeve between the lower clamp and black zoom lens.
+  cyl(g, 0.204, 0.32, [0, 0.31, 0], aluminum);
+  ring(g, 0.203, 0.215, 0.025, [0, 0.47, 0], silver);
+  g = angled("adapterLock", 0.73, [-1.9, 2.8, 0.45]);
+  cyl(g, 0.075, 0.1, [0.13, 0, 0.285], blue, [Math.PI / 2, 0, 0]);
   g = angled("zoom", 1.48, [-1.8, 3.1, 0]);
   cyl(g, 0.25, 0.67, [0, 0, 0], black);
   const cameraFocusDial = new T.Group();
@@ -618,16 +620,24 @@ export function createLab(
   );
   screw(g, [0.12, -0.16, 0.27], 0.025);
   g = angled("rods", 1.25, [-1.4, 3.2, -0.65]);
-  for (const z of [-0.34, 0.34]) cyl(g, 0.035, 1.72, [0.37, 0, z], chrome);
-  box(g, 0.65, 0.08, 0.83, [0.08, 0.73, 0], black);
-  box(g, 0.57, 0.12, 0.78, [0.1, -0.58, 0], black);
-  cyl(g, 0.065, 0.12, [0.35, -0.58, 0.45], blue, [Math.PI / 2, 0, 0]);
+  g.name = "photo-reference-side-support-rods";
+  for (const z of [-0.23, 0.23]) cyl(g, 0.038, 1.8, [0.37, 0.03, z], chrome);
+  box(g, 0.68, 0.065, 0.65, [0.12, 0.62, 0], black);
+  box(g, 0.27, 0.34, 0.65, [0.37, -0.49, 0], black);
+  cyl(g, 0.068, 0.13, [0.37, -0.49, 0.39], blue, [Math.PI / 2, 0, 0]);
   g = angled("camera", 2.1, [-2.2, 3.9, 0]);
-  box(g, 0.62, 0.73, 0.58, [0, 0, 0], blue);
-  box(g, 0.66, 0.13, 0.62, [0, 0.42, 0], black);
-  box(g, 0.66, 0.09, 0.62, [0, -0.4, 0], black);
-  for (let i = 0; i < 8; i++)
-    box(g, 0.012, 0.65, 0.01, [-0.26 + i * 0.074, 0, 0.295], chrome);
+  g.name = "photo-reference-blue-ccd-camera";
+  box(g, 0.64, 0.69, 0.53, [0, 0, 0], blue);
+  box(g, 0.65, 0.055, 0.54, [0, 0.365, 0], blue);
+  box(g, 0.68, 0.055, 0.6, [0, -0.37, 0], black);
+  // Blue extrusion ribs, rather than the old silver stripes across the face.
+  for (const x of [-0.29, 0.29])
+    box(g, 0.018, 0.65, 0.015, [x, 0, 0.27], blue);
+  for (const x of [-0.27, 0.27])
+    for (const z of [-0.2, 0.2]) cyl(g, 0.022, 0.012, [x, 0.4, z], chrome);
+  // Rear USB connector and strain relief at the cable attachment point.
+  box(g, 0.16, 0.055, 0.1, [0.12, 0.415, 0], chrome);
+  box(g, 0.13, 0.1, 0.085, [0.12, 0.49, 0], blue);
   cyl(g, 0.07, 0.1, [0.12, 0.54, 0], black);
   const exposureDial = new T.Group();
   g.add(exposureDial);
