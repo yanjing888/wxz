@@ -9,6 +9,8 @@ if not exist "%ROOT%\config\application.yml" (
   exit /b 1
 )
 if defined MAVEN_HOME (set "MVN=%MAVEN_HOME%\bin\mvn.cmd") else (set "MVN=mvn")
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\start-expert-relay.ps1"
+if errorlevel 1 exit /b 1
 echo Backend configuration: %ROOT%\config\application.yml
 cd /d "%ROOT%\backend"
 "%MVN%" -DskipTests spring-boot:run

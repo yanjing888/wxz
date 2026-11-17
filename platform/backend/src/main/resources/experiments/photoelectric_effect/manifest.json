@@ -1,0 +1,169 @@
+{
+  "code": "photoelectric_effect",
+  "name": "光电效应实验",
+  "enabled": true,
+  "category": "modern_physics",
+  "description": "支持实验指导、手动数据记录、过程考核与报告；仪器自动采集待后续接入。",
+  "dataCollection": {
+    "enabled": true
+  },
+  "processScoreWeight": 40,
+  "menuLabels": [
+    "光电管与暗电流检查",
+    "单色光与伏安特性",
+    "不同频率截止电压测量",
+    "普朗克常量拟合与讨论",
+    "实验结束与资料整理"
+  ],
+  "steps": {
+    "1": {
+      "title": "光电管与暗电流检查",
+      "guidePath": "steps/1.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "核对光电管供电、微电流量程和滤光片波长",
+        "遮光检查暗电流及零点，按现场要求预热",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "2": {
+      "title": "单色光与伏安特性",
+      "guidePath": "steps/2.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "选择已知波长的滤光片并固定照明几何关系",
+        "按仪器规程扫描电压，记录电压、电流和暗电流，形成伏安曲线",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "wavelength_nm",
+          "label": "入射光波长",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "nm",
+          "min": 1e-06
+        },
+        {
+          "key": "applied_voltage_V",
+          "label": "光电管外加电压（带符号）",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "V"
+        },
+        {
+          "key": "photocurrent_nA",
+          "label": "测得电流（带符号）",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "nA"
+        },
+        {
+          "key": "dark_current_nA",
+          "label": "暗电流",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "nA"
+        }
+      ]
+    },
+    "3": {
+      "title": "不同频率截止电压测量",
+      "guidePath": "steps/3.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "使用一致且有说明的截止判据，结合暗电流确定截止位置",
+        "更换多种波长重复测量，表格记录波长、截止电压及不确定度",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "stopping_voltage_V",
+          "label": "截止电压大小",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "V",
+          "min": 0
+        },
+        {
+          "key": "cutoff_criterion",
+          "label": "截止电压判据与暗电流处理",
+          "type": "text",
+          "required": true,
+          "photoAssist": false
+        }
+      ]
+    },
+    "4": {
+      "title": "普朗克常量拟合与讨论",
+      "guidePath": "steps/4.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "将波长换算为频率，对 U_stop–ν 进行多点线性拟合",
+        "由 h=e×斜率求普朗克常量，讨论截距、接触电势和照度影响",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "fit_slope_V_s",
+          "label": "U_stop–ν 拟合斜率",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "V·s",
+          "min": 0.0
+        },
+        {
+          "key": "planck_constant_J_s",
+          "label": "测得普朗克常量",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "J·s",
+          "min": 0.0
+        }
+      ]
+    },
+    "5": {
+      "title": "实验结束与资料整理",
+      "guidePath": "steps/5.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按现场规程停机或关闭光源、电源，将调节机构恢复安全位置",
+        "整理原始记录、数据表格和过程照片，检查报告所需信息并清理台面",
+        "原始记录、单位与过程证据清楚"
+      ]
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

@@ -312,3 +312,435 @@ experiments:
           - "断后测量"
           - "指标计算"
           - "数据纠错"
+
+  hall_effect:
+    name: "霍尔效应实验"
+    category: "electromagnetism"
+    teaching:
+      dataset: "teaching"
+      doc: "hall_effect/teaching-knowledge.md"
+      sectionKey: "hall_effect"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "hall_effect/visual-rules.md"
+      sectionKey: "hall_effect"
+    steps:
+      "1":
+        title: "样品与接线检查"
+        correctionMode: "vision"
+        guide: "hall_effect/steps/1.md"
+        teachingSection: "hall_effect.step.1.teaching"
+        rulesSection: "hall_effect.step.1.rules"
+        retrievalTags: ["hall_effect", "step:1", "样品与接线检查"]
+      "2":
+        title: "零点与磁场标定"
+        correctionMode: "data"
+        guide: "hall_effect/steps/2.md"
+        teachingSection: "hall_effect.step.2.teaching"
+        rulesSection: "hall_effect.step.2.rules"
+        retrievalTags: ["hall_effect", "step:2", "零点与磁场标定"]
+      "3":
+        title: "换向测量与原始记录"
+        correctionMode: "data"
+        guide: "hall_effect/steps/3.md"
+        teachingSection: "hall_effect.step.3.teaching"
+        rulesSection: "hall_effect.step.3.rules"
+        retrievalTags: ["hall_effect", "step:3", "换向测量与原始记录"]
+      "4":
+        title: "霍尔系数与误差分析"
+        correctionMode: "data"
+        guide: "hall_effect/steps/4.md"
+        teachingSection: "hall_effect.step.4.teaching"
+        rulesSection: "hall_effect.step.4.rules"
+        retrievalTags: ["hall_effect", "step:4", "霍尔系数与误差分析"]
+      "5":
+        title: "实验结束与资料整理"
+        correctionMode: "vision"
+        guide: "hall_effect/steps/5.md"
+        teachingSection: "hall_effect.step.5.teaching"
+        rulesSection: "hall_effect.step.5.rules"
+        retrievalTags: ["hall_effect", "step:5", "实验结束与资料整理"]
+
+  millikan_oil_drop:
+    name: "油滴实验"
+    category: "modern_physics"
+    teaching:
+      dataset: "teaching"
+      doc: "millikan_oil_drop/teaching-knowledge.md"
+      sectionKey: "millikan_oil_drop"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "millikan_oil_drop/visual-rules.md"
+      sectionKey: "millikan_oil_drop"
+    steps:
+      "1":
+        title: "观察系统与参数核对"
+        correctionMode: "vision"
+        guide: "millikan_oil_drop/steps/1.md"
+        teachingSection: "millikan_oil_drop.step.1.teaching"
+        rulesSection: "millikan_oil_drop.step.1.rules"
+        retrievalTags: ["millikan_oil_drop", "step:1", "观察系统与参数核对"]
+      "2":
+        title: "选择油滴与平衡调节"
+        correctionMode: "data"
+        guide: "millikan_oil_drop/steps/2.md"
+        teachingSection: "millikan_oil_drop.step.2.teaching"
+        rulesSection: "millikan_oil_drop.step.2.rules"
+        retrievalTags: ["millikan_oil_drop", "step:2", "选择油滴与平衡调节"]
+      "3":
+        title: "无电场下落计时"
+        correctionMode: "data"
+        guide: "millikan_oil_drop/steps/3.md"
+        teachingSection: "millikan_oil_drop.step.3.teaching"
+        rulesSection: "millikan_oil_drop.step.3.rules"
+        retrievalTags: ["millikan_oil_drop", "step:3", "无电场下落计时"]
+      "4":
+        title: "电荷计算与量子化检验"
+        correctionMode: "data"
+        guide: "millikan_oil_drop/steps/4.md"
+        teachingSection: "millikan_oil_drop.step.4.teaching"
+        rulesSection: "millikan_oil_drop.step.4.rules"
+        retrievalTags: ["millikan_oil_drop", "step:4", "电荷计算与量子化检验"]
+      "5":
+        title: "实验结束与资料整理"
+        correctionMode: "vision"
+        guide: "millikan_oil_drop/steps/5.md"
+        teachingSection: "millikan_oil_drop.step.5.teaching"
+        rulesSection: "millikan_oil_drop.step.5.rules"
+        retrievalTags: ["millikan_oil_drop", "step:5", "实验结束与资料整理"]
+
+  slide_wire_resistor:
+    name: "滑线变阻器特性研究"
+    category: "electromagnetism"
+    teaching:
+      dataset: "teaching"
+      doc: "slide_wire_resistor/teaching-knowledge.md"
+      sectionKey: "slide_wire_resistor"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "slide_wire_resistor/visual-rules.md"
+      sectionKey: "slide_wire_resistor"
+    steps:
+      "1":
+        title: "端子识别与额定值检查"
+        correctionMode: "vision"
+        guide: "slide_wire_resistor/steps/1.md"
+        teachingSection: "slide_wire_resistor.step.1.teaching"
+        rulesSection: "slide_wire_resistor.step.1.rules"
+        retrievalTags: ["slide_wire_resistor", "step:1", "端子识别与额定值检查"]
+      "2":
+        title: "限流电路测量"
+        correctionMode: "data"
+        guide: "slide_wire_resistor/steps/2.md"
+        teachingSection: "slide_wire_resistor.step.2.teaching"
+        rulesSection: "slide_wire_resistor.step.2.rules"
+        retrievalTags: ["slide_wire_resistor", "step:2", "限流电路测量"]
+      "3":
+        title: "空载与带载分压测量"
+        correctionMode: "data"
+        guide: "slide_wire_resistor/steps/3.md"
+        teachingSection: "slide_wire_resistor.step.3.teaching"
+        rulesSection: "slide_wire_resistor.step.3.rules"
+        retrievalTags: ["slide_wire_resistor", "step:3", "空载与带载分压测量"]
+      "4":
+        title: "特性曲线与接法比较"
+        correctionMode: "data"
+        guide: "slide_wire_resistor/steps/4.md"
+        teachingSection: "slide_wire_resistor.step.4.teaching"
+        rulesSection: "slide_wire_resistor.step.4.rules"
+        retrievalTags: ["slide_wire_resistor", "step:4", "特性曲线与接法比较"]
+      "5":
+        title: "实验结束与资料整理"
+        correctionMode: "vision"
+        guide: "slide_wire_resistor/steps/5.md"
+        teachingSection: "slide_wire_resistor.step.5.teaching"
+        rulesSection: "slide_wire_resistor.step.5.rules"
+        retrievalTags: ["slide_wire_resistor", "step:5", "实验结束与资料整理"]
+
+  thin_lens_focal_length:
+    name: "薄透镜焦距测量"
+    category: "optics"
+    teaching:
+      dataset: "teaching"
+      doc: "thin_lens_focal_length/teaching-knowledge.md"
+      sectionKey: "thin_lens_focal_length"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "thin_lens_focal_length/visual-rules.md"
+      sectionKey: "thin_lens_focal_length"
+    steps:
+      "1":
+        title: "共轴与光屏调节"
+        correctionMode: "vision"
+        guide: "thin_lens_focal_length/steps/1.md"
+        teachingSection: "thin_lens_focal_length.step.1.teaching"
+        rulesSection: "thin_lens_focal_length.step.1.rules"
+        retrievalTags: ["thin_lens_focal_length", "step:1", "共轴与光屏调节"]
+      "2":
+        title: "共轭位置测量"
+        correctionMode: "data"
+        guide: "thin_lens_focal_length/steps/2.md"
+        teachingSection: "thin_lens_focal_length.step.2.teaching"
+        rulesSection: "thin_lens_focal_length.step.2.rules"
+        retrievalTags: ["thin_lens_focal_length", "step:2", "共轭位置测量"]
+      "3":
+        title: "物距像距与焦距计算"
+        correctionMode: "data"
+        guide: "thin_lens_focal_length/steps/3.md"
+        teachingSection: "thin_lens_focal_length.step.3.teaching"
+        rulesSection: "thin_lens_focal_length.step.3.rules"
+        retrievalTags: ["thin_lens_focal_length", "step:3", "物距像距与焦距计算"]
+      "4":
+        title: "平均结果与方法讨论"
+        correctionMode: "data"
+        guide: "thin_lens_focal_length/steps/4.md"
+        teachingSection: "thin_lens_focal_length.step.4.teaching"
+        rulesSection: "thin_lens_focal_length.step.4.rules"
+        retrievalTags: ["thin_lens_focal_length", "step:4", "平均结果与方法讨论"]
+      "5":
+        title: "实验结束与资料整理"
+        correctionMode: "vision"
+        guide: "thin_lens_focal_length/steps/5.md"
+        teachingSection: "thin_lens_focal_length.step.5.teaching"
+        rulesSection: "thin_lens_focal_length.step.5.rules"
+        retrievalTags: ["thin_lens_focal_length", "step:5", "实验结束与资料整理"]
+
+  equal_thickness_laser_wavelength:
+    name: "等厚干涉测量激光波长"
+    category: "optics"
+    teaching:
+      dataset: "teaching"
+      doc: "equal_thickness_laser_wavelength/teaching-knowledge.md"
+      sectionKey: "equal_thickness_laser_wavelength"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "equal_thickness_laser_wavelength/visual-rules.md"
+      sectionKey: "equal_thickness_laser_wavelength"
+    steps:
+      "1":
+        title: "光路与方法确认"
+        correctionMode: "vision"
+        guide: "equal_thickness_laser_wavelength/steps/1.md"
+        teachingSection: "equal_thickness_laser_wavelength.step.1.teaching"
+        rulesSection: "equal_thickness_laser_wavelength.step.1.rules"
+        retrievalTags: ["equal_thickness_laser_wavelength", "step:1", "光路与方法确认"]
+      "2":
+        title: "等厚条纹与计数基准"
+        correctionMode: "vision"
+        guide: "equal_thickness_laser_wavelength/steps/2.md"
+        teachingSection: "equal_thickness_laser_wavelength.step.2.teaching"
+        rulesSection: "equal_thickness_laser_wavelength.step.2.rules"
+        retrievalTags: ["equal_thickness_laser_wavelength", "step:2", "等厚条纹与计数基准"]
+      "3":
+        title: "条纹移动与位移记录"
+        correctionMode: "data"
+        guide: "equal_thickness_laser_wavelength/steps/3.md"
+        teachingSection: "equal_thickness_laser_wavelength.step.3.teaching"
+        rulesSection: "equal_thickness_laser_wavelength.step.3.rules"
+        retrievalTags: ["equal_thickness_laser_wavelength", "step:3", "条纹移动与位移记录"]
+      "4":
+        title: "波长计算与误差分析"
+        correctionMode: "data"
+        guide: "equal_thickness_laser_wavelength/steps/4.md"
+        teachingSection: "equal_thickness_laser_wavelength.step.4.teaching"
+        rulesSection: "equal_thickness_laser_wavelength.step.4.rules"
+        retrievalTags: ["equal_thickness_laser_wavelength", "step:4", "波长计算与误差分析"]
+      "5":
+        title: "实验结束与资料整理"
+        correctionMode: "vision"
+        guide: "equal_thickness_laser_wavelength/steps/5.md"
+        teachingSection: "equal_thickness_laser_wavelength.step.5.teaching"
+        rulesSection: "equal_thickness_laser_wavelength.step.5.rules"
+        retrievalTags: ["equal_thickness_laser_wavelength", "step:5", "实验结束与资料整理"]
+
+  spectrometer:
+    name: "分光计实验"
+    category: "optics"
+    teaching:
+      dataset: "teaching"
+      doc: "spectrometer/teaching-knowledge.md"
+      sectionKey: "spectrometer"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "spectrometer/visual-rules.md"
+      sectionKey: "spectrometer"
+    steps:
+      "1":
+        title: "目镜与望远镜调节"
+        correctionMode: "vision"
+        guide: "spectrometer/steps/1.md"
+        teachingSection: "spectrometer.step.1.teaching"
+        rulesSection: "spectrometer.step.1.rules"
+        retrievalTags: ["spectrometer", "step:1", "目镜与望远镜调节"]
+      "2":
+        title: "平行光管与载物台调节"
+        correctionMode: "vision"
+        guide: "spectrometer/steps/2.md"
+        teachingSection: "spectrometer.step.2.teaching"
+        rulesSection: "spectrometer.step.2.rules"
+        retrievalTags: ["spectrometer", "step:2", "平行光管与载物台调节"]
+      "3":
+        title: "顶角与最小偏向位置测量"
+        correctionMode: "data"
+        guide: "spectrometer/steps/3.md"
+        teachingSection: "spectrometer.step.3.teaching"
+        rulesSection: "spectrometer.step.3.rules"
+        retrievalTags: ["spectrometer", "step:3", "顶角与最小偏向位置测量"]
+      "4":
+        title: "折射率与测角误差分析"
+        correctionMode: "data"
+        guide: "spectrometer/steps/4.md"
+        teachingSection: "spectrometer.step.4.teaching"
+        rulesSection: "spectrometer.step.4.rules"
+        retrievalTags: ["spectrometer", "step:4", "折射率与测角误差分析"]
+      "5":
+        title: "实验结束与资料整理"
+        correctionMode: "vision"
+        guide: "spectrometer/steps/5.md"
+        teachingSection: "spectrometer.step.5.teaching"
+        rulesSection: "spectrometer.step.5.rules"
+        retrievalTags: ["spectrometer", "step:5", "实验结束与资料整理"]
+
+  oscilloscope_usage:
+    name: "示波器的使用实验"
+    category: "electromagnetism"
+    teaching:
+      dataset: "teaching"
+      doc: "oscilloscope_usage/teaching-knowledge.md"
+      sectionKey: "oscilloscope_usage"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "oscilloscope_usage/visual-rules.md"
+      sectionKey: "oscilloscope_usage"
+    steps:
+      "1":
+        title: "接地与探头检查"
+        correctionMode: "vision"
+        guide: "oscilloscope_usage/steps/1.md"
+        teachingSection: "oscilloscope_usage.step.1.teaching"
+        rulesSection: "oscilloscope_usage.step.1.rules"
+        retrievalTags: ["oscilloscope_usage", "step:1", "接地与探头检查"]
+      "2":
+        title: "稳定显示与触发调节"
+        correctionMode: "vision"
+        guide: "oscilloscope_usage/steps/2.md"
+        teachingSection: "oscilloscope_usage.step.2.teaching"
+        rulesSection: "oscilloscope_usage.step.2.rules"
+        retrievalTags: ["oscilloscope_usage", "step:2", "稳定显示与触发调节"]
+      "3":
+        title: "幅值与周期测量"
+        correctionMode: "data"
+        guide: "oscilloscope_usage/steps/3.md"
+        teachingSection: "oscilloscope_usage.step.3.teaching"
+        rulesSection: "oscilloscope_usage.step.3.rules"
+        retrievalTags: ["oscilloscope_usage", "step:3", "幅值与周期测量"]
+      "4":
+        title: "频率换算与读数分析"
+        correctionMode: "data"
+        guide: "oscilloscope_usage/steps/4.md"
+        teachingSection: "oscilloscope_usage.step.4.teaching"
+        rulesSection: "oscilloscope_usage.step.4.rules"
+        retrievalTags: ["oscilloscope_usage", "step:4", "频率换算与读数分析"]
+      "5":
+        title: "实验结束与资料整理"
+        correctionMode: "vision"
+        guide: "oscilloscope_usage/steps/5.md"
+        teachingSection: "oscilloscope_usage.step.5.teaching"
+        rulesSection: "oscilloscope_usage.step.5.rules"
+        retrievalTags: ["oscilloscope_usage", "step:5", "实验结束与资料整理"]
+
+  sound_velocity:
+    name: "声速测量实验"
+    category: "acoustics"
+    teaching:
+      dataset: "teaching"
+      doc: "sound_velocity/teaching-knowledge.md"
+      sectionKey: "sound_velocity"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "sound_velocity/visual-rules.md"
+      sectionKey: "sound_velocity"
+    steps:
+      "1":
+        title: "换能器与信号检查"
+        correctionMode: "vision"
+        guide: "sound_velocity/steps/1.md"
+        teachingSection: "sound_velocity.step.1.teaching"
+        rulesSection: "sound_velocity.step.1.rules"
+        retrievalTags: ["sound_velocity", "step:1", "换能器与信号检查"]
+      "2":
+        title: "工作频率与稳定波形"
+        correctionMode: "data"
+        guide: "sound_velocity/steps/2.md"
+        teachingSection: "sound_velocity.step.2.teaching"
+        rulesSection: "sound_velocity.step.2.rules"
+        retrievalTags: ["sound_velocity", "step:2", "工作频率与稳定波形"]
+      "3":
+        title: "驻波极值位置记录"
+        correctionMode: "data"
+        guide: "sound_velocity/steps/3.md"
+        teachingSection: "sound_velocity.step.3.teaching"
+        rulesSection: "sound_velocity.step.3.rules"
+        retrievalTags: ["sound_velocity", "step:3", "驻波极值位置记录"]
+      "4":
+        title: "声速与温度影响分析"
+        correctionMode: "data"
+        guide: "sound_velocity/steps/4.md"
+        teachingSection: "sound_velocity.step.4.teaching"
+        rulesSection: "sound_velocity.step.4.rules"
+        retrievalTags: ["sound_velocity", "step:4", "声速与温度影响分析"]
+      "5":
+        title: "实验结束与资料整理"
+        correctionMode: "vision"
+        guide: "sound_velocity/steps/5.md"
+        teachingSection: "sound_velocity.step.5.teaching"
+        rulesSection: "sound_velocity.step.5.rules"
+        retrievalTags: ["sound_velocity", "step:5", "实验结束与资料整理"]
+
+  photoelectric_effect:
+    name: "光电效应实验"
+    category: "modern_physics"
+    teaching:
+      dataset: "teaching"
+      doc: "photoelectric_effect/teaching-knowledge.md"
+      sectionKey: "photoelectric_effect"
+    correctionRules:
+      dataset: "correction_rules"
+      doc: "photoelectric_effect/visual-rules.md"
+      sectionKey: "photoelectric_effect"
+    steps:
+      "1":
+        title: "光电管与暗电流检查"
+        correctionMode: "vision"
+        guide: "photoelectric_effect/steps/1.md"
+        teachingSection: "photoelectric_effect.step.1.teaching"
+        rulesSection: "photoelectric_effect.step.1.rules"
+        retrievalTags: ["photoelectric_effect", "step:1", "光电管与暗电流检查"]
+      "2":
+        title: "单色光与伏安特性"
+        correctionMode: "data"
+        guide: "photoelectric_effect/steps/2.md"
+        teachingSection: "photoelectric_effect.step.2.teaching"
+        rulesSection: "photoelectric_effect.step.2.rules"
+        retrievalTags: ["photoelectric_effect", "step:2", "单色光与伏安特性"]
+      "3":
+        title: "不同频率截止电压测量"
+        correctionMode: "data"
+        guide: "photoelectric_effect/steps/3.md"
+        teachingSection: "photoelectric_effect.step.3.teaching"
+        rulesSection: "photoelectric_effect.step.3.rules"
+        retrievalTags: ["photoelectric_effect", "step:3", "不同频率截止电压测量"]
+      "4":
+        title: "普朗克常量拟合与讨论"
+        correctionMode: "data"
+        guide: "photoelectric_effect/steps/4.md"
+        teachingSection: "photoelectric_effect.step.4.teaching"
+        rulesSection: "photoelectric_effect.step.4.rules"
+        retrievalTags: ["photoelectric_effect", "step:4", "普朗克常量拟合与讨论"]
+      "5":
+        title: "实验结束与资料整理"
+        correctionMode: "vision"
+        guide: "photoelectric_effect/steps/5.md"
+        teachingSection: "photoelectric_effect.step.5.teaching"
+        rulesSection: "photoelectric_effect.step.5.rules"
+        retrievalTags: ["photoelectric_effect", "step:5", "实验结束与资料整理"]

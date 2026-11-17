@@ -15,7 +15,7 @@
         :class="qaLocked
           ? 'bg-surface-muted text-ink-faint cursor-not-allowed'
           : 'brand-gradient text-white shadow-brand btn-active-scale'"
-        :disabled="qaLocked"
+        :disabled="qaLocked || historyBusy"
         :title="qaLocked ? '实验已结束，仅可查看历史对话' : '开始新的问答会话'"
         @click="qaLocked ? null : $emit('new-session')"
       >
@@ -47,6 +47,7 @@
                 class="min-w-0 flex-1 text-left rounded-lg pl-2.5 pr-1 py-2.5 transition-all btn-active-scale"
                 :class="item.id === currentSessionId ? 'text-brand-900' : 'text-ink-muted group-hover:text-ink-base'"
                 :title="sessionTitle(item)"
+                :disabled="historyBusy"
                 @click="$emit('select-session', item)"
               >
                 <div class="flex items-center gap-2 min-w-0">
@@ -57,6 +58,7 @@
                 </div>
               </button>
               <button
+                v-if="historyArchiveEnabled"
                 type="button"
                 class="archive-btn shrink-0 mr-1 px-1.5 py-1 rounded-md text-[10px] font-semibold leading-none text-ink-faint hover:text-brand-600 hover:bg-brand-50"
                 title="归档后从列表隐藏，对话仍会保留"
@@ -101,6 +103,13 @@
     />
 
     <div class="order-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden">
+      <div class="mobile-history shrink-0 gap-2 px-3 py-2 border-b border-line-soft">
+        <button type="button" class="text-xs font-semibold shrink-0" :disabled="qaLocked || historyBusy" @click="$emit('new-session')">新建对话</button>
+        <select aria-label="最近对话" class="min-w-0 flex-1 text-xs border border-line-soft rounded px-2 py-1.5" :value="currentSessionId" :disabled="historyBusy" @change="$emit('select-session', sessionHistory.find(item => String(item.id) === $event.target.value))">
+          <option v-if="!sessionHistory.some(item => item.id === currentSessionId)" :value="currentSessionId">当前新对话</option>
+          <option v-for="item in sessionHistory" :key="item.id" :value="item.id">{{ sessionTitle(item) }}</option>
+        </select>
+      </div>
       <header v-if="showHeader" class="shrink-0 flex items-center gap-2.5 px-5 pt-3 pb-2">
         <div class="w-8 h-8 rounded-xl brand-gradient flex items-center justify-center text-white text-[13px] font-bold shadow-brand">智</div>
         <div class="flex flex-col leading-tight min-w-0">
@@ -110,13 +119,13 @@
       </header>
       <div v-if="showHeader" class="workzone-divider" />
 
+      <div v-show="!alternativeActive" class="flex-1 min-h-0 flex flex-col overflow-hidden">
       <ChatBox
         :messages="messages"
         :loading="loadingAssist || submittingData"
         :welcome-subtitle="subtitle"
         :student-name="studentName"
       />
-
       <Composer
         :loading-assist="loadingAssist"
         :submitting-data="submittingData"
@@ -133,6 +142,10 @@
         @clear-image="$emit('clear-image')"
         @clear-data="$emit('clear-data')"
       />
+      </div>
+      <div v-show="alternativeActive" class="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <slot name="alternative" />
+      </div>
     </div>
   </section>
 </template>
@@ -171,7 +184,10 @@ const props = defineProps({
   readOnly: { type: Boolean, default: false },
   qaLocked: { type: Boolean, default: false },
   sessionHistory: { type: Array, default: () => [] },
-  currentSessionId: { type: Number, default: 0 },
+  currentSessionId: { type: [Number, String], default: 0 },
+  historyBusy: { type: Boolean, default: false },
+  historyArchiveEnabled: { type: Boolean, default: true },
+  alternativeActive: { type: Boolean, default: false },
   sessionHistoryLoading: { type: Boolean, default: false },
   showHeader: { type: Boolean, default: true }
 })
@@ -219,6 +235,7 @@ function startResize(event) {
 
 function sessionTitle(item) {
   if (!item) return '实验会话'
+  if (item.title) return item.title
   if (item.historyTitle) return item.historyTitle
   return item.status === 'FINISHED' ? `已完成会话 #${item.id}` : `实验会话 #${item.id}`
 }
@@ -233,6 +250,7 @@ onBeforeUnmount(() => {
 .right-panel-shell {
   grid-template-columns: minmax(0, 1fr);
 }
+.mobile-history { display: flex; }
 
 .history-panel,
 .history-resizer,
@@ -242,6 +260,7 @@ onBeforeUnmount(() => {
 }
 
 @media (min-width: 860px) {
+  .mobile-history { display: none; }
   .right-panel-shell {
     grid-template-columns: minmax(0, 1fr) var(--history-panel-width);
   }

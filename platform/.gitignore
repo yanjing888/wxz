@@ -24,6 +24,8 @@ config/lab.yml
 config/lab.yaml
 backups/
 config/application.yml
+config/expert-relay.json
+.expert-relay-venv/
 !config/dify.env
 __pycache__/
 *.py[cod]

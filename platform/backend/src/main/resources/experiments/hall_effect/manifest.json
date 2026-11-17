@@ -1,0 +1,176 @@
+{
+  "code": "hall_effect",
+  "name": "霍尔效应实验",
+  "enabled": true,
+  "category": "electromagnetism",
+  "description": "支持实验指导、手动数据记录、过程考核与报告；仪器自动采集待后续接入。",
+  "dataCollection": {
+    "enabled": true
+  },
+  "processScoreWeight": 40,
+  "menuLabels": [
+    "样品与接线检查",
+    "零点与磁场标定",
+    "换向测量与原始记录",
+    "霍尔系数与误差分析",
+    "实验结束与资料整理"
+  ],
+  "steps": {
+    "1": {
+      "title": "样品与接线检查",
+      "guidePath": "steps/1.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "识别样品电流端、霍尔电压端和励磁回路",
+        "断电核对接线、样品厚度及量程，记录磁场标定方法",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "2": {
+      "title": "零点与磁场标定",
+      "guidePath": "steps/2.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "在规定工作范围内检查电压零点",
+        "记录样品厚度并按特斯拉计或仪器标定关系确定磁感应强度",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "thickness_mm",
+          "label": "样品厚度 d",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mm",
+          "min": 1e-06
+        },
+        {
+          "key": "field_T",
+          "label": "磁感应强度 B",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "T"
+        }
+      ]
+    },
+    "3": {
+      "title": "换向测量与原始记录",
+      "guidePath": "steps/3.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "固定电流和磁场大小，分别改变两者方向",
+        "记录 U(+I,+B)、U(−I,+B)、U(−I,−B)、U(+I,−B)，在表格保留多组原始值",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "sample_current_mA",
+          "label": "样品电流大小",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mA",
+          "min": 1e-06
+        },
+        {
+          "key": "u_pp_mV",
+          "label": "U(+I,+B)",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mV"
+        },
+        {
+          "key": "u_np_mV",
+          "label": "U(−I,+B)",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mV"
+        },
+        {
+          "key": "u_nn_mV",
+          "label": "U(−I,−B)",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mV"
+        },
+        {
+          "key": "u_pn_mV",
+          "label": "U(+I,−B)",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mV"
+        }
+      ]
+    },
+    "4": {
+      "title": "霍尔系数与误差分析",
+      "guidePath": "steps/4.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按既定接线方向用四次换向组合消除偶对称偏置",
+        "计算 U_H=(Upp−Unp+Unn−Upn)/4，统一 SI 单位求 R_H，分析拟合与零点误差",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "hall_voltage_mV",
+          "label": "组合霍尔电压",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mV"
+        },
+        {
+          "key": "hall_coefficient",
+          "label": "霍尔系数 R_H",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "m³/C"
+        }
+      ]
+    },
+    "5": {
+      "title": "实验结束与资料整理",
+      "guidePath": "steps/5.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按现场规程停机或关闭光源、电源，将调节机构恢复安全位置",
+        "整理原始记录、数据表格和过程照片，检查报告所需信息并清理台面",
+        "原始记录、单位与过程证据清楚"
+      ]
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

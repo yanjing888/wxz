@@ -21,4 +21,5 @@ if not errorlevel 1 (
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\stop-frontend.ps1" -Port %FRONTEND_PORT%
 
 echo Done.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\stop-expert-relay.ps1"
 if /I not "%~1"=="--no-pause" pause

@@ -1,15 +1,18 @@
 <template>
   <StagePanel layout="chat" :title="title" :desc="desc">
     <template #actions>
-      <button type="button" class="btn-ghost px-3 py-1.5 rounded-lg text-[13px] font-semibold" @click="startNewConversation">
+      <AssistantPicker v-if="octopAvailable" v-model="provider" :disabled="sending || octopSending" />
+      <button v-if="!usingOctop" :disabled="sending" type="button" class="btn-ghost px-3 py-1.5 rounded-lg text-[13px] font-semibold" @click="startNewConversation">
         新对话
       </button>
     </template>
 
-    <div v-if="bootError" class="flex-1 flex items-center justify-center px-6">
+    <OctopTutorPanel v-show="usingOctop" v-if="octopAvailable" :student-name="auth.displayName || auth.username"
+      @busy="octopSending = $event" />
+    <div v-if="!usingOctop && bootError" class="flex-1 flex items-center justify-center px-6">
       <p class="text-sm text-rose-600">{{ bootError }}</p>
     </div>
-    <div v-else class="flex-1 min-h-0 flex flex-col bg-white max-w-[960px] mx-auto w-full">
+    <div v-else-if="!usingOctop" class="flex-1 min-h-0 flex flex-col bg-white max-w-[960px] mx-auto w-full">
       <ChatBox
         :messages="messages"
         :loading="false"
@@ -31,9 +34,13 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import StagePanel from './StagePanel.vue'
+import AssistantPicker from '../chat/AssistantPicker.vue'
+import OctopTutorPanel from './OctopTutorPanel.vue'
 import ChatBox from '../chat/ChatBox.vue'
 import Composer from '../chat/Composer.vue'
 import { aiToolApi } from '../../api'
+import http from '../../api/http'
+import { useAssistantChoice } from '../../composables/useAssistantChoice'
 import { postSse } from '../../api/sse'
 import { useAuthStore } from '../../stores/auth'
 
@@ -55,12 +62,23 @@ const messages = ref([])
 const sending = ref(false)
 const bootError = ref('')
 const assistAbort = ref(null)
+const octopAvailable = ref(false)
+const provider = useAssistantChoice()
+const octopSending = ref(false)
+const usingOctop = computed(() => octopAvailable.value && provider.value === 'octop')
 
 const welcomeSubtitle = computed(() =>
   props.experimentName ? `围绕「${props.experimentName}」提问，回答会结合本实验讲义。` : props.desc
 )
 
-onMounted(bootstrap)
+onMounted(() => {
+  bootstrap()
+  if (props.toolCode === 'explore') {
+    http.get('/api/ai/octop-preview')
+      .then(({ data }) => { octopAvailable.value = data?.enabled === true })
+      .catch(() => {})
+  }
+})
 watch(() => props.toolCode, bootstrap)
 
 async function bootstrap() {
@@ -119,7 +137,8 @@ function finishAiMessage(aiIndex) {
 
 async function sendMessage(text) {
   const prompt = (text || '').trim()
-  if (!prompt || !conversationId.value || sending.value) return false
+  if (!prompt || sending.value) return false
+  if (!conversationId.value) return false
 
   if (assistAbort.value) assistAbort.value.abort()
   const abortCtrl = new AbortController()

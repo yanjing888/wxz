@@ -30,7 +30,7 @@ public class WuxiaozhiApplication {
     }
 
     private static void loadExternalEnvFiles() {
-        for (String name : new String[] { "dify.env" }) {
+        for (String name : new String[] { "dify.env", "expert.env" }) {
             for (Path path : configCandidates(name)) {
                 if (Files.isRegularFile(path)) {
                     loadEnvFile(path);

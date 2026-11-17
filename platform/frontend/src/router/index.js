@@ -18,9 +18,9 @@ const routes = [
     component: () => import('../layouts/StudentLayout.vue'),
     meta: studentMeta,
     children: [
-      { path: '', redirect: { name: 'lab' } },
+      { path: '', redirect: { name: 'experiments' } },
       { path: 'learning', name: 'my-learning', component: () => import('../views/MyLearningView.vue'), meta: studentMeta },
-      { path: 'tasks', name: 'student-tasks', redirect: { name: 'lab' } },
+      { path: 'tasks', name: 'student-tasks', redirect: { name: 'experiments' } },
       {
         path: 'reports',
         name: 'student-reports',
@@ -33,7 +33,8 @@ const routes = [
       {
         path: 'experiments',
         name: 'experiments',
-        redirect: { name: 'lab' }
+        component: () => import('../views/experiment/MyExperimentsView.vue'),
+        meta: studentMeta
       },
       {
         path: 'after/:code',
@@ -106,7 +107,7 @@ const routes = [
       }
     ]
   },
-  { path: '/home', redirect: { name: 'lab' } },
+  { path: '/home', redirect: { name: 'experiments' } },
   { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true, role: 'ADMIN' } },
   { path: '/ai', redirect: { name: 'agents' } },
   { path: '/ai/:code', redirect: { name: 'agents' } },

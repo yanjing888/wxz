@@ -1,0 +1,163 @@
+{
+  "code": "millikan_oil_drop",
+  "name": "油滴实验",
+  "enabled": true,
+  "category": "modern_physics",
+  "description": "支持实验指导、手动数据记录、过程考核与报告；仪器自动采集待后续接入。",
+  "dataCollection": {
+    "enabled": true
+  },
+  "processScoreWeight": 40,
+  "menuLabels": [
+    "观察系统与参数核对",
+    "选择油滴与平衡调节",
+    "无电场下落计时",
+    "电荷计算与量子化检验",
+    "实验结束与资料整理"
+  ],
+  "steps": {
+    "1": {
+      "title": "观察系统与参数核对",
+      "guidePath": "steps/1.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "核对极板间距、温度、油密度、空气黏度和标尺换算",
+        "调节目镜和照明，明确倒像时实际运动方向",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "2": {
+      "title": "选择油滴与平衡调节",
+      "guidePath": "steps/2.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "选择运动稳定且可持续跟踪的单颗油滴",
+        "调节电压使其悬浮，观察足够时间确认平衡",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "drop_id",
+          "label": "油滴编号",
+          "type": "text",
+          "required": true,
+          "photoAssist": false
+        },
+        {
+          "key": "plate_distance_mm",
+          "label": "极板间距",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mm",
+          "min": 1e-06
+        },
+        {
+          "key": "balance_voltage_V",
+          "label": "平衡电压大小",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "V",
+          "min": 1e-06
+        }
+      ]
+    },
+    "3": {
+      "title": "无电场下落计时",
+      "guidePath": "steps/3.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "关闭电场，待油滴进入匀速区后测量固定距离的下落时间",
+        "同一油滴重复计时并在表格保留每次距离、时间和平衡电压",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "fall_distance_mm",
+          "label": "实际下落距离",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mm",
+          "min": 1e-06
+        },
+        {
+          "key": "fall_time_s",
+          "label": "下落时间",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "s",
+          "min": 1e-06
+        }
+      ]
+    },
+    "4": {
+      "title": "电荷计算与量子化检验",
+      "guidePath": "steps/4.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "记录采用的黏度、密度、气压和滑移修正公式",
+        "计算各油滴电荷，比较多颗油滴的整数倍关系并分析不确定度",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "charge_C",
+          "label": "油滴电荷量绝对值",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "C",
+          "min": 0.0
+        },
+        {
+          "key": "elementary_charge_C",
+          "label": "估算基本电荷",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "C",
+          "min": 0.0
+        }
+      ]
+    },
+    "5": {
+      "title": "实验结束与资料整理",
+      "guidePath": "steps/5.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按现场规程停机或关闭光源、电源，将调节机构恢复安全位置",
+        "整理原始记录、数据表格和过程照片，检查报告所需信息并清理台面",
+        "原始记录、单位与过程证据清楚"
+      ]
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

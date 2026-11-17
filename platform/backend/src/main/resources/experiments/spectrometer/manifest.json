@@ -1,0 +1,140 @@
+{
+  "code": "spectrometer",
+  "name": "分光计实验",
+  "enabled": true,
+  "category": "optics",
+  "description": "支持实验指导、手动数据记录、过程考核与报告；仪器自动采集待后续接入。",
+  "dataCollection": {
+    "enabled": true
+  },
+  "processScoreWeight": 40,
+  "menuLabels": [
+    "目镜与望远镜调节",
+    "平行光管与载物台调节",
+    "顶角与最小偏向位置测量",
+    "折射率与测角误差分析",
+    "实验结束与资料整理"
+  ],
+  "steps": {
+    "1": {
+      "title": "目镜与望远镜调节",
+      "guidePath": "steps/1.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "先调清叉丝，再用自准直方法调望远镜至无穷远",
+        "检查望远镜光轴与仪器转轴的关系",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "2": {
+      "title": "平行光管与载物台调节",
+      "guidePath": "steps/2.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "调节平行光管使狭缝像清晰，采用适当狭缝宽度",
+        "调整载物台，使棱镜主截面与测角平面匹配",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "3": {
+      "title": "顶角与最小偏向位置测量",
+      "guidePath": "steps/3.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "用两反射面反射法等指定方法测顶角，分别保存两个游标原始读数",
+        "转动棱镜寻找谱线偏转的转折位置，测量最小偏向角并重复",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "prism_angle_deg",
+          "label": "棱镜顶角 A",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "°",
+          "min": 1e-06
+        },
+        {
+          "key": "minimum_deviation_deg",
+          "label": "最小偏向角 δ_min",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "°",
+          "min": 0
+        },
+        {
+          "key": "spectral_line",
+          "label": "所用谱线或波长",
+          "type": "text",
+          "required": true,
+          "photoAssist": false
+        }
+      ]
+    },
+    "4": {
+      "title": "折射率与测角误差分析",
+      "guidePath": "steps/4.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "用实际光线夹角代入最小偏向角公式，计算前统一角度制",
+        "报告双游标平均方法、重复测量离散及谱线判读误差",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "refractive_index",
+          "label": "棱镜折射率",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "min": 1
+        },
+        {
+          "key": "angle_analysis",
+          "label": "双游标与跨零处理说明",
+          "type": "text",
+          "required": true,
+          "photoAssist": false
+        }
+      ]
+    },
+    "5": {
+      "title": "实验结束与资料整理",
+      "guidePath": "steps/5.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按现场规程停机或关闭光源、电源，将调节机构恢复安全位置",
+        "整理原始记录、数据表格和过程照片，检查报告所需信息并清理台面",
+        "原始记录、单位与过程证据清楚"
+      ]
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

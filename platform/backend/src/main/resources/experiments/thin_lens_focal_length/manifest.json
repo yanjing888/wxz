@@ -1,0 +1,171 @@
+{
+  "code": "thin_lens_focal_length",
+  "name": "薄透镜焦距测量",
+  "enabled": true,
+  "category": "optics",
+  "description": "支持实验指导、手动数据记录、过程考核与报告；仪器自动采集待后续接入。",
+  "dataCollection": {
+    "enabled": true
+  },
+  "processScoreWeight": 40,
+  "menuLabels": [
+    "共轴与光屏调节",
+    "共轭位置测量",
+    "物距像距与焦距计算",
+    "平均结果与方法讨论",
+    "实验结束与资料整理"
+  ],
+  "steps": {
+    "1": {
+      "title": "共轴与光屏调节",
+      "guidePath": "steps/1.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "固定物、凸透镜和光屏，使中心大致等高共轴",
+        "记录光具座刻度方向和长度单位",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "2": {
+      "title": "共轭位置测量",
+      "guidePath": "steps/2.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "移动透镜或光屏获得最清晰实像",
+        "记录物、透镜和光屏的位置，改变共轭位置重复测量",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "object_position_cm",
+          "label": "物位置",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "cm"
+        },
+        {
+          "key": "lens_position_cm",
+          "label": "透镜位置",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "cm"
+        },
+        {
+          "key": "screen_position_cm",
+          "label": "光屏位置",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "cm"
+        }
+      ]
+    },
+    "3": {
+      "title": "物距像距与焦距计算",
+      "guidePath": "steps/3.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "由相同刻度基准求 u、v 的正距离",
+        "逐组计算 f=uv/(u+v)，在表格保留各组数据和结果",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "object_distance_cm",
+          "label": "物距 u",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "cm",
+          "min": 1e-06
+        },
+        {
+          "key": "image_distance_cm",
+          "label": "像距 v",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "cm",
+          "min": 1e-06
+        },
+        {
+          "key": "focal_length_cm",
+          "label": "焦距 f",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "cm",
+          "min": 1e-06
+        }
+      ]
+    },
+    "4": {
+      "title": "平均结果与方法讨论",
+      "guidePath": "steps/4.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "计算多组焦距均值，估计清晰成像判断与定位误差",
+        "说明薄透镜近似的影响，可在满足 L>4f 时采用位移法复核",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "mean_focal_length_cm",
+          "label": "平均焦距",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "cm",
+          "min": 1e-06
+        },
+        {
+          "key": "uncertainty_cm",
+          "label": "焦距不确定度",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "cm",
+          "min": 0
+        }
+      ]
+    },
+    "5": {
+      "title": "实验结束与资料整理",
+      "guidePath": "steps/5.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按现场规程停机或关闭光源、电源，将调节机构恢复安全位置",
+        "整理原始记录、数据表格和过程照片，检查报告所需信息并清理台面",
+        "原始记录、单位与过程证据清楚"
+      ]
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

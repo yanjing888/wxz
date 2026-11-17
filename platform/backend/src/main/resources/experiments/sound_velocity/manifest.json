@@ -1,0 +1,163 @@
+{
+  "code": "sound_velocity",
+  "name": "声速测量实验",
+  "enabled": true,
+  "category": "acoustics",
+  "description": "支持实验指导、手动数据记录、过程考核与报告；仪器自动采集待后续接入。",
+  "dataCollection": {
+    "enabled": true
+  },
+  "processScoreWeight": 40,
+  "menuLabels": [
+    "换能器与信号检查",
+    "工作频率与稳定波形",
+    "驻波极值位置记录",
+    "声速与温度影响分析",
+    "实验结束与资料整理"
+  ],
+  "steps": {
+    "1": {
+      "title": "换能器与信号检查",
+      "guidePath": "steps/1.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "使发射和接收换能器中心等高、轴线重合",
+        "连接信号源与示波器，低幅度起调并记录环境温度",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "2": {
+      "title": "工作频率与稳定波形",
+      "guidePath": "steps/2.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "在换能器允许频段寻找稳定接收信号",
+        "记录实际工作频率和温度，保持后续测量频率不变",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "frequency_kHz",
+          "label": "工作频率",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "kHz",
+          "min": 1e-06
+        },
+        {
+          "key": "temperature_C",
+          "label": "环境温度",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "°C"
+        }
+      ]
+    },
+    "3": {
+      "title": "驻波极值位置记录",
+      "guidePath": "steps/3.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "沿同一方向逐个寻找同类幅度极值并记录位置",
+        "跨多个间隔测量，使用表格保存所有位置以便逐差处理",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "start_position_mm",
+          "label": "起始极值位置",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mm"
+        },
+        {
+          "key": "end_position_mm",
+          "label": "末端极值位置",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mm"
+        },
+        {
+          "key": "interval_count",
+          "label": "同类极值间隔数 N",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "min": 1
+        }
+      ]
+    },
+    "4": {
+      "title": "声速与温度影响分析",
+      "guidePath": "steps/4.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按 λ=2",
+        "Δx",
+        "/N 求波长，再由 v=fλ 求声速",
+        "记录重复结果并分析温度、对准、近场及极值定位的影响",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "wavelength_mm",
+          "label": "波长",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mm",
+          "min": 1e-06
+        },
+        {
+          "key": "velocity_m_s",
+          "label": "声速",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "m/s",
+          "min": 1e-06
+        }
+      ]
+    },
+    "5": {
+      "title": "实验结束与资料整理",
+      "guidePath": "steps/5.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按现场规程停机或关闭光源、电源，将调节机构恢复安全位置",
+        "整理原始记录、数据表格和过程照片，检查报告所需信息并清理台面",
+        "原始记录、单位与过程证据清楚"
+      ]
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

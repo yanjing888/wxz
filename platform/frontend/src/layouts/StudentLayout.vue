@@ -2,7 +2,7 @@
   <div class="student-app h-full flex flex-col">
     <AppTopBar title="" subtitle="" @logout="logout">
       <template #left-extra>
-        <StudentExperimentSwitcher v-if="route.name !== 'my-learning'" />
+        <StudentExperimentSwitcher v-if="!['my-learning', 'experiments'].includes(route.name)" />
       </template>
       <template #center>
         <StudentTabBar />

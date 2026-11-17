@@ -1,0 +1,181 @@
+{
+  "code": "slide_wire_resistor",
+  "name": "滑线变阻器特性研究",
+  "enabled": true,
+  "category": "electromagnetism",
+  "description": "支持实验指导、手动数据记录、过程考核与报告；仪器自动采集待后续接入。",
+  "dataCollection": {
+    "enabled": true
+  },
+  "processScoreWeight": 40,
+  "menuLabels": [
+    "端子识别与额定值检查",
+    "限流电路测量",
+    "空载与带载分压测量",
+    "特性曲线与接法比较",
+    "实验结束与资料整理"
+  ],
+  "steps": {
+    "1": {
+      "title": "端子识别与额定值检查",
+      "guidePath": "steps/1.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "断电用电阻挡识别两个固定端和滑片端",
+        "记录总阻值、额定电流及电源范围",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "2": {
+      "title": "限流电路测量",
+      "guidePath": "steps/2.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按限流接法接线，通电前将接入阻值调至最大",
+        "逐步移动滑片，逐点记录位置、电压和电流",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "position_percent",
+          "label": "滑片相对位置",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "%",
+          "min": 0
+        },
+        {
+          "key": "voltage_V",
+          "label": "接入部分电压",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "V",
+          "min": 0
+        },
+        {
+          "key": "current_mA",
+          "label": "回路电流",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mA",
+          "min": 1e-06
+        }
+      ]
+    },
+    "3": {
+      "title": "空载与带载分压测量",
+      "guidePath": "steps/3.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "断电改接分压电路，输出从低电压开始",
+        "在相同滑片位置分别测量空载与接入负载后的输出，保留多组表格",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "input_voltage_V",
+          "label": "输入电压",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "V",
+          "min": 1e-06
+        },
+        {
+          "key": "unloaded_voltage_V",
+          "label": "空载输出电压",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "V",
+          "min": 0
+        },
+        {
+          "key": "loaded_voltage_V",
+          "label": "带载输出电压",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "V",
+          "min": 0
+        },
+        {
+          "key": "load_resistance_ohm",
+          "label": "负载电阻",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "Ω",
+          "min": 1e-06
+        }
+      ]
+    },
+    "4": {
+      "title": "特性曲线与接法比较",
+      "guidePath": "steps/4.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "绘制位置–接入电阻、位置–输出电压曲线",
+        "解释负载效应，比较限流与分压接法的调节范围和功耗",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "resistance_ohm",
+          "label": "计算接入电阻",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "Ω",
+          "min": 0
+        },
+        {
+          "key": "conclusion",
+          "label": "负载效应与接法比较",
+          "type": "text",
+          "required": true,
+          "photoAssist": false
+        }
+      ]
+    },
+    "5": {
+      "title": "实验结束与资料整理",
+      "guidePath": "steps/5.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按现场规程停机或关闭光源、电源，将调节机构恢复安全位置",
+        "整理原始记录、数据表格和过程照片，检查报告所需信息并清理台面",
+        "原始记录、单位与过程证据清楚"
+      ]
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

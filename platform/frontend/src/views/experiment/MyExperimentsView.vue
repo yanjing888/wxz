@@ -1,162 +1,91 @@
 <template>
-  <div class="page flex-1 min-h-0 overflow-y-auto custom-scroll">
-    <div class="inner">
-      <header class="page-head">
-        <div class="min-w-0">
-          <h1 class="page-title">我的实验</h1>
-          <p class="page-lead">
-            每个实验都按「预习 → 操作 → 数据 → 报告」四步推进，AI 在每一步就近提供帮助。
-          </p>
+  <div class="overview custom-scroll">
+    <div class="overview-inner">
+      <h1 class="sr-only">我的实验</h1>
+      <div v-if="tasks.error" class="notice" role="alert">{{ tasks.error }} <button type="button" @click="load">重新加载</button></div>
+      <p v-if="!tasks.loaded && tasks.loading" class="empty" role="status">正在加载已分配的实验…</p>
+      <template v-else-if="tasks.loaded">
+        <div class="toolbar">
+          <div class="filters" aria-label="按实验状态筛选">
+            <button v-for="filter in EXPERIMENT_FILTERS" :key="filter.key" type="button" :aria-pressed="selected === filter.key" :class="{ selected: selected === filter.key }" @click="selected = filter.key">{{ filter.label }} <span>{{ counts[filter.key] }}</span></button>
+          </div>
+          <div class="toolbar-actions">
+            <label class="search"><span class="sr-only">搜索实验名称</span><input v-model="search" type="search" placeholder="搜索实验名称" /></label>
+            <button class="refresh" type="button" :disabled="tasks.loading" @click="load">{{ tasks.loading ? '刷新中…' : '刷新列表' }}</button>
+          </div>
         </div>
-        <router-link to="/files" class="btn-ghost px-4 py-2 rounded-xl text-[13px] font-semibold shrink-0">
-          查看实验资料
-        </router-link>
-      </header>
-
-      <div v-if="loading" class="state-box">正在加载实验列表…</div>
-      <div v-else-if="error" class="state-box state-box--error">{{ error }}</div>
-      <div v-else-if="!items.length" class="state-box">
-        暂无已分配的实验。请联系任课教师为你分配实验后再进入。
-      </div>
-
-      <ul v-else class="exp-list">
-        <li v-for="item in experimentItems" :key="item.experimentCode" class="exp-card">
-          <div class="card-head">
-            <div class="min-w-0">
-              <h2 class="exp-name">{{ item.experimentName }}</h2>
-              <p class="exp-meta">
-                {{ statusSummary(item) }}
-                <span v-if="item.fileCount" class="meta-dot">·</span>
-                <span v-if="item.fileCount">{{ item.fileCount }} 份资料</span>
-              </p>
+        <p v-if="!tasks.items.length" class="empty">暂无已分配的实验，请联系任课教师分配。</p>
+        <p v-else-if="!visible.length" class="empty">没有符合条件的实验。<button type="button" @click="selected = 'all'; search = ''">查看全部实验</button></p>
+        <ul v-else class="experiment-grid">
+          <li v-for="item in visible" :key="item.experimentCode" class="experiment-card" :class="{ 'is-current': experimentState(item) === 'current' }">
+            <div class="card-top"><span class="state" :class="`state-${experimentState(item)}`">{{ stateLabel(item) }}</span><span class="class-name">{{ item.className || '未标注教学班' }}</span></div>
+            <h2>{{ item.experimentName }}</h2><p class="card-description">{{ description(item) }}</p>
+            <ol class="milestones" aria-label="实验进度">
+              <li :class="{ complete: item.preLabCompleted || item.simulationCompleted }">预习</li>
+              <li :class="{ complete: item.labCompleted, active: item.currentTask }">实操</li>
+              <li :class="{ complete: item.reportCompleted }">报告</li><li :class="{ complete: item.gradingCompleted }">评价</li>
+            </ol>
+            <p v-if="item.reportDueAt" class="due">报告截止：{{ dateText(item.reportDueAt) }}</p>
+            <details v-if="item.instructions" class="instructions"><summary>老师的补充要求</summary><p>{{ item.instructions }}</p></details>
+            <div class="card-footer">
+              <span v-if="item.gradingCompleted" class="footer-hint">报告成绩 <strong>{{ item.teacherScore ?? '—' }}</strong></span>
+              <span v-else class="footer-hint">{{ item.currentTask ? '当前可以开展' : item.labCompleted ? '实操已结束' : '完成前序实操后开放' }}</span>
+              <router-link v-if="experimentAction(item)" :to="experimentAction(item).to" class="card-action" :class="{ primary: item.currentTask }">{{ experimentAction(item).label }} <span aria-hidden="true">→</span></router-link>
+              <button v-else type="button" class="waiting" disabled>等待开始</button>
             </div>
-            <router-link :to="primaryRoute(item)" class="btn-brand px-5 py-2 rounded-xl text-[13px] font-semibold shrink-0">
-              {{ primaryLabel(item) }}
-            </router-link>
-          </div>
-
-          <div v-if="item.finishedSessionId" class="mb-4 flex flex-wrap items-center gap-3">
-            <ProcessRecordDownload :session-id="item.finishedSessionId" />
-            <router-link :to="{ name: 'after-center', params: { code: item.experimentCode } }" class="text-[13px] text-brand-600">实验资料与报告</router-link>
-          </div>
-          <ol class="stage-rail">
-            <li v-for="(stage, index) in STAGES" :key="stage.key" class="rail-item">
-              <router-link :to="stage.route(item.experimentCode)" class="rail-link" :class="`rail-link--${statusOf(item, stage.key)}`">
-                <span class="rail-dot" :class="`rail-dot--${statusOf(item, stage.key)}`">
-                  <template v-if="statusOf(item, stage.key) === 'done'">✓</template>
-                  <template v-else>{{ index + 1 }}</template>
-                </span>
-                <span class="rail-text">
-                  <span class="rail-label">{{ stage.label }}</span>
-                  <span class="rail-lead">{{ stage.lead }}</span>
-                </span>
-              </router-link>
-              <span v-if="index < STAGES.length - 1" class="rail-line" :class="{ 'rail-line--done': statusOf(item, stage.key) === 'done' }" />
-            </li>
-          </ol>
-        </li>
-      </ul>
-      <ListPagination v-model:page="experimentPage" v-model:page-size="experimentSize" :total="experimentTotal" />
+          </li>
+        </ul>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup>
-import ListPagination from '../../components/common/ListPagination.vue'
-import ProcessRecordDownload from '../../components/experiment/ProcessRecordDownload.vue'
-import { usePagination } from '../../composables/usePagination'
-import { onMounted, ref } from 'vue'
-import { studentExperimentApi, studentFileApi } from '../../api'
-import { STAGES, stageStatus } from '../../utils/experimentFlow'
-
-const items = ref([])
-const loading = ref(true)
-const error = ref('')
-
-onMounted(async () => {
-  try {
-    const { data } = await studentExperimentApi.listProgress()
-    items.value = (data || []).map((row) => ({ ...row, fileCount: 0 }))
-  } catch (e) {
-    error.value = e.response?.data?.message || '实验列表加载失败，请确认后端已启动'
-  } finally {
-    loading.value = false
-  }
-
-  try {
-    const { data } = await studentFileApi.list()
-    const counts = {}
-    ;(data || []).forEach((file) => {
-      if (file.experimentCode) counts[file.experimentCode] = (counts[file.experimentCode] || 0) + 1
-    })
-    items.value = items.value.map((row) => ({ ...row, fileCount: counts[row.experimentCode] || 0 }))
-  } catch {
-    // 资料统计失败不影响主流程
-  }
+import { computed, onMounted, ref } from 'vue'
+import { useTaskStore } from '../../stores/tasks'
+import { EXPERIMENT_FILTERS, experimentState, experimentAction, orderedExperiments } from '../../utils/experimentOverview'
+const tasks = useTaskStore()
+const selected = ref('all'), search = ref('')
+const counts = computed(() => {
+  const result = Object.fromEntries(EXPERIMENT_FILTERS.map(f => [f.key, 0]))
+  result.all = tasks.items.length
+  for (const item of tasks.items) result[experimentState(item)]++
+  return result
 })
-
-function statusOf(item, stageKey) {
-  return stageStatus(item, stageKey)
+const visible = computed(() => orderedExperiments(tasks.items).filter(item =>
+  (selected.value === 'all' || selected.value === experimentState(item)) && item.experimentName.includes(search.value.trim())))
+function stateLabel(item) {
+  const state = experimentState(item)
+  if (state === 'current') return item.activeSessionId ? '正在进行' : '当前待开始'
+  return EXPERIMENT_FILTERS.find(f => f.key === state).label
 }
-
-function statusSummary(item) {
-  const done = STAGES.filter((s) => statusOf(item, s.key) === 'done').length
-  if (done === 0) return '尚未开始'
-  if (done >= STAGES.length) return '全部完成'
-  return `已完成 ${done}/${STAGES.length} 个阶段`
+function description(item) {
+  const state = experimentState(item)
+  if (state === 'current') return item.simulationRequired && !item.simulationCompleted ? '先完成仿真预习，再进入实验台开展操作。' : item.activeSessionId ? '继续上次的实验操作，按步骤记录数据并提交检查。' : '已轮到这个实验，可以进入实验台开始操作。'
+  return { queued: '已分配到你的任务列表，等待前序实操完成。', report: '实操已结束，请整理数据并完成实验报告。', submitted: '报告已提交，等待老师批阅与反馈。', done: '报告已批阅，可以查看成绩、评语与实验记录。' }[state]
 }
-
-function nextStage(item) {
-  return STAGES.find((s) => statusOf(item, s.key) !== 'done') || STAGES[STAGES.length - 1]
+function dateText(value) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
 }
-
-function primaryRoute(item) {
-  return nextStage(item).route(item.experimentCode)
-}
-
-function primaryLabel(item) {
-  const stage = nextStage(item)
-  const started = STAGES.some((s) => statusOf(item, s.key) === 'done')
-  return started ? `继续：${stage.label}` : '开始预习'
-}
-const { page: experimentPage, pageSize: experimentSize, total: experimentTotal, items: experimentItems } = usePagination(items)
+async function load() { try { await tasks.load() } catch { /* Store exposes retryable errors. */ } }
+onMounted(load)
 </script>
 
 <style scoped>
-.page { @apply bg-surface-soft/40; }
-.inner { @apply max-w-[1000px] mx-auto w-full px-6 py-7 pb-12; }
-
-.page-head { @apply flex flex-wrap items-end justify-between gap-4 mb-6; }
-.page-title { @apply text-[22px] font-bold text-ink-strong; }
-.page-lead { @apply text-[14px] text-ink-muted mt-1.5; }
-
-.state-box { @apply rounded-2xl border border-line-soft bg-white px-5 py-8 text-center text-[14px] text-ink-muted; }
-.state-box--error { @apply text-rose-600 border-rose-100 bg-rose-50/50; }
-
-.exp-list { @apply space-y-4; }
-.exp-card { @apply rounded-2xl border border-line-soft bg-white p-5; }
-.card-head { @apply flex flex-wrap items-start justify-between gap-3 mb-5; }
-.exp-name { @apply text-[17px] font-bold text-ink-strong; }
-.exp-meta { @apply text-[12.5px] text-ink-muted mt-1; }
-.meta-dot { @apply mx-1.5 text-ink-faint; }
-
-.stage-rail { @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 relative; }
-.rail-item { @apply relative flex items-center; }
-.rail-link {
-  @apply flex items-start gap-3 rounded-xl border border-line-soft bg-surface-soft/50 px-3 py-3 flex-1 min-w-0
-    transition-all hover:border-brand-300 hover:bg-white;
-}
-.rail-link--done { @apply border-emerald-100 bg-emerald-50/40; }
-.rail-link--in_progress { @apply border-brand-300 bg-brand-50/60; }
-.rail-dot {
-  @apply w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0
-    bg-white border border-line-soft text-ink-muted;
-}
-.rail-dot--done { @apply bg-emerald-500 border-emerald-500 text-white; }
-.rail-dot--in_progress { @apply bg-brand-600 border-brand-600 text-white; }
-.rail-text { @apply min-w-0; }
-.rail-label { @apply block text-[13.5px] font-bold text-ink-strong; }
-.rail-lead { @apply block text-[11.5px] text-ink-muted leading-snug mt-0.5; }
-.rail-line { @apply hidden lg:block absolute -right-1 top-1/2 w-2 h-px bg-line-soft; }
-.rail-line--done { @apply bg-emerald-300; }
+.overview { flex:1; min-height:0; overflow-y:auto; background:#f5f7fb; color:#17243b; }
+.overview-inner { width:100%; max-width:1320px; margin:0 auto; padding:32px 32px 48px; }
+.toolbar { margin-top:0; margin-bottom:22px; }
+.toolbar-actions { display:flex; align-items:center; gap:10px; }
+@media(max-width:640px) { .toolbar-actions { width:100%; }.toolbar-actions .search { flex:1; min-width:0; } }
+button,input,a { outline-offset:4px; }.refresh,.search input { border:1px solid #dbe1ea; background:white; border-radius:7px; padding:9px 13px; font-size:13px; }.refresh { white-space:nowrap; }.refresh:disabled { opacity:.6; }
+.toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; }.filters { display:flex; flex-wrap:wrap; gap:5px; }.filters button { font-size:13px; padding:8px 11px; border-radius:6px; color:#647187; }.filters .selected { background:#e5eaf2; color:#17243b; font-weight:600; }.filters span { margin-left:5px; font-variant-numeric:tabular-nums; }.search input { width:200px; max-width:100%; }
+.experiment-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; list-style:none; padding:0; }.experiment-card { min-width:0; border:1px solid #dfe5ee; border-radius:10px; background:white; padding:21px; display:flex; flex-direction:column; }.is-current { border-color:#818cf8; box-shadow:inset 0 3px #6366f1; }
+.card-top { display:flex; justify-content:space-between; gap:10px; align-items:center; }.state { font-size:12px; background:#f0f2f6; color:#607086; padding:3px 8px; border-radius:4px; white-space:nowrap; }.state-current { color:#4946b7; background:#eeedff; }.state-report { color:#925514; background:#fff4df; }.state-done { color:#257155; background:#edf7f1; }.class-name { font-size:11px; color:#8490a1; overflow-wrap:anywhere; }
+h2 { font-size:17px; font-weight:600; line-height:1.6; margin-top:17px; overflow-wrap:anywhere; }.card-description { font-size:12px; line-height:1.8; color:#738096; margin-top:8px; }
+.milestones { display:flex; gap:5px; list-style:none; padding:0; margin:23px 0 20px; }.milestones li { flex:1; border-top:3px solid #e9edf3; padding-top:7px; color:#8792a3; font-size:11px; }.milestones .complete { border-color:#809b8e; color:#46705a; }.milestones .active { border-color:#6366f1; color:#4f46b5; }
+.due { font-size:11px; color:#748095; margin-bottom:10px; }.instructions { font-size:12px; color:#657187; margin-bottom:14px; }.instructions p { white-space:pre-wrap; margin-top:8px; line-height:1.8; }.card-footer { display:flex; justify-content:space-between; align-items:center; gap:10px; border-top:1px solid #edf0f5; padding-top:15px; margin-top:auto; }.footer-hint { font-size:11px; color:#7a879b; }.footer-hint strong { color:#25364f; }.card-action { font-size:12px; font-weight:600; white-space:nowrap; padding:8px 10px; border-radius:6px; color:#4f46b5; }.card-action.primary { background:#5652cf; color:white; }.card-action:hover { text-decoration:underline; }.waiting { font-size:12px; color:#95a0b0; background:#f3f5f8; border-radius:6px; padding:8px 10px; cursor:not-allowed; }
+.empty { padding:50px 20px; text-align:center; color:#68768b; font-size:14px; }.empty button,.notice button { text-decoration:underline; margin-left:10px; }.notice { padding:14px; background:#fff1ee; color:#a54731; font-size:13px; border-radius:7px; margin-bottom:16px; }
+@media(max-width:1100px) { .experiment-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:640px) { .overview-inner { padding:22px 16px 32px; }.experiment-grid { grid-template-columns:minmax(0,1fr); }.search,.search input { width:100%; }.experiment-card { padding:18px; } }
 </style>

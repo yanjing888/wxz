@@ -79,7 +79,11 @@ const tabs = computed(() => {
     ? { name: 'after-center', params: { code }, query: { tab: 'report' } }
     : labTo
 
-  const items = []
+  const items = [{
+    key: 'experiments', label: '我的实验', color: '#4f46e5',
+    icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+    to: { name: 'experiments' }
+  }]
   if (code) {
     items.push(simulationTab(code))
   }
@@ -109,7 +113,7 @@ const tabs = computed(() => {
   )
 
   return simulationLocked.value && code
-    ? items.filter(item => ['simulation', 'report', 'learning'].includes(item.key))
+    ? items.filter(item => ['experiments', 'simulation', 'report', 'learning'].includes(item.key))
     : items
 })
 
@@ -118,6 +122,7 @@ const SIMULATION_ROUTES = ['prep-simulation']
 const REPORT_ROUTES = ['student-reports', 'after-center', 'after-report', 'after-review']
 
 function isActive(tab) {
+  if (tab.key === 'experiments') return route.name === 'experiments'
   if (tab.key === 'simulation') return SIMULATION_ROUTES.includes(route.name)
   if (tab.key === 'lab') return LAB_ROUTES.includes(route.name)
   if (tab.key === 'report') return REPORT_ROUTES.includes(route.name)

@@ -82,7 +82,8 @@
         @keydown="onKeydown"
       />
       <div class="flex justify-between items-center mt-1.5 gap-2">
-        <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
+        <slot name="actions" />
+        <div v-if="!textOnly" class="flex items-center gap-1.5 min-w-0 flex-wrap">
           <button
             type="button"
             class="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-ink-muted hover:text-brand-600 rounded-md hover:bg-brand-50 transition-all btn-active-scale shrink-0"
@@ -193,7 +194,8 @@ const props = defineProps({
   imageReady: { type: Boolean, default: false },
   dataAttachment: { type: Object, default: null },
   suggestions: { type: Array, default: () => [] },
-  readOnly: { type: Boolean, default: false }
+  readOnly: { type: Boolean, default: false },
+  textOnly: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['send', 'stop', 'upload-image', 'capture-image', 'clear-image', 'clear-data'])

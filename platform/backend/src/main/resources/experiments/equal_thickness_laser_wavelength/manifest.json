@@ -1,0 +1,144 @@
+{
+  "code": "equal_thickness_laser_wavelength",
+  "name": "等厚干涉测量激光波长",
+  "enabled": true,
+  "category": "optics",
+  "description": "支持实验指导、手动数据记录、过程考核与报告；仪器自动采集待后续接入。",
+  "dataCollection": {
+    "enabled": true
+  },
+  "processScoreWeight": 40,
+  "menuLabels": [
+    "光路与方法确认",
+    "等厚条纹与计数基准",
+    "条纹移动与位移记录",
+    "波长计算与误差分析",
+    "实验结束与资料整理"
+  ],
+  "steps": {
+    "1": {
+      "title": "光路与方法确认",
+      "guidePath": "steps/1.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "确认采用迈克尔逊干涉仪及反射镜位移标定关系",
+        "调整两束光重合，并按设备规程获得可观察条纹",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "2": {
+      "title": "等厚条纹与计数基准",
+      "guidePath": "steps/2.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "微调反射镜倾角，得到稳定的近似平行直条纹",
+        "设置固定计数参考线，沿单一方向预进微调机构以消除回程间隙",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "3": {
+      "title": "条纹移动与位移记录",
+      "guidePath": "steps/3.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "缓慢单向移动反射镜，在固定参考线处累计条纹通过数",
+        "记录读数起点、终点及条纹数，重复多组并保留原始记录",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "start_reading_mm",
+          "label": "位移机构起点读数",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mm"
+        },
+        {
+          "key": "end_reading_mm",
+          "label": "位移机构终点读数",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "mm"
+        },
+        {
+          "key": "fringe_count",
+          "label": "通过参考线的条纹数 N",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "min": 1
+        }
+      ]
+    },
+    "4": {
+      "title": "波长计算与误差分析",
+      "guidePath": "steps/4.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "将机构读数差换算为镜面实际位移 Δd",
+        "按 λ≈2",
+        "Δd",
+        "/N 求波长并换算为 nm，分析漏计、回程间隙和倾角误差",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "mirror_displacement_um",
+          "label": "镜面实际位移大小",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "μm",
+          "min": 1e-06
+        },
+        {
+          "key": "wavelength_nm",
+          "label": "激光波长",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "nm",
+          "min": 1e-06
+        }
+      ]
+    },
+    "5": {
+      "title": "实验结束与资料整理",
+      "guidePath": "steps/5.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按现场规程停机或关闭光源、电源，将调节机构恢复安全位置",
+        "整理原始记录、数据表格和过程照片，检查报告所需信息并清理台面",
+        "原始记录、单位与过程证据清楚"
+      ]
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

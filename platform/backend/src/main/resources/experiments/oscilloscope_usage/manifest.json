@@ -1,0 +1,149 @@
+{
+  "code": "oscilloscope_usage",
+  "name": "示波器的使用实验",
+  "enabled": true,
+  "category": "electromagnetism",
+  "description": "支持实验指导、手动数据记录、过程考核与报告；仪器自动采集待后续接入。",
+  "dataCollection": {
+    "enabled": true
+  },
+  "processScoreWeight": 40,
+  "menuLabels": [
+    "接地与探头检查",
+    "稳定显示与触发调节",
+    "幅值与周期测量",
+    "频率换算与读数分析",
+    "实验结束与资料整理"
+  ],
+  "steps": {
+    "1": {
+      "title": "接地与探头检查",
+      "guidePath": "steps/1.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "确认示波器地与被测电路地的关系，选择合适量程",
+        "匹配探头物理倍率与通道设置，使用校准信号检查补偿",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "2": {
+      "title": "稳定显示与触发调节",
+      "guidePath": "steps/2.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "接入低压信号，选择适当 AC/DC 耦合",
+        "调整时基、垂直档位、触发源、边沿和电平得到稳定波形",
+        "原始记录、单位与过程证据清楚"
+      ]
+    },
+    "3": {
+      "title": "幅值与周期测量",
+      "guidePath": "steps/3.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "记录波形类型、探头倍率、各档位及跨周期读数",
+        "测量峰峰值与周期，并与光标或自动测量结果比较",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "peak_to_peak_V",
+          "label": "峰峰值 Upp",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "V",
+          "min": 0
+        },
+        {
+          "key": "period_ms",
+          "label": "周期 T",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "ms",
+          "min": 1e-06
+        },
+        {
+          "key": "probe_factor",
+          "label": "探头物理衰减倍率",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "min": 1
+        },
+        {
+          "key": "waveform",
+          "label": "波形与耦合方式",
+          "type": "text",
+          "required": true,
+          "photoAssist": false
+        }
+      ]
+    },
+    "4": {
+      "title": "频率换算与读数分析",
+      "guidePath": "steps/4.md",
+      "correctionMode": "data",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按 f(Hz)=1000/T(ms) 计算频率，与信号源设定值比较",
+        "分析触发不稳、采样不足、探头负载和读数分辨率影响",
+        "原始记录、单位与过程证据清楚"
+      ],
+      "dataFields": [
+        {
+          "key": "frequency_Hz",
+          "label": "测得频率",
+          "type": "number",
+          "required": true,
+          "photoAssist": false,
+          "unit": "Hz",
+          "min": 1e-06
+        },
+        {
+          "key": "measurement_analysis",
+          "label": "读数差异与原因",
+          "type": "text",
+          "required": true,
+          "photoAssist": false
+        }
+      ]
+    },
+    "5": {
+      "title": "实验结束与资料整理",
+      "guidePath": "steps/5.md",
+      "correctionMode": "vision",
+      "dataSource": "manual",
+      "imageRequired": true,
+      "assessmentRequired": true,
+      "assessmentBlocking": false,
+      "assessmentMaxScore": 20,
+      "assessmentCriteria": [
+        "按现场规程停机或关闭光源、电源，将调节机构恢复安全位置",
+        "整理原始记录、数据表格和过程照片，检查报告所需信息并清理台面",
+        "原始记录、单位与过程证据清楚"
+      ]
+    }
+  },
+  "reportGuidePath": "report-guide.md"
+}

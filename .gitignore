@@ -5,6 +5,7 @@ dist/
 /platform/uploads/
 .codex-tmp/
 .codex-logs/
+.taste-skill/
 .codex-ppt-work/
 evidence_screenshots/
 ppt_edit_tmp/

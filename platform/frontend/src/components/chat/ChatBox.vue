@@ -3,24 +3,26 @@
     <div
       v-for="(msg, i) in messages"
       :key="i"
-      class="flex gap-3 fade-in-up"
+      class="flex min-w-0 gap-3 fade-in-up"
       :class="msg.role === 'user' ? 'flex-row-reverse' : ''"
     >
       <div
         class="w-7 h-7 flex flex-shrink-0 items-center justify-center text-[10px] font-bold shadow-card"
         :class="[
           msg.role === 'ai'
-            ? 'rounded-lg brand-gradient text-white'
+            ? (assistantAvatar ? 'rounded-full overflow-hidden' : 'rounded-lg brand-gradient text-white')
             : 'rounded-full brand-gradient text-white',
           msg.role === 'ai' && msg.streaming && !msg.text ? 'chat-loading-avatar' : ''
         ]"
       >
-        {{ msg.role === 'ai' ? '智' : userInitial }}
+        <img v-if="msg.role === 'ai' && assistantAvatar" :src="assistantAvatar" alt="" class="w-full h-full" />
+        <template v-else>{{ msg.role === 'ai' ? '智' : userInitial }}</template>
       </div>
       <div
         :class="[
           bubbleBaseClass,
-          msg.role === 'ai' ? aiBubbleClass : userBubbleClass
+          msg.role === 'ai' ? aiBubbleClass : userBubbleClass,
+          richReply && msg.role === 'ai' ? 'chat-rich-reply' : ''
         ]"
       >
         <div v-if="msg.image" class="mb-2">
@@ -39,14 +41,16 @@
             @error="onImageError($event, msg)"
           />
         </div>
-        <div v-if="msg.streaming && !msg.text" class="flex items-center gap-2 text-ink-muted">
+        <slot name="activity" :message="msg" />
+        <div v-if="msg.streaming && !msg.text && !msg.activity?.length" class="flex items-center gap-2 text-ink-muted">
           <span>正在分析</span>
           <span class="chat-loading-dots" aria-hidden="true">
             <span /><span /><span />
           </span>
         </div>
         <div v-else-if="msg.text || msg.streaming" class="min-w-0 w-full">
-          <div v-html="renderMd(msg.text, msg.role)" />
+          <OctopMarkdown v-if="richReply" :text="msg.text" :class="{ 'chat-rich-markdown': msg.role === 'ai' }" />
+          <div v-else v-html="renderMd(msg.text, msg.role)" />
           <span v-if="msg.streaming" class="chat-stream-cursor" aria-hidden="true" />
         </div>
         <div
@@ -106,6 +110,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { renderChatMarkdown } from '../../utils/markdown'
+import OctopMarkdown from './OctopMarkdown.vue'
 import { useLabStore } from '../../stores/lab'
 
 const scrollEl = ref(null)
@@ -130,7 +135,9 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   welcomeSubtitle: { type: String, default: '' },
   studentName: { type: String, default: '' },
-  enableFeedback: { type: Boolean, default: true }
+  enableFeedback: { type: Boolean, default: true },
+  richReply: Boolean,
+  assistantAvatar: String
 })
 
 const bubbleBaseClass = 'px-3 py-2.5 rounded-2xl leading-relaxed border chat-md shadow-card'
@@ -153,7 +160,7 @@ watch(
 watch(
   () => {
     const last = props.messages[props.messages.length - 1]
-    return last?.streaming ? `${last.text || ''}|${last.image || ''}` : ''
+    return last?.streaming ? `${last.text || ''}|${last.image || ''}|${last.activity?.at(-1)?.text?.length || 0}` : ''
   },
   () => {
     if (hasStreaming.value) scrollToBottom(false)
@@ -216,4 +223,42 @@ async function submitFeedback(msg, rating) {
 .feedback-btn:disabled {
   @apply opacity-60 cursor-not-allowed;
 }
+</style>
+
+<style scoped>
+.chat-rich-reply {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #e8eaee;
+  border-radius: 14px;
+  background: #f7f8fa;
+  box-shadow: none;
+  font-size: 14px;
+}
+.chat-rich-markdown { overflow-x: auto; }
+.chat-rich-markdown :deep(table) {
+  display: table;
+  min-width: 100%;
+  width: max-content;
+  max-width: none;
+  font-size: inherit;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.chat-rich-markdown :deep(th),
+.chat-rich-markdown :deep(td) {
+  text-align: start;
+  border: 0;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 9px 12px;
+  max-width: 25rem;
+  overflow-wrap: anywhere;
+}
+.chat-rich-markdown :deep(tbody tr:last-child td) { border-bottom: 0; }
+.chat-rich-markdown :deep(thead th) { background: #eceef2; }
+.chat-rich-markdown :deep(blockquote) { color: #566070; }
 </style>
